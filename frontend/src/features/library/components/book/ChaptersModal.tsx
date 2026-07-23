@@ -59,7 +59,7 @@ function ChaptersModalBody({ book, onClose }: { book: Book; onClose: () => void 
           if (window.confirm('Delete this chapter?')) void deleteChapter.mutateAsync(id)
         }}
       />
-      <div className="flex justify-end">
+      <div className="mt-4 flex justify-end border-t border-border pt-4">
         <Button
           type="button"
           onClick={() => {
