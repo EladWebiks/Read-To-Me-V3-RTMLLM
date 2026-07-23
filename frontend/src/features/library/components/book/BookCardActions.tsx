@@ -17,17 +17,20 @@ export function BookCardActions(props: Props) {
     event.stopPropagation()
   }
   return (
-    <div className="flex shrink-0 items-center gap-0.5" onClick={stop}>
+    <div
+      className="flex shrink-0 items-center gap-0.5 opacity-80 transition-opacity duration-150 group-hover:opacity-100"
+      onClick={stop}
+    >
       <IconBtn
         label={`Edit ${book.title}`}
         title="Edit book"
         onClick={() => onEdit(book)}
       >
-        <Pencil className="h-3.5 w-3.5" />
+        <Pencil className="h-3.5 w-3.5 transition-transform duration-150 group-hover/btn:scale-110" />
       </IconBtn>
       {book.chapter_count > 0 ? (
         <IconBtn label={`Read ${book.title}`} title="Read" onClick={() => onRead(book)}>
-          <Play className="h-3.5 w-3.5 fill-current" />
+          <Play className="h-3.5 w-3.5 fill-current transition-transform duration-150 group-hover/btn:scale-110" />
         </IconBtn>
       ) : null}
       <IconBtn
@@ -37,7 +40,7 @@ export function BookCardActions(props: Props) {
         danger
         onClick={() => onDelete(book.id)}
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="h-3.5 w-3.5 transition-transform duration-150 group-hover/btn:scale-110" />
       </IconBtn>
     </div>
   )
@@ -58,8 +61,8 @@ function IconBtn(props: {
       size="icon"
       className={
         props.danger
-          ? 'h-8 w-8 cursor-pointer text-destructive hover:bg-destructive/10 hover:text-destructive'
-          : 'h-8 w-8 cursor-pointer'
+          ? 'group/btn h-8 w-8 cursor-pointer text-destructive transition-all duration-150 hover:bg-destructive/20 hover:text-destructive active:scale-95'
+          : 'group/btn h-8 w-8 cursor-pointer transition-all duration-150 hover:bg-foreground/10 hover:text-foreground active:scale-95'
       }
       aria-label={props.label}
       title={props.title}

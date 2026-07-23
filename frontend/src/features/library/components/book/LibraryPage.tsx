@@ -6,12 +6,12 @@ import { LibraryPagination } from './LibraryPagination'
 import { SearchSortBar } from './SearchSortBar'
 import { useFitLibraryPageSize } from './useFitLibraryPageSize'
 import { useLibraryPageState } from './useLibraryPageState'
-import { useLibraryViewportLock } from './useLibraryViewportLock'
+import { useViewportLock } from '@/shared/hooks/useViewportLock'
 
 export function LibraryPage() {
   const sectionRef = useRef<HTMLElement>(null)
   const gridSlotRef = useRef<HTMLDivElement>(null)
-  useLibraryViewportLock(sectionRef)
+  useViewportLock(sectionRef)
   const pageSize = useFitLibraryPageSize(gridSlotRef)
   const state = useLibraryPageState(pageSize)
 
