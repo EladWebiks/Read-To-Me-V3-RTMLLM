@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { ChevronLeft } from 'lucide-react'
 import { Button, Input, Label } from '@/shared/ui'
 import { useChapter, useUpdateChapter } from '@/features/library/hooks'
+import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 
 export function ChapterEditorPage() {
   const { bookId = '', chapterId = '' } = useParams()
@@ -20,11 +21,11 @@ export function ChapterEditorPage() {
   return (
     <section className="space-y-4">
       <Link
-        to={`/library/books/${bookId}`}
+        to={libraryBookHref(bookId)}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to book
+        Back to chapters
       </Link>
       <h1 className="text-2xl font-semibold tracking-tight">
         Edit chapter #{chapterQuery.data.chapter_number}
@@ -37,7 +38,7 @@ export function ChapterEditorPage() {
         onSubmit={(title, content) => {
           updateChapter.mutate(
             { chapterId, input: { title, content } },
-            { onSuccess: () => void navigate(`/library/books/${bookId}`) },
+            { onSuccess: () => void navigate(libraryBookHref(bookId)) },
           )
         }}
       />

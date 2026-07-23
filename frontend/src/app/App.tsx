@@ -1,14 +1,15 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import { LoginPage, ProtectedRoute, PublicOnlyRoute } from '@/features/auth'
-import {
-  BookDetailPage,
-  ChapterEditorPage,
-  ChapterNewPage,
-  LibraryPage,
-} from '@/features/library'
+import { ChapterEditorPage, ChapterNewPage, LibraryPage } from '@/features/library'
+import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 import { ReaderHubPage, ReaderPage, ResumeReadingPage } from '@/features/reader'
 import { ScraperPage } from '@/features/scraping'
 import { AppShell } from '@/layout/AppShell'
+
+function LegacyBookDetailRedirect() {
+  const { bookId = '' } = useParams()
+  return <Navigate to={libraryBookHref(bookId)} replace />
+}
 
 export function App() {
   return (
@@ -21,7 +22,7 @@ export function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/reader" replace />} />
             <Route path="/library" element={<LibraryPage />} />
-            <Route path="/library/books/:bookId" element={<BookDetailPage />} />
+            <Route path="/library/books/:bookId" element={<LegacyBookDetailRedirect />} />
             <Route
               path="/library/books/:bookId/chapters/new"
               element={<ChapterNewPage />}

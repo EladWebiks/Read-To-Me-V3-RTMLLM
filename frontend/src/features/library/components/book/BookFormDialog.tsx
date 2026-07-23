@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui'
 import { uploadCover } from '@/features/library/api'
-import { booksQueryKey, useCreateBook } from '@/features/library/hooks'
+import { booksQueryKey, useCreateBook, useUpdateBook } from '@/features/library/hooks'
 import type { Book } from '@/features/library/types'
 import { BookFormFields } from './BookFormFields'
 
@@ -26,22 +26,27 @@ export function BookFormDialog({ open, onClose, book }: Props) {
 
 function BookFormBody({ book, onClose }: { book: Book | null; onClose: () => void }) {
   const create = useCreateBook()
+  const update = useUpdateBook()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState(book?.title ?? '')
   const [author, setAuthor] = useState(book?.author ?? '')
   const [starting, setStarting] = useState(String(book?.starting_chapter_number ?? 1))
   const [coverFile, setCoverFile] = useState<File | null>(null)
+  const saving = create.isPending || update.isPending
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!title.trim()) return
-    const created = await create.mutateAsync({
+    const payload = {
       title: title.trim(),
       author: author.trim(),
       starting_chapter_number: Number(starting) || 1,
-    })
+    }
+    const saved = book
+      ? await update.mutateAsync({ bookId: book.id, input: payload })
+      : await create.mutateAsync(payload)
     if (coverFile) {
-      await uploadCover(created.id, coverFile)
+      await uploadCover(saved.id, coverFile)
       void queryClient.invalidateQueries({ queryKey: booksQueryKey })
     }
     onClose()
@@ -66,8 +71,8 @@ function BookFormBody({ book, onClose }: { book: Book | null; onClose: () => voi
         <Button type="button" variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={create.isPending || !title.trim()}>
-          {create.isPending ? 'Saving…' : book ? 'Save' : 'Create'}
+        <Button type="submit" disabled={saving || !title.trim()}>
+          {saving ? 'Saving…' : book ? 'Save' : 'Create'}
         </Button>
       </div>
     </form>
