@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { ChevronLeft } from 'lucide-react'
+import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 
 type ReaderNavProps = {
   bookId: string
@@ -12,7 +13,7 @@ export function ReaderNav(props: ReaderNavProps) {
   return (
     <header className="space-y-2 border-b border-border/80 pb-3">
       <Link
-        to={`/library/books/${props.bookId}`}
+        to={libraryBookHref(props.bookId)}
         className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />

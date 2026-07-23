@@ -19,6 +19,13 @@ export function createBook(input: BookCreateInput): Promise<Book> {
   return apiPost<Book>('/api/library/books', input)
 }
 
+export function updateBook(
+  bookId: string,
+  input: Partial<BookCreateInput>,
+): Promise<Book> {
+  return apiPut<Book>(`/api/library/books/${bookId}`, input)
+}
+
 export function deleteBook(bookId: string): Promise<void> {
   return apiDelete(`/api/library/books/${bookId}`)
 }

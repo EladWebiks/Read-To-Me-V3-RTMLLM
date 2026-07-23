@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useBook, useChapters, useCreateChapter } from '@/features/library/hooks'
+import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 import { ChapterNewFields } from './ChapterNewFields'
 import { ChapterNewLayout } from './ChapterNewLayout'
 import { useChapterDraft } from './useChapterDraft'
@@ -25,7 +26,7 @@ export function ChapterNewPage() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     void createChapter.mutateAsync(draft.toCreateInput()).then(() => {
-      void navigate('/library')
+      void navigate(libraryBookHref(bookId))
     })
   }
 
@@ -34,7 +35,7 @@ export function ChapterNewPage() {
       bookTitle={bookQuery.data?.title ?? 'Book'}
       activeNumber={draft.activeNumber}
       savedCount={savedCount}
-      onClose={() => void navigate('/library')}
+      onClose={() => void navigate(libraryBookHref(bookId))}
       onSubmit={handleSubmit}
       pending={createChapter.isPending}
       canSave={Boolean(draft.content.trim())}
