@@ -1,0 +1,16 @@
+# Dependencies
+node_modules
+
+# Build
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# Test
+coverage
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea

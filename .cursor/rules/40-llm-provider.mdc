@@ -1,0 +1,26 @@
+---
+description: LLM provider abstraction and model-routing rules
+globs: backend/app/modules/{llm,orchestration,chat}/**/*.py
+alwaysApply: false
+---
+
+# LLM provider abstraction
+
+Goal: swap/route/compare models without touching business logic.
+
+## The interface is the contract
+- All LLM access goes through the `LLMProvider` protocol in `modules/llm` (methods: `generate_text`, `stream_text`, `generate_structured_output`, `call_tools`, optional `create_embeddings`).
+- Concrete adapters (`GeminiProvider`, `OpenAIProvider`, `AnthropicProvider`, `OpenRouterProvider`, `LocalModelProvider`) live only in `modules/llm/providers/`. litellm may implement them internally, but callers never see it.
+- **Nothing outside `modules/llm` imports a provider SDK or litellm.**
+
+## Request capabilities, not model names
+- Callers ask for a capability: `FAST_CHAT`, `TOOL_CALLING`, `STRUCTURED_EXTRACTION`, `LONG_CONTEXT_SUMMARIZATION`, `RERANKING`, `EMBEDDING`, `LOCAL_PRIVATE_INFERENCE`.
+- A **router** maps `(task, capability, constraints)` → ordered candidate models with fallback chain, retry policy, timeout, and per-provider circuit breaker.
+- Model/provider config is data (DB/settings), never hardcoded in domain logic.
+
+## Every call must
+- Do **feature detection** (don't send tools/structured/streaming to a model that lacks them).
+- Record `provider, model, tokens_in, tokens_out, cost, latency_ms, fallback_used, trace_id` to `llm_execution` / `cost_record`.
+- Enforce per-conversation/per-task **token + cost + time budgets**.
+- Never assume providers share request format, tool schema, token accounting, or system-prompt semantics — normalize in the adapter.
+- Structured output uses **instructor + pydantic**; validate before returning; retry on invalid schema (bounded).

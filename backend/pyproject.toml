@@ -1,0 +1,96 @@
+[project]
+name = "rtm-backend"
+version = "0.1.0"
+description = "RTM v3 — Read To Me backend (FastAPI modular monolith)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic-settings>=2.7.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "redis>=5.2.0",
+    "pyjwt>=2.10.0",
+    "argon2-cffi>=23.1.0",
+    "email-validator>=2.2.0",
+    "minio>=7.2.20",
+    "edge-tts>=7.2.8",
+    "arq>=0.28.0",
+    "httpx>=0.28.1",
+    "beautifulsoup4>=4.15.0",
+    "python-multipart>=0.0.32",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 99
+src = ["app"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "UP", "B", "SIM", "N", "RUF", "S", "C4", "PT",
+    "ERA", "T20", "DTZ", "PIE", "RET", "PLR", "C901", "ASYNC",
+]
+ignore = ["E501", "RET504", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106", "PLR2004"]
+"migrations/**" = ["ERA", "E402", "S608"]
+"app/core/config.py" = ["S105"]  # local defaults are not production secrets
+"app/modules/scraping/adapters/**" = ["PLR2004"]
+"app/modules/scraping/worker.py" = ["PLR0911", "S101"]
+
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-statements = 20
+max-branches = 6
+max-returns = 4
+max-args = 6
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+disallow_untyped_defs = true
+mypy_path = "."
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: fast pure-Python unit tests (no external services)",
+    "integration: tests that exercise real I/O (DB/Redis/HTTP)",
+    "slow: tests that take more than ~2 seconds",
+]

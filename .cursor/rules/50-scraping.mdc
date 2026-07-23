@@ -1,0 +1,28 @@
+---
+description: Scraping adapters, fetch service, and durable scraping-job rules
+globs: backend/app/modules/scraping/**/*.py
+alwaysApply: false
+---
+
+# Scraping
+
+Deterministic per-site adapters are preferred; the LLM is a controlled fallback only.
+
+## Adapter interface (common to every site)
+`supports_url`, `parse_book_page`, `extract_book_metadata`, `find_first_chapter`,
+`parse_chapter`, `find_next_chapter`, `find_previous_chapter`, `estimate_chapter_count`,
+`validate_chapter_sequence`. (Ports v2's proven adapters: novelbin, novelfull, freewebnovel, novellunar.)
+- Register adapters; resolve by `supports_url` (first match). Fail loudly for unsupported URLs.
+- Prefer `httpx` + `selectolax`/`BeautifulSoup`; use `cloudscraper` for Cloudflare, `Playwright` only when static fetch fails.
+
+## Central fetch service (all outbound-to-source requests go through it)
+- **SSRF guard:** domain **allowlist** (enabled sources only), block private/link-local IPs, DNS-rebinding protection.
+- Enforce per-request **timeout** and **response-size limit**; **per-site rate limit / throttle**.
+- Sanitize returned HTML (strip scripts); return parsed content as **untrusted data**.
+- Optionally persist raw HTML / extraction trace to MinIO for regression fixtures.
+
+## Jobs (durable — never in-memory like v2)
+- Scraping runs as an **arq** job with a persisted `scraping_job` + per-chapter `scraping_job_item`.
+- Support range / full / resume / retry / dedup (by `content_hash`) / missing-chapter detection / idempotency.
+- Concurrency control + cancellation + safe restart (recover in-progress items on startup).
+- Emit progress/failure/completion events (SSE). Respect robots.txt, ToS, and per-source enable/disable.

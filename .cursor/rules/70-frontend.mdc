@@ -1,0 +1,39 @@
+---
+description: React + TypeScript frontend conventions for RTM v3
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend (React + TS)
+
+Reuse v2's proven patterns (React 19, Vite, Tailwind 4, shadcn/ui, react-query, zustand).
+
+- **Strict TypeScript.** No `any`; type API responses. Share/mirror backend pydantic contracts as TS types.
+- **Feature-first structure:** `src/features/<feature>/{api,components,hooks,logic}/` with a feature `index.ts` public barrel. Nest `components/` further by UI concern when a group grows (e.g. `components/player/`, `components/audio-modal/`). Shared UI in `src/shared/ui` (shadcn). Avoid import cycles.
+- **Server state → react-query** (queries/mutations, caching, prefetch). **Client/UI state → zustand** (persist settings). Don't duplicate server state in zustand.
+- **Data fetching** goes through a typed API client in `src/shared/lib/api.ts` (base URL from env); include credentials for auth. Never scatter raw `fetch` in components.
+- **Chat/progress use SSE**; render streamed assistant turns and job progress incrementally.
+- Components: functional + hooks; extract reusable logic into custom hooks; keep components presentational where possible.
+- Accessibility: use Radix/shadcn primitives; label controls; keyboard-navigable reader/player.
+- Never trust or render scraped/book HTML unsanitized.
+
+## Size & complexity limits (hard — ESLint-enforced, see `85-linting-and-types`)
+- **A React component/file must not exceed 110 lines** (`max-lines: 110`). If it does, split it (extract subcomponents and/or custom hooks).
+- **No function may exceed 60 lines** (`max-lines-per-function: 60`). Break longer logic into smaller, named functions.
+- **Max nesting depth 3** (`max-depth: 3`). Barrel `index.ts` and test files are exempt from the line limits.
+
+## Never call a state setter inside `useEffect`
+Do not call `setState` from `useEffect` to sync/derive state — it causes extra renders and loops. Instead:
+
+```tsx
+// ❌ BAD — deriving state in an effect
+const [fullName, setFullName] = useState("");
+useEffect(() => { setFullName(`${first} ${last}`); }, [first, last]);
+
+// ✅ GOOD — derive during render
+const fullName = `${first} ${last}`;
+// expensive? const fullName = useMemo(() => `${first} ${last}`, [first, last]);
+```
+- Compute derived values during render (or `useMemo`); reset state via `key` prop instead of an effect.
+- Effects are for **external** side effects only (subscriptions, DOM/media APIs, non-react-query fetches). Prefer react-query for server data and event handlers for user-driven updates.
+

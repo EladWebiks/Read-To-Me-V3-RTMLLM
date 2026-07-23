@@ -1,0 +1,221 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: light;
+  --font-ui: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  --font-reader: 'Literata', 'Palatino Linotype', Palatino, serif;
+  --background: #f5f5f4;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --primary: #1c1917;
+  --primary-foreground: #fafaf9;
+  --secondary: #e7e5e4;
+  --secondary-foreground: #1c1917;
+  --muted: #f5f5f4;
+  --muted-foreground: #78716c;
+  --destructive: #b91c1c;
+  --destructive-foreground: #fafaf9;
+  --border: #e7e5e4;
+  --ring: #a8a29e;
+  --reader-active: #fef3c7;
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --card: #1c1917;
+  --card-foreground: #fafaf9;
+  --primary: #fafaf9;
+  --primary-foreground: #1c1917;
+  --secondary: #292524;
+  --secondary-foreground: #fafaf9;
+  --muted: #1c1917;
+  --muted-foreground: #a8a29e;
+  --destructive: #dc2626;
+  --destructive-foreground: #fafaf9;
+  --border: #292524;
+  --ring: #78716c;
+  --reader-active: #854d0e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.reader-prose {
+  font-family: var(--font-reader);
+  font-optical-sizing: auto;
+  font-size: var(--reader-font-size, 1.2rem);
+  line-height: 1.85;
+  color: var(--foreground);
+}
+
+.reader-prose p {
+  margin: 0 0 1.35em;
+  max-width: none;
+  text-wrap: pretty;
+  border-radius: 0.25rem;
+  transition: background-color 160ms ease;
+}
+
+.reader-prose p.reader-paragraph-active {
+  background: color-mix(in srgb, var(--reader-active) 55%, transparent);
+}
+
+.reader-word {
+  margin: 0;
+  padding: 0 0.05em;
+  border: 0;
+  border-radius: 0.15em;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.reader-word:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
+}
+
+.reader-word:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.reader-word-active {
+  background: var(--reader-active);
+  box-shadow: inset 0 -0.12em 0 var(--border);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 220ms ease-out;
+}
+
+@keyframes assistant-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(167 139 250 / 0.45),
+      0 1px 2px rgb(0 0 0 / 0.06);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgb(167 139 250 / 0),
+      0 1px 2px rgb(0 0 0 / 0.06);
+  }
+}
+
+@keyframes assistant-spark-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  40% {
+    opacity: 0.65;
+    transform: scale(0.86) rotate(-8deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.12) rotate(6deg);
+  }
+}
+
+@keyframes assistant-spark-twinkle-alt {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2) rotate(12deg);
+  }
+}
+
+.assistant-nav-btn {
+  cursor: pointer;
+  animation: assistant-pulse 2.2s ease-in-out infinite;
+}
+
+.assistant-nav-btn:hover {
+  cursor: pointer;
+}
+
+.assistant-spark-a {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: assistant-spark-twinkle 2.4s ease-in-out infinite;
+}
+
+.assistant-spark-b {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: assistant-spark-twinkle-alt 1.8s ease-in-out infinite 0.2s;
+}
+
+.assistant-spark-c {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: assistant-spark-twinkle 2s ease-in-out infinite 0.45s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-nav-btn,
+  .assistant-spark-a,
+  .assistant-spark-b,
+  .assistant-spark-c {
+    animation: none;
+  }
+}
+

@@ -1,0 +1,25 @@
+---
+description: RTM v3 project overview, stack, and non-negotiable golden rules
+alwaysApply: true
+---
+
+# RTM v3 — Read To Me
+
+Web platform to manage, read, listen to (TTS), download, scrape, search, and **discuss** books via a GUI and a controlled LLM assistant. Rebuild of RTM v2. See `docs/phase-0-discovery.md` for full context.
+
+## Stack (locked — see phase-0 §0)
+- **Backend:** Python 3.12 + FastAPI, modular monolith (package per module). Managed with `uv`.
+- **Frontend:** React 19 + TypeScript + Vite + Tailwind + shadcn + react-query + zustand.
+- **DB:** PostgreSQL + pgvector. **ORM:** SQLAlchemy 2.0 + Alembic.
+- **Validation:** pydantic v2. **Jobs:** Redis + arq. **Storage:** MinIO (S3). **Streaming:** SSE.
+- **LLM:** own `LLMProvider` abstraction (litellm/SDKs behind it); Gemini first. **Structured output:** instructor.
+- **Tooling:** ruff + mypy + pytest. Runs fully via `docker compose up`.
+
+## Golden rules (never violate)
+1. **Provider-agnostic:** business/domain code NEVER imports an LLM SDK. Depend on the `LLMProvider` interface and request *capabilities*, not model names.
+2. **LLM acts only through tools.** The model never touches the DB, filesystem, internal services, arbitrary URLs, or shell. All actions go through validated, authorized, audited tools.
+3. **Single-user now, multi-user-ready:** every user-owned row has an owner FK; every read/write checks ownership. Don't hardcode a single-user shortcut.
+4. **Scraped/book/external text is untrusted data.** It can never redefine instructions, select tools, or expose secrets.
+5. **Deterministic first:** known sites use deterministic adapters; the LLM is a controlled fallback, never the primary parser.
+6. **Modular monolith:** respect module boundaries (see `10-architecture`). No cross-module reach into another module's repository/models.
+7. **Milestone A ships with zero LLM dependency;** the assistant is additive (B+). Chat UI placeholder only until B.
