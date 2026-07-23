@@ -3,7 +3,7 @@ import { useTheme } from 'next-themes'
 import { useLogout, useMe } from '@/features/auth/hooks'
 import { AssistantNavButton } from '@/features/assistant'
 import { SettingsSheet } from '@/features/settings/SettingsSheet'
-import { Button } from '@/shared/ui'
+import { Button, IconTooltip, TooltipProvider } from '@/shared/ui'
 
 export function ShellActions() {
   const { data } = useMe()
@@ -11,33 +11,37 @@ export function ShellActions() {
   const { resolvedTheme, setTheme } = useTheme()
   const dark = resolvedTheme === 'dark'
   return (
-    <>
+    <TooltipProvider>
       <AssistantNavButton />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="cursor-pointer"
-        aria-label="Toggle theme"
-        onClick={() => setTheme(dark ? 'light' : 'dark')}
-      >
-        {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-      </Button>
+      <IconTooltip label={dark ? 'Light mode' : 'Dark mode'}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="cursor-pointer"
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={() => setTheme(dark ? 'light' : 'dark')}
+        >
+          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
+      </IconTooltip>
       <SettingsSheet />
       <span className="hidden text-sm text-muted-foreground sm:inline">
         {data?.user.username}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="cursor-pointer"
-        aria-label="Log out"
-        disabled={logout.isPending}
-        onClick={() => logout.mutate()}
-      >
-        <LogOut className="h-4 w-4" />
-      </Button>
-    </>
+      <IconTooltip label="Log out">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="cursor-pointer"
+          aria-label="Log out"
+          disabled={logout.isPending}
+          onClick={() => logout.mutate()}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </IconTooltip>
+    </TooltipProvider>
   )
 }
