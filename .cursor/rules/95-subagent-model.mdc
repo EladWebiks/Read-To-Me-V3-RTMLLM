@@ -1,0 +1,18 @@
+---
+description: Subagents must inherit parent model — never auto-upgrade to Opus/API models
+alwaysApply: true
+---
+
+# Subagent model policy (cost control)
+
+When using the Task tool / subagents:
+
+1. **Do not pass a `model` argument** unless the user explicitly named a model in this chat.
+   Omitting `model` makes the subagent inherit the parent (Auto / Composer / whatever is selected).
+2. **Never** set `model` to Opus, Claude thinking, or other API-pool SKUs on your own, including:
+   - `claude-4.6-opus-high-thinking`
+   - `claude-opus-4-8-thinking-high`
+   - any `*opus*` / `*-thinking*` id
+3. Prefer doing the work in the parent chat over spawning subagents.
+4. If a subagent is required, use built-in types (`explore`, `shell`, `generalPurpose`) with **no** `model` field.
+5. Only pass `model` when the user explicitly asks for that model (e.g. "use Opus for this subagent").

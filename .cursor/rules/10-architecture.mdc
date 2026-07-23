@@ -1,0 +1,37 @@
+---
+description: RTM v3 modular-monolith boundaries and dependency direction
+alwaysApply: true
+---
+
+# Architecture & module boundaries
+
+Modular monolith. One FastAPI app, one package per bounded context under `backend/app/modules/`.
+
+## Module layout (every module)
+```
+modules/<name>/
+  router.py        # FastAPI routes: HTTP only, thin, pydantic in/out, authz deps
+  service.py       # business logic (the only place it lives)
+  repository.py    # DB access for THIS module's tables only
+  schemas.py       # pydantic DTOs (request/response)
+  models.py        # SQLAlchemy models for THIS module
+  tests/
+```
+
+## Dependency direction (never invert)
+```
+router → service → repository → DB
+orchestration → tools → domain services   (LLM sees tools, not services)
+```
+- Routers contain **no business logic**; delegate to services.
+- Services never import `fastapi.Request`/`Response` or SQL directly — go through the repository.
+- **No cross-module data access:** module A calls module B's *service*, never B's repository/models.
+- Domain/business code must not import: any LLM SDK, `httpx` for scraping, or the orchestrator.
+- Shared cross-cutting code lives in `backend/app/core/` (config, db session, logging, security, deps).
+
+## Boundaries that must stay independent
+- `llm` (provider abstraction) ← used by `orchestration`, never by `books`/`reader`/etc.
+- `tools` wrap domain services with schema+authz+audit; the orchestrator only ever calls tools.
+- `scraping` owns all outbound-to-source fetching; other modules request scraping via its service/jobs.
+
+When adding a feature, decide which module owns it. If none fits, propose a new module (update phase-0 §11).

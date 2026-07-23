@@ -1,0 +1,63 @@
+---
+description: Linting, formatting, and type-checking standards (backend + frontend) that must pass before any change is done
+alwaysApply: true
+---
+
+# Linting, formatting & types — must pass before "done"
+
+Run and pass every command below **locally before considering a change complete / before committing** (no CI — this discipline is the only gate). Auto-fix first, then fix what remains — never disable a rule to make it pass without justification.
+
+## Definition of done (any code change)
+- **Backend:** `ruff check .` clean · `ruff format --check .` clean · `mypy` clean · `pytest -m "unit or integration"` green.
+- **Frontend:** `npm run lint` clean · `npm run format` applied · `npm run build` (`tsc -b && vite build`) typechecks · `npm run test` green.
+
+## Backend — ruff + mypy (Python 3.12, `uv`)
+Commands (`cd backend`):
+```bash
+uv run ruff check . --fix && uv run ruff format .      # auto-fix + format
+uv run ruff check . && uv run ruff format --check .    # verify
+uv run mypy .
+```
+`pyproject.toml` config (canonical — keep in sync):
+```toml
+[tool.ruff]
+target-version = "py312"
+line-length = 99
+src = ["app"]
+
+[tool.ruff.lint]
+select = ["E","W","F","I","UP","B","SIM","N","RUF","S","C4","PT","ERA","T20","DTZ","PIE","RET","PLR","C901","ASYNC"]
+ignore = ["E501","RET504","B008"]   # E501=formatter; B008=FastAPI Depends()
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101","S105","S106","PLR2004"]   # asserts/magic values OK in tests
+"backend/migrations/**" = ["ERA","E402","S608"]     # Alembic templates
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+[tool.ruff.lint.pylint]
+max-statements = 20
+max-branches = 6
+max-returns = 4
+max-args = 6
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+disallow_untyped_defs = true
+```
+- `# type: ignore[code]` / `# noqa: RULE` only with a specific code **and** a short reason comment. No blanket `# type: ignore`.
+
+## Frontend — ESLint + Prettier + tsc (strict TS)
+- **Strict TypeScript**, no `any`. Prettier is the single source of formatting truth.
+- ESLint enforces the size limits from rule `70-frontend`: **`max-lines` 110** (component/file), **`max-lines-per-function` 60**, **`max-depth` 3**. Barrels (`index.ts`) and test files relax `max-lines`/`max-lines-per-function`.
+- `.prettierrc`: `{ semi:false, singleQuote:true, trailingComma:"all", printWidth:90, tabWidth:2, arrowParens:"always", endOfLine:"lf" }`.
+- `eslint.config.js` includes `prettier/prettier: 'error'` (via `eslint-plugin-prettier` + `eslint-config-prettier`) so format violations fail lint.
+
+Do not commit code that fails these checks. If a rule genuinely doesn't fit, discuss it and scope the exception in config (per-file-ignores), not with scattered inline disables.
