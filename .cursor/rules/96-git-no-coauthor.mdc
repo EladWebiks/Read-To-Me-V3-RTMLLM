@@ -1,0 +1,14 @@
+---
+description: Never add Cursor Co-authored-by or any git commit trailers; strip them if injected.
+alwaysApply: true
+---
+
+# Git commits — no trailers / no Cursor co-author
+
+Hard rule for every commit / amend / push in this repo:
+
+1. **Never** pass `--trailer` to git (any trailer — especially `Co-authored-by`).
+2. **Never** put bare `git commit` in an agent Shell command — Cursor rewrites it to inject `--trailer "Co-authored-by: Cursor <cursoragent@cursor.com>"`. Always use `bash scripts/git-commit-clean.sh /tmp/msg.txt`.
+3. **Never** put `Co-authored-by:`, `Made-with:`, or Cursor attribution in the commit message.
+4. Verify with `git log -1 --format=%B` before push; message must have zero attribution lines.
+5. Do **not** ask the user to strip trailers themselves.

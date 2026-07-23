@@ -1,5 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router'
 import { useChapters } from '@/features/library/hooks'
+import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 import { useProgress } from '@/features/reader/hooks'
 
 export function ResumeReadingPage() {
@@ -20,7 +21,7 @@ export function ResumeReadingPage() {
     return (
       <p className="text-sm text-stone-500">
         No chapters to read.{' '}
-        <Link to={`/library/books/${bookId}`} className="underline">
+        <Link to={libraryBookHref(bookId)} className="underline">
           Add one
         </Link>
         .

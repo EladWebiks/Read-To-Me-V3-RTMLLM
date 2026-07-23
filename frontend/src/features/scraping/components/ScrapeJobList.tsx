@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { Button } from '@/shared/ui'
+import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 import { useCancelScrapeJob, useScrapeJobs } from '../hooks'
 import type { ScrapeJob } from '../types'
 
@@ -43,7 +44,7 @@ function JobRow({ job, onCancel }: { job: ScrapeJob; onCancel: () => void }) {
       <div className="flex gap-2">
         {job.book_id ? (
           <Button asChild variant="outline" size="sm">
-            <Link to={`/library/books/${job.book_id}`}>Open book</Link>
+            <Link to={libraryBookHref(job.book_id)}>Open book</Link>
           </Button>
         ) : null}
         {busy ? (

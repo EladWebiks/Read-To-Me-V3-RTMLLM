@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Strip Cursor / AI attribution trailers Cursor may inject into commit messages.
+MSG_FILE=$1
+[ -f "$MSG_FILE" ] || exit 0
+tmp=$(mktemp)
+sed -e '/^Co-authored-by:/Id' \
+  -e '/^Made-with:/Id' \
+  -e '/cursoragent@cursor\.com/Id' \
+  "$MSG_FILE" >"$tmp"
+# Trim trailing blank lines
+sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$tmp" >"$MSG_FILE"
+rm -f "$tmp"
+exit 0
