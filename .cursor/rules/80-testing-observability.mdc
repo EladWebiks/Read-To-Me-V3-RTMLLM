@@ -1,0 +1,20 @@
+---
+description: Testing and observability conventions for RTM v3
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Testing & observability
+
+## Testing (pytest)
+- Markers: `unit`, `integration`, `slow`. Unit tests need no external services; integration uses test Postgres/Redis/MinIO.
+- **Contract tests** for each LLM provider adapter (normalized behaviour) and each scraping adapter (against **saved HTML fixtures** → regression). Add a fixture whenever a site changes.
+- **Security tests:** tool authorization matrix, prompt-injection suite, SSRF suite.
+- **Queue/retry tests:** job durability, resume, idempotency, dedup. **Migration tests:** up/down + seed.
+- **LLM evals:** repeatable datasets for tool-selection, structured-output validity, summary quality, search relevance, plus **cost regression** — not manual impressions.
+- New code ships with tests. Business logic lives in services, so services are the primary unit-test target.
+
+## Observability
+- Structured logs with trace/correlation IDs. **Never log full book content or full prompts/secrets.**
+- Record per-call LLM cost/tokens/latency (`llm_execution`/`cost_record`); tool success/failure (`tool_call`); scraping success/failure by source; job timing.
+- Expose app `/metrics` (`prometheus-fastapi-instrumentator`). Langfuse traces optional behind a compose profile and disabled in `internal_only`.

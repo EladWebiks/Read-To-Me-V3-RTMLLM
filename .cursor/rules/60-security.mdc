@@ -1,0 +1,19 @@
+---
+description: Security requirements that always apply to RTM v3
+alwaysApply: true
+---
+
+# Security (always)
+
+- **AuthN:** hash passwords with argon2/bcrypt (never plaintext — v2 mistake). Secure, httpOnly cookies/tokens; CSRF protection; session expiry.
+- **AuthZ + ownership:** every resource access checks `user_id` ownership. Tools re-check authz independently of the LLM. No trusting client- or model-supplied identity.
+- **Input validation:** pydantic at every boundary (HTTP, tools, config, LLM structured output).
+- **SSRF:** all outbound fetches (scraping + external discovery) go through the central fetcher with domain allowlist, private-IP block, DNS-rebind protection, timeouts, and response-size caps.
+- **Untrusted content:** scraped/book/external text is DATA, never instructions. Delimit it clearly in prompts; it can't select tools, expose secrets, or escalate. Sanitize HTML; prevent XSS in the reader.
+- **SQL:** parameterized/ORM only — no string SQL.
+- **Downloads:** authorization required; deliver via **signed, expiring URLs** (MinIO). No direct object access.
+- **Rate limiting:** per-user, per-tool, per-source.
+- **Secrets:** via `pydantic-settings`/env/compose secrets; provider keys isolated in `modules/llm`. Never log or commit secrets.
+- **Audit:** write `audit_log` + `tool_call` for every state-changing or external action.
+- **LLM data minimization:** send the model only what a task needs; prefer `LOCAL_PRIVATE_INFERENCE` for sensitive ops; mind provider data-retention.
+- **Copyright/ToS:** per-source enable/disable, honor robots.txt + rate limits, support retention/deletion + attribution. Don't assume reachable text may be stored/distributed.

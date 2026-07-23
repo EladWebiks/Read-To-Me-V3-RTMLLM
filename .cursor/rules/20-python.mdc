@@ -1,0 +1,32 @@
+---
+description: Python coding standards for the RTM v3 backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Python standards
+
+- **Python 3.12**, full **type hints** on every function signature; code must pass `mypy` (strict) and `ruff` before it's done (exact config + commands in rule `85-linting-and-types`).
+- Prefer **async** for I/O (FastAPI routes, DB via async SQLAlchemy, httpx, redis). Never block the event loop; offload CPU/sync work with `run_in_executor` / a worker.
+- **pydantic v2** for all external data (request bodies, config, tool I/O, LLM structured output). Validate at boundaries; pass typed models inward.
+- **Config** via `pydantic-settings` in `app/core/config.py`. No `os.environ[...]` scattered in code. Required secrets have no default (fail fast).
+- **Errors:** raise typed domain exceptions; map to HTTP in a central handler. Never `except:` or `except Exception: pass`. Always attach context.
+
+```python
+# BAD
+try:
+    data = await fetch()
+except Exception:
+    pass
+
+# GOOD
+try:
+    data = await fetch()
+except httpx.HTTPError as e:
+    logger.warning("fetch failed", extra={"url": url, "error": str(e)})
+    raise ChapterFetchError(url) from e
+```
+
+- **Logging:** module-level `logger = logging.getLogger(__name__)`, structured `extra={...}`. Never log secrets, full book content, or full prompts (see `70-security`).
+- Small, focused functions; no god-modules. Dependencies via FastAPI `Depends`, not globals/singletons where avoidable.
+- Docstrings for public service methods; comments explain **why**, not what.

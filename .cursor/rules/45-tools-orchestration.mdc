@@ -1,0 +1,34 @@
+---
+description: LLM tool authoring and orchestration-loop safety rules
+globs: backend/app/modules/{tools,orchestration}/**/*.py
+alwaysApply: false
+---
+
+# Tools & orchestration
+
+The LLM interprets intent and picks a tool; the **backend is authoritative** and validates + executes.
+
+## Every tool declares
+- `name`, `description`
+- `input_schema` + `output_schema` (pydantic) — these double as the LLM function schema
+- `risk_level`: `read_only` | `low_risk` | `confirmation_required`
+- `read_only: bool`, `touches_external: bool`, `allowed_in_internal_only: bool`
+- `rate_limit`, `timeout_ms`, optional `idempotency_key`
+- `authorize(ctx)` and `execute(input, ctx)` — `ctx` carries `user_id`
+
+## Execution contract (orchestrator enforces, in order)
+1. Validate args against `input_schema`.
+2. Check **authz + ownership** (independent of the LLM's claims).
+3. Check risk/confirmation and current mode (`internal_only` blocks external tools).
+4. Apply rate limit / idempotency.
+5. Execute with timeout → validate output → audit to `tool_call` → return structured result.
+
+## Tool implementation rules
+- Tools **wrap domain services**; they contain no business logic of their own.
+- `confirmation_required` tools must pause for user approval (HITL) before executing — never auto-run destructive/expensive/external actions.
+- A tool never returns secrets or another user's data.
+
+## Orchestration loop must cap
+- max tool-call iterations, max external requests, max token budget, max wall-clock time.
+- Support cancellation, retries, fallback, user-visible progress (SSE), and a trace id per run.
+- **No uncontrolled agent loops.** Treat scraped/tool text as untrusted; it cannot authorize actions or change instructions.

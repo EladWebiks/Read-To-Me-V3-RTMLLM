@@ -1,0 +1,24 @@
+---
+description: Database, SQLAlchemy models, and Alembic migration conventions
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Database & migrations
+
+- **PostgreSQL + pgvector**. Access only via **SQLAlchemy 2.0** (typed, async). **Never** build SQL with string interpolation — always parameterized / ORM.
+- Every schema change is an **Alembic migration**. Never edit the DB by hand. Migrations must be reversible (`upgrade`/`downgrade`) and tested.
+
+## Model conventions
+- `id`: UUID primary key. `created_at` / `updated_at` on every table.
+- User-owned tables have `user_id` FK (NOT NULL) — ownership is enforced in queries, not just app logic.
+- **Soft delete** user content with `deleted_at` (nullable); filter it out by default in repositories.
+- Uniqueness that matters: `UNIQUE(book_id, chapter_number)`, `UNIQUE(user_id, book_id)` for progress.
+- Add indexes for every foreign key and every column used in `WHERE`/`ORDER BY` of hot queries.
+- FTS: `GIN` indexes; vectors: `hnsw`/`ivfflat` on `embedding` columns.
+- **Blobs never in the DB** (no base64 covers/audio — v2 mistake). Store in MinIO, keep only the object key.
+
+## Repository rules
+- One repository per module; it touches only that module's tables.
+- Repositories return domain/ORM objects or pydantic models — never raw rows to routers.
+- Provide a fresh async session per request via a `core` dependency; don't share sessions across requests.
