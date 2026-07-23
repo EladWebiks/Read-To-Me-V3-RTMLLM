@@ -28,4 +28,5 @@ export {
   PaginationNext,
   PaginationPrevious,
 } from './pagination'
+export { ListPagination } from './list-pagination'
 export { ThemeProvider } from './theme-provider'
