@@ -8,7 +8,7 @@
 
 | Tag | Meaning |
 |-----|---------|
-| **[V]** Verified | Confirmed by reading the RTM v2 / geoLLM source |
+| **[V]** Verified | Confirmed by reading the RTM v2 / LLM project source |
 | **[U]** User requirement | Explicitly stated in the RTM v3 brief |
 | **[R]** Recommendation | My proposed decision + rationale |
 | **[A]** Assumption | Reasonable default, **needs validation** |
@@ -16,7 +16,7 @@
 
 Reference material analysed:
 - `refrence_projects/RTM_v2` — the app we are replacing (see [existing-system analysis](#5-existing-system-analysis)).
-- `refrence_projects/geollm` — an unrelated LLM/maps app we **learn architecture from**, do not copy.
+- `refrence_projects/LLM project` — an unrelated LLM app we **learn architecture from**, do not copy.
 
 ---
 
@@ -28,7 +28,7 @@ These were decided with the stakeholder and **override any conflicting recommend
 |---|----------|-----------|
 | D1 | **Single-user / self-hosted for v1**, but the data model is designed **multi-user-ready** (ownership FKs from day 1). | Simplifies auth/authz now; no rework later. |
 | D2 | **Fresh start — no v2 data migration.** | Speed; v2 Mongo model is being replaced. |
-| D3 | **Backend = Python 3.12 + FastAPI, modular monolith.** Frontend = React + TypeScript + Vite (reuse v2 UI). | LLM-heavy product; max reuse of geoLLM patterns + v2 Python scraper; best LLM/RAG ecosystem (litellm, LangGraph, instructor, pydantic). |
+| D3 | **Backend = Python 3.12 + FastAPI, modular monolith.** Frontend = React + TypeScript + Vite (reuse v2 UI). | LLM-heavy product; max reuse of LLM project patterns + v2 Python scraper; best LLM/RAG ecosystem (litellm, LangGraph, instructor, pydantic). |
 | D4 | **LLM: build our own provider abstraction; Gemini (free key) as the first adapter.** litellm may sit *behind* the interface. | Provider-agnostic requirement; cheapest capable model (Gemini 2.5 Flash-Lite) + free dev tier. |
 | D5 | **Conventions captured as both Cursor Rules (always-on) + Skills (invokable workflows)** before feature code. | Prevent drift/mistakes during development. |
 
@@ -161,8 +161,8 @@ React 19 SPA (Vite)  ──cookie JWT──►  Express 5 API (:3001)  ──►
 6. No server-side search, no pagination.
 7. No structured logging/metrics/tracing.
 
-### 5.6 What geoLLM teaches us (reference architecture) **[V]**
-geoLLM is a **modular monolith** (FastAPI + LangGraph) with strong patterns we should adapt — **but it is single-provider (Gemini/Vertex only) with no provider abstraction and no classic tool-calling** (it makes the LLM emit SQL that is then validated). Reusable ideas:
+### 5.6 What LLM project teaches us (reference architecture) **[V]**
+LLM project is a **modular monolith** (FastAPI + LangGraph) with strong patterns we should adapt — **but it is single-provider (Gemini/Vertex only) with no provider abstraction and no classic tool-calling** (it makes the LLM emit SQL that is then validated). Reusable ideas:
 - **`LLMBase.invoke(caller=...)`** wrapper: system-prompt composition, per-caller generation overrides, token→DB logging. Adapt behind a real provider interface.
 - **Prompt provider** with remote + local-file fallback.
 - **Checkpointer + per-conversation Redis lock** to stop concurrent runs corrupting state.
@@ -263,7 +263,7 @@ geoLLM is a **modular monolith** (FastAPI + LangGraph) with strong patterns we s
 
 | Concern | Choice | Rationale | Tag |
 |---------|--------|-----------|-----|
-| Backend | **Python 3.12 + FastAPI** (modular monolith, package-per-module) | LLM-heavy product; reuse geoLLM patterns + v2 scraper; best LLM/RAG ecosystem | **[U]/[R]** |
+| Backend | **Python 3.12 + FastAPI** (modular monolith, package-per-module) | LLM-heavy product; reuse LLM project patterns + v2 scraper; best LLM/RAG ecosystem | **[U]/[R]** |
 | Frontend | **React + TypeScript + Vite** | Matches v2 (React 19, Vite, Tailwind 4, shadcn, react-query, zustand) — reuse UI knowledge & components | **[U]/[V]** |
 | DB | **PostgreSQL + pgvector** | Relational integrity for ownership/jobs/facts; pgvector for discovery embeddings; FTS for search — one engine instead of Mongo | **[U]** |
 | ORM/migrations | **SQLAlchemy 2.0 + Alembic** (SQLModel optional) | Typed models, first-class migrations | **[R]** |
@@ -272,9 +272,9 @@ geoLLM is a **modular monolith** (FastAPI + LangGraph) with strong patterns we s
 | Scraping | **httpx + selectolax/BeautifulSoup**, **cloudscraper** (Cloudflare), **Playwright** fallback | Reuse v2's proven adapters; deterministic first, browser only when needed | **[U]/[R]** |
 | LLM abstraction | **own `LLMProvider` protocol**, adapters via **litellm** / provider SDKs; **instructor** for structured output | Provider-agnostic; swap/route models without touching business logic | **[U]** |
 | Object storage | **MinIO** (S3-compatible) in compose | Covers, generated MP3s, HTML/extraction traces; signed URLs; keeps blobs out of DB | **[U]** |
-| Streaming | **SSE** (FastAPI `StreamingResponse`/`sse-starlette`) | Sufficient for chat + progress; geoLLM confirms viability | **[U]/[V]** |
-| LLM traces | **Langfuse** (optional, compose profile) | Proven in geoLLM; gate behind a profile so `internal_only`/offline still works | **[R]** |
-| Metrics | **Prometheus + Grafana** (optional profile) + app `/metrics` (`prometheus-fastapi-instrumentator`) | Fix geoLLM's gap (it had infra-only metrics) | **[R]** |
+| Streaming | **SSE** (FastAPI `StreamingResponse`/`sse-starlette`) | Sufficient for chat + progress; LLM project confirms viability | **[U]/[V]** |
+| LLM traces | **Langfuse** (optional, compose profile) | Proven in LLM project; gate behind a profile so `internal_only`/offline still works | **[R]** |
+| Metrics | **Prometheus + Grafana** (optional profile) + app `/metrics` (`prometheus-fastapi-instrumentator`) | Fix LLM project's gap (it had infra-only metrics) | **[R]** |
 | Lint/format/types/tests | **ruff + mypy + pytest** | Strict typing + fast tooling | **[R]** |
 
 ### 10.2 Layering (dependency direction ↓)
@@ -338,7 +338,7 @@ Proposed FastAPI modules (each = Python package with `router.py` / `service.py` 
 
 ### 12.2 Jobs & downloads
 - **download_job**(id, user_id, book_id, chapter_from, chapter_to, provider, voice, status, object_key, expires_at, error, created_at) — durable (replaces in-memory).
-- **job**(generic) or per-queue rows; progress persisted so restarts recover — **[R]** (geoLLM `layer_recovery` pattern).
+- **job**(generic) or per-queue rows; progress persisted so restarts recover — **[R]** (LLM project `layer_recovery` pattern).
 
 ### 12.3 Scraping (Phase 3)
 - **scraping_source**(id, name, base_domains[], enabled, robots_policy, rate_limit, terms_note) — config + **[U]** copyright control.
@@ -388,9 +388,9 @@ A **router** maps `(task, capability, constraints)` → ordered candidate models
 - feature detection (does model support tools/structured/streaming?) so we don't send unsupported requests, **[U]**
 - cost/token/latency recording on every call (→ `llm_execution`, `cost_record`). **[U]**
 
-**[R]** Do **not** assume providers share request format, tool schema, token accounting, or system-prompt semantics — each adapter normalizes to our internal types (learned from geoLLM being locked to one provider).
+**[R]** Do **not** assume providers share request format, tool schema, token accounting, or system-prompt semantics — each adapter normalizes to our internal types (learned from LLM project being locked to one provider).
 
-**[R]** Reuse geoLLM's `LLMBase.invoke(caller=...)` idea: a thin call wrapper that composes the system prompt, applies per-task generation overrides (temperature/seed), records tokens, and links the trace — but sitting **behind** the provider interface.
+**[R]** Reuse LLM project's `LLMBase.invoke(caller=...)` idea: a thin call wrapper that composes the system prompt, applies per-task generation overrides (temperature/seed), records tokens, and links the trace — but sitting **behind** the provider interface.
 
 ---
 
@@ -408,7 +408,7 @@ A **router** maps `(task, capability, constraints)` → ordered candidate models
 
 Phase-2 tool set (from brief): `search_user_books`, `get_book_details`, `get_reading_progress`, `get_recently_read_chapters`, `get_chapter_content`, `play_chapter`, `resume_book`, `list_available_chapters`, `create_chapter_download`, `get_download_status`, `search_library_content`. **[U]**
 
-**Orchestration loop [U]** (adapt geoLLM's controlled pipeline + HITL): conversation state, tool registry, tool-execution loop with **max iterations / max external requests / max token budget / max wall-clock**, cancellation, retries, fallback, confirmation gates, user-visible progress (SSE), trace IDs, audit, cost accounting. **No uncontrolled agent loops.**
+**Orchestration loop [U]** (adapt LLM project's controlled pipeline + HITL): conversation state, tool registry, tool-execution loop with **max iterations / max external requests / max token budget / max wall-clock**, cancellation, retries, fallback, confirmation gates, user-visible progress (SSE), trace IDs, audit, cost accounting. **No uncontrolled agent loops.**
 
 **[Q11]** Implement the loop with a framework (LangGraph.js / Vercel AI SDK) or hand-rolled? **[R]** start hand-rolled + Zod for full control and provider-agnosticism; revisit if complexity grows (ADR).
 
@@ -478,7 +478,7 @@ Adapter interface (derived from the **verified** v2 interface, extended per brie
 - **Scraping:** success/failure by source, chapter-extraction failures, retry counts, per-source throughput.
 - **Downloads/jobs:** generation time, queue depth, failure rate.
 - **Search:** internal-vs-external rate, cache hit rate, result relevance, user selection from results.
-- **Infra:** app `/metrics` (fix geoLLM gap) scraped by **Prometheus**, dashboards in **Grafana** (compose profile).
+- **Infra:** app `/metrics` (fix LLM project gap) scraped by **Prometheus**, dashboards in **Grafana** (compose profile).
 - **Logging:** structured logs w/ trace/correlation IDs; **[U] never log full private book content or sensitive prompts** unless explicitly required and protected.
 
 ---
@@ -493,7 +493,7 @@ Adapter interface (derived from the **verified** v2 interface, extended per brie
 - **Queue/retry tests** — job durability, resume, idempotency, dedup.
 - **DB migration tests** — up/down, seed.
 - **E2E** — Playwright for reader/TTS/scraping happy paths.
-- **LLM evaluations [U]** — repeatable datasets (not vibes) for **tool-selection**, structured-output validity, summary quality, search relevance; **cost regression** tests. (Adapt geoLLM's `research/eval` approach.)
+- **LLM evaluations [U]** — repeatable datasets (not vibes) for **tool-selection**, structured-output validity, summary quality, search relevance; **cost regression** tests. (Adapt LLM project's `research/eval` approach.)
 
 **[R]** No CI for now — lint + format + typecheck + tests are run **locally before every commit** as the gate (see rule `85-linting-and-types`). E2E + eval run on demand.
 
