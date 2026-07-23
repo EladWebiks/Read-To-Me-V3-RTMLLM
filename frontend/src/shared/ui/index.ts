@@ -30,3 +30,10 @@ export {
 } from './pagination'
 export { ListPagination } from './list-pagination'
 export { ThemeProvider } from './theme-provider'
+export {
+  IconTooltip,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './tooltip'
