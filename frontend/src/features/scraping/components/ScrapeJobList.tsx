@@ -1,58 +1,51 @@
-import { Link } from 'react-router'
-import { Button } from '@/shared/ui'
+import { useRef } from 'react'
+import { ListPagination } from '@/shared/ui'
 import { libraryBookHref } from '@/features/library/logic/libraryPaths'
-import { useCancelScrapeJob, useScrapeJobs } from '../hooks'
-import type { ScrapeJob } from '../types'
+import { ScrapeJobRow } from './ScrapeJobRow'
+import { useScrapeJobListState } from './useScrapeJobListState'
 
 export function ScrapeJobList() {
-  const jobs = useScrapeJobs()
-  const cancel = useCancelScrapeJob()
-  const items = jobs.data ?? []
+  const listSlotRef = useRef<HTMLDivElement>(null)
+  const state = useScrapeJobListState(listSlotRef)
   return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-medium text-muted-foreground">Recent jobs</h2>
-      {jobs.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-      {items.length === 0 && !jobs.isLoading ? (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <h2 className="shrink-0 text-sm font-medium text-muted-foreground">
+        Recent jobs
+        {state.showMocksHint ? ' (incl. layout mocks)' : ''}
+      </h2>
+      {state.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
+      {state.items.length === 0 && !state.isLoading ? (
         <p className="text-sm text-muted-foreground">No scrape jobs yet.</p>
       ) : null}
-      <ul className="space-y-2">
-        {items.map((job) => (
-          <JobRow
-            key={job.id}
-            job={job}
-            onCancel={() => void cancel.mutateAsync(job.id)}
-          />
-        ))}
-      </ul>
+      {state.items.length > 0 ? (
+        <>
+          <div ref={listSlotRef} className="min-h-0 flex-1 overflow-hidden">
+            <ul className="space-y-2">
+              {state.pageItems.map((job) => (
+                <ScrapeJobRow
+                  key={job.id}
+                  job={job}
+                  onCancel={() => state.onCancel(job)}
+                  onOpenHref={
+                    job.book_id && !job.id.startsWith('mock-')
+                      ? libraryBookHref(job.book_id)
+                      : null
+                  }
+                />
+              ))}
+            </ul>
+          </div>
+          <div className="shrink-0">
+            <ListPagination
+              page={state.page}
+              pageCount={state.pageCount}
+              total={state.items.length}
+              pageSize={state.pageSize}
+              onPage={state.setPage}
+            />
+          </div>
+        </>
+      ) : null}
     </div>
-  )
-}
-
-function JobRow({ job, onCancel }: { job: ScrapeJob; onCancel: () => void }) {
-  const busy = job.status === 'pending' || job.status === 'running'
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-      <div className="min-w-0">
-        <p className="font-medium">
-          {job.status} · {job.chapters_done} chapters
-        </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {job.message || job.start_url}
-        </p>
-        {job.error ? <p className="text-xs text-destructive">{job.error}</p> : null}
-      </div>
-      <div className="flex gap-2">
-        {job.book_id ? (
-          <Button asChild variant="outline" size="sm">
-            <Link to={libraryBookHref(job.book_id)}>Open book</Link>
-          </Button>
-        ) : null}
-        {busy ? (
-          <Button variant="destructive" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-        ) : null}
-      </div>
-    </li>
   )
 }
