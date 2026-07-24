@@ -14,7 +14,7 @@ export function AssistantHeader(props: Props) {
   const { expanded, dragHandleProps, onToggleExpanded, onClose, titleRef } = props
   return (
     <header
-      className={`flex shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-card px-4 py-3 ${
+      className={`flex shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-card px-4 py-3 touch-none ${
         expanded ? '' : 'cursor-grab active:cursor-grabbing'
       }`}
       {...dragHandleProps}
