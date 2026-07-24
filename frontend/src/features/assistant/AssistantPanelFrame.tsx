@@ -2,20 +2,18 @@ import { type PointerEvent, type RefObject } from 'react'
 import { motion, type DragControls, type MotionValue } from 'motion/react'
 import { AssistantChatPlaceholder } from './AssistantChatPlaceholder'
 import { AssistantHeader } from './AssistantHeader'
-import {
-  assistantPanelClass,
-  assistantPanelStyle,
-  assistantSpring,
-} from './assistantPanelStyle'
+import { assistantPanelClass, assistantPanelStyle } from './assistantPanelStyle'
 
 type Props = {
   expanded: boolean
+  compact: boolean
   panelRef: RefObject<HTMLDivElement | null>
   titleRef: RefObject<HTMLHeadingElement | null>
   boundsRef: RefObject<HTMLDivElement | null>
   x: MotionValue<number>
   y: MotionValue<number>
   dragControls: DragControls
+  onDragStart: () => void
   onDragEnd: () => void
   onToggleExpanded: () => void
   onClose: () => void
@@ -25,12 +23,14 @@ type Props = {
 export function AssistantPanelFrame(props: Props) {
   const {
     expanded,
+    compact,
     panelRef,
     titleRef,
     boundsRef,
     x,
     y,
     dragControls,
+    onDragStart,
     onDragEnd,
     onToggleExpanded,
     onClose,
@@ -39,23 +39,22 @@ export function AssistantPanelFrame(props: Props) {
   return (
     <motion.div
       ref={panelRef}
-      layout
-      layoutId="assistant-panel"
       role="dialog"
       aria-modal={expanded}
       aria-label="Assistant"
-      drag={!expanded}
+      drag={expanded ? false : compact ? 'y' : true}
       dragControls={dragControls}
       dragListener={false}
-      dragConstraints={boundsRef}
+      dragConstraints={expanded || compact ? undefined : boundsRef}
       dragMomentum={false}
-      dragElastic={0.04}
+      dragElastic={0}
+      onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      initial={{ opacity: 0, scale: 0.94 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={assistantSpring}
-      style={assistantPanelStyle(expanded, x, y)}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      style={assistantPanelStyle(expanded, x, y, compact)}
       className={assistantPanelClass(expanded)}
     >
       <AssistantHeader
@@ -66,7 +65,12 @@ export function AssistantPanelFrame(props: Props) {
         dragHandleProps={
           expanded
             ? undefined
-            : { onPointerDown: (e: PointerEvent) => dragControls.start(e) }
+            : {
+                onPointerDown: (e: PointerEvent) => {
+                  e.preventDefault()
+                  dragControls.start(e, { snapToCursor: false })
+                },
+              }
         }
       />
       <AssistantChatPlaceholder expanded={expanded} />
