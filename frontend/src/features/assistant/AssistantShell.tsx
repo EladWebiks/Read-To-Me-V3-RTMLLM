@@ -1,11 +1,12 @@
 import { useLayoutEffect } from 'react'
 import { AnimatePresence, motion, useDragControls } from 'motion/react'
 import { AssistantPanelFrame } from './AssistantPanelFrame'
-import { clampPosition } from './assistantGeometry'
+import { clampPosition, panelSizeOrFallback } from './assistantGeometry'
 import { useAssistantStore } from './assistantStore'
 import {
   useAssistantFloatingPosition,
   useAssistantMotionValues,
+  useCompactViewport,
 } from './useAssistantFloatingPosition'
 
 /** Open assistant shell: scrim + floating / fullscreen panel. */
@@ -16,9 +17,11 @@ export function AssistantShell() {
   const setExpanded = useAssistantStore((s) => s.setExpanded)
   const toggleExpanded = useAssistantStore((s) => s.toggleExpanded)
   const setPosition = useAssistantStore((s) => s.setPosition)
+  const compact = useCompactViewport()
   const dragControls = useDragControls()
   const { x, y, boundsRef, panelRef, titleRef } = useAssistantMotionValues()
-  useAssistantFloatingPosition(expanded, position, panelRef, x, y)
+  const dragGate = useAssistantFloatingPosition(expanded, position, panelRef, x, y)
+
   useLayoutEffect(() => {
     titleRef.current?.focus()
   }, [titleRef])
@@ -47,22 +50,19 @@ export function AssistantShell() {
       </AnimatePresence>
       <AssistantPanelFrame
         expanded={expanded}
+        compact={compact}
         panelRef={panelRef}
         titleRef={titleRef}
         boundsRef={boundsRef}
         x={x}
         y={y}
         dragControls={dragControls}
+        onDragStart={dragGate.onDragStart}
         onDragEnd={() => {
+          dragGate.onDragEnd()
           const el = panelRef.current
-          setPosition(
-            clampPosition(
-              x.get(),
-              y.get(),
-              el?.offsetWidth ?? 448,
-              el?.offsetHeight ?? 544,
-            ),
-          )
+          const { width, height } = panelSizeOrFallback(el?.offsetWidth, el?.offsetHeight)
+          setPosition(clampPosition(x.get(), y.get(), width, height))
         }}
         onToggleExpanded={toggleExpanded}
         onClose={() => setOpen(false)}
