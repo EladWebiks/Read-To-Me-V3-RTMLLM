@@ -22,6 +22,7 @@ from app.modules.downloads.exceptions import (
 from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.llm.exceptions import (
     CapabilityNotSupportedError,
+    ConversationNotFoundError,
     LlmConfigError,
     LlmDisabledError,
     LlmProviderError,
@@ -237,6 +238,13 @@ def _register_llm_handlers(app: FastAPI) -> None:
         exc: NoCandidateModelError,
     ) -> JSONResponse:
         return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+    @app.exception_handler(ConversationNotFoundError)
+    async def _llm_conversation_missing(
+        _request: Request,
+        exc: ConversationNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
 
     @app.exception_handler(LlmProviderError)
     async def _llm_provider(

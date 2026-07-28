@@ -1,33 +1,29 @@
 import type { MotionValue } from 'motion/react'
-import {
-  ASSISTANT_FLOAT_HEIGHT,
-  ASSISTANT_FLOAT_HEIGHT_COMPACT,
-  ASSISTANT_FLOAT_WIDTH,
-} from './assistantGeometry'
 
 export const assistantSpring = {
   type: 'spring' as const,
   stiffness: 380,
-  damping: 32,
+  damping: 34,
+  mass: 0.85,
 }
 
-export function assistantPanelClass(expanded: boolean): string {
-  const base =
-    'assistant-panel pointer-events-auto fixed z-[60] flex flex-col overflow-hidden rounded-2xl border bg-card'
-  return expanded ? `${base} inset-3 sm:inset-4` : `${base} left-0 top-0`
+/** Soft size/position tween when expanding or shrinking the panel. */
+export const assistantLayoutTransition = {
+  type: 'spring' as const,
+  stiffness: 300,
+  damping: 34,
+  mass: 0.9,
+}
+
+export function assistantPanelClass(): string {
+  return 'assistant-panel pointer-events-auto fixed left-0 top-0 z-[60] flex flex-col overflow-hidden rounded-2xl border bg-card will-change-transform'
 }
 
 export function assistantPanelStyle(
-  expanded: boolean,
   x: MotionValue<number>,
   y: MotionValue<number>,
-  compact: boolean,
+  width: MotionValue<number>,
+  height: MotionValue<number>,
 ) {
-  if (expanded) return { x, y }
-  return {
-    x,
-    y,
-    width: ASSISTANT_FLOAT_WIDTH,
-    height: compact ? ASSISTANT_FLOAT_HEIGHT_COMPACT : ASSISTANT_FLOAT_HEIGHT,
-  }
+  return { x, y, width, height }
 }

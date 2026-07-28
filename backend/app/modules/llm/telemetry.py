@@ -131,6 +131,30 @@ class LlmTelemetry:
         self._tracer.end(trace_id, status="ok")
         return value
 
+    async def write_result(
+        self,
+        ctx: TelemetryContext,
+        *,
+        usage: Usage,
+        latency_ms: int,
+        status: str,
+        error: str | None,
+    ) -> None:
+        """Persist telemetry for an already-finished call (e.g. streaming)."""
+        trace_id = self._tracer.start(
+            ctx.task,
+            metadata={"provider": ctx.model.provider, "model": ctx.model.model_name},
+        )
+        await self._write(
+            ctx,
+            usage=usage,
+            latency_ms=latency_ms,
+            status=status,
+            trace_id=trace_id,
+            error=error,
+        )
+        self._tracer.end(trace_id, status=status, error=error)
+
     async def _write(
         self,
         ctx: TelemetryContext,

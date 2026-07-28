@@ -86,11 +86,14 @@ class GeminiProvider:
         if not self._config.supports_streaming:
             raise CapabilityNotSupportedError("streaming")
         stream = await self._open_stream(req)
+        last: Any = None
         async for chunk in stream:
+            last = chunk
             text = _response_text(chunk)
             if text:
                 yield StreamChunk(text=text, done=False)
-        yield StreamChunk(text="", done=True)
+        usage = _usage_from(last) if last is not None else Usage(0, 0)
+        yield StreamChunk(text="", done=True, usage=usage)
 
     async def generate_structured_output(
         self,

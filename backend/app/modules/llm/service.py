@@ -44,6 +44,16 @@ class LlmService:
             build_tracer(langfuse_enabled=settings.langfuse_enabled),
         )
 
+    @property
+    def router(self) -> ModelRouter:
+        """Capability router (used by chat streaming)."""
+        return self._router
+
+    @property
+    def telemetry(self) -> LlmTelemetry:
+        """Telemetry sink (used by chat streaming)."""
+        return self._telemetry
+
     def ensure_enabled(self) -> None:
         """Raise if LLM is off or misconfigured."""
         if not self._settings.llm_enabled:

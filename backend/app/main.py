@@ -17,6 +17,7 @@ from app.modules.chapters.router import router as chapters_router
 from app.modules.downloads.router import router as downloads_router
 from app.modules.health.router import router as health_router
 from app.modules.library.router import router as library_router
+from app.modules.llm.router import chat_router
 from app.modules.llm.router import router as llm_router
 from app.modules.llm.seed import seed_llm_models
 from app.modules.reader.router import router as reader_router
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(downloads_router, prefix=settings.api_prefix)
     app.include_router(scraping_router, prefix=settings.api_prefix)
     app.include_router(llm_router, prefix=settings.api_prefix)
+    app.include_router(chat_router, prefix=settings.api_prefix)
     return app
 
 

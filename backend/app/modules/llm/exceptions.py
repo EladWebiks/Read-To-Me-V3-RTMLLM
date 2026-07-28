@@ -33,3 +33,7 @@ class LlmTimeoutError(LlmProviderError):
 
 class NoCandidateModelError(LlmError):
     """Router found no enabled model for the capability."""
+
+
+class ConversationNotFoundError(LlmError):
+    """Conversation missing or not owned by the caller."""

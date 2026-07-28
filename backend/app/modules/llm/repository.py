@@ -1,14 +1,17 @@
-"""Persistence for LLM telemetry and model catalog."""
+"""Persistence for LLM telemetry, conversations, and model catalog."""
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.llm.models import (
+    Conversation,
+    ConversationMessage,
     CostRecord,
     LlmExecution,
     ModelConfiguration,
@@ -110,3 +113,84 @@ class LlmRepository:
                 enabled=spec.enabled,
             )
         )
+
+    async def create_conversation(
+        self,
+        user_id: uuid.UUID,
+        *,
+        title: str | None = None,
+    ) -> Conversation:
+        """Insert a new conversation owned by user_id."""
+        row = Conversation(user_id=user_id, title=title)
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get_conversation_for_user(
+        self,
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> Conversation | None:
+        """Return conversation if owned by user_id."""
+        result = await self._session.execute(
+            select(Conversation).where(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def add_message(
+        self,
+        conversation_id: uuid.UUID,
+        *,
+        role: str,
+        content: str,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+    ) -> ConversationMessage:
+        """Append one message to a conversation."""
+        row = ConversationMessage(
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            # Explicit clock: Postgres now() is transaction-start and collides in-batch.
+            created_at=datetime.now(UTC),
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def list_messages(
+        self,
+        conversation_id: uuid.UUID,
+        *,
+        limit: int = 40,
+    ) -> list[ConversationMessage]:
+        """Newest-last history capped at limit (oldest of the window first)."""
+        result = await self._session.execute(
+            select(ConversationMessage)
+            .where(ConversationMessage.conversation_id == conversation_id)
+            .order_by(
+                ConversationMessage.created_at.desc(),
+                ConversationMessage.id.desc(),
+            )
+            .limit(limit)
+        )
+        rows = list(result.scalars().all())
+        rows.reverse()
+        return rows
+
+    async def set_conversation_title(
+        self,
+        conversation_id: uuid.UUID,
+        title: str,
+    ) -> None:
+        """Update conversation title when still empty."""
+        row = await self._session.get(Conversation, conversation_id)
+        if row is None or row.title:
+            return
+        row.title = title
+        await self._session.flush()

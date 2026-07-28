@@ -1,6 +1,6 @@
 import { type PointerEvent, type RefObject } from 'react'
 import { motion, type DragControls, type MotionValue } from 'motion/react'
-import { AssistantChatPlaceholder } from './AssistantChatPlaceholder'
+import { AssistantChat } from './components/AssistantChat'
 import { AssistantHeader } from './AssistantHeader'
 import { assistantPanelClass, assistantPanelStyle } from './assistantPanelStyle'
 
@@ -12,6 +12,8 @@ type Props = {
   boundsRef: RefObject<HTMLDivElement | null>
   x: MotionValue<number>
   y: MotionValue<number>
+  width: MotionValue<number>
+  height: MotionValue<number>
   dragControls: DragControls
   onDragStart: () => void
   onDragEnd: () => void
@@ -29,6 +31,8 @@ export function AssistantPanelFrame(props: Props) {
     boundsRef,
     x,
     y,
+    width,
+    height,
     dragControls,
     onDragStart,
     onDragEnd,
@@ -54,8 +58,8 @@ export function AssistantPanelFrame(props: Props) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      style={assistantPanelStyle(expanded, x, y, compact)}
-      className={assistantPanelClass(expanded)}
+      style={assistantPanelStyle(x, y, width, height)}
+      className={assistantPanelClass()}
     >
       <AssistantHeader
         expanded={expanded}
@@ -73,7 +77,7 @@ export function AssistantPanelFrame(props: Props) {
               }
         }
       />
-      <AssistantChatPlaceholder expanded={expanded} />
+      <AssistantChat expanded={expanded} />
     </motion.div>
   )
 }

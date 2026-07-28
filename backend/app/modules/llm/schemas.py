@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -25,3 +28,27 @@ class ModelListResponse(BaseModel):
     default_provider: str
     default_model: str
     models: list[ModelRead] = Field(default_factory=list)
+
+
+class ChatRequest(BaseModel):
+    """POST /api/chat body."""
+
+    message: str = Field(min_length=1, max_length=16_000)
+    conversation_id: UUID | None = None
+
+
+class ChatMessageRead(BaseModel):
+    """One persisted conversation message."""
+
+    id: UUID
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ConversationRead(BaseModel):
+    """Conversation with ordered messages."""
+
+    id: UUID
+    title: str | None
+    messages: list[ChatMessageRead] = Field(default_factory=list)
