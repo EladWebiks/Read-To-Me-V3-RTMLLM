@@ -1,6 +1,7 @@
 import { MessageSquare } from 'lucide-react'
 import type { ChatMessage } from '../api/chatApi'
 import { useStickToBottom } from '../hooks/useStickToBottom'
+import { isVisibleToolMessage } from '../logic/toolVisibility'
 import { ChatTurn } from './ChatTurn'
 import { LiveStatusLine } from './LiveStatusLine'
 
@@ -28,9 +29,7 @@ export function AssistantMessageList({
   onResolveConfirm,
   onPickChoice,
 }: Props) {
-  const visible = messages.filter(
-    (m) => m.role !== 'step' && !(m.role === 'tool' && m.toolName === 'propose_choices'),
-  )
+  const visible = messages.filter((m) => m.role !== 'step' && isVisibleToolMessage(m))
   const last = visible[visible.length - 1]
   const contentKey = `${visible.length}:${last?.id ?? ''}:${last?.content.length ?? 0}:${liveStatus ?? ''}`
   const { containerRef, onScroll } = useStickToBottom(sending, contentKey)
