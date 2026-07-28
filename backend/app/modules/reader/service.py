@@ -38,6 +38,11 @@ class ReaderService:
             return None
         return ProgressRead.model_validate(progress)
 
+    async def list_recent(self, user_id: UUID, *, limit: int = 10) -> list[ProgressRead]:
+        """Recently updated reading positions for this user."""
+        rows = await self._repo.list_recent_for_user(user_id, limit=limit)
+        return [ProgressRead.model_validate(row) for row in rows]
+
     async def upsert_progress(
         self,
         user_id: UUID,

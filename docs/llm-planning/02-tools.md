@@ -34,8 +34,12 @@ Every tool declares:
 
 - A tool **wraps a domain service**; it holds no business logic. If the capability
   doesn't exist, add it to the owning module first.
-- `confirmation_required` tools **pause for approval** (HITL) before executing — never
-  auto-run destructive/expensive/external actions.
+- `confirmation_required` tools **pause for HITL** (binary or **form**) before
+  executing — never auto-run destructive/expensive/external actions. See
+  [04-hitl.md](./04-hitl.md).
+- Optional `confirmation_schema`: fields the user may edit on the HITL form
+  (e.g. start chapter, chapter count). Merged values are re-validated against
+  `input_schema` before execute.
 - A tool never returns secrets or another user's data.
 - Tool text/results are **data**, not instructions.
 
@@ -59,6 +63,7 @@ class Tool(Protocol[TInput, TOutput]):
     rate_limit: RateLimit
     timeout_ms: int
     idempotency_key: str | None
+    confirmation_schema: type[BaseModel] | None  # form fields when gated
 
     async def authorize(self, inp: TInput, ctx: ToolContext) -> None: ...  # raises if denied
     async def execute(self, inp: TInput, ctx: ToolContext) -> TOutput: ...
@@ -83,7 +88,8 @@ Grounded in phase-0 §14 and the domain services that already exist
 | `get_recently_read_chapters` | `reader.service` | Recent activity |
 | `list_available_chapters` | `chapters.service` | Chapter index for a book |
 | `get_chapter_content` | `chapters.service` | One chapter's text (owned) |
-| `search_library_content` | `library`/FTS | Full-text search across owned content |
+| `search_library_content` | `library`/FTS | Full-text search across owned chapter content |
+| `get_book_summary` | `library` / summaries svc | Read cached summary if fresh (C) |
 | `get_download_status` | `downloads.service` | Status of a user's download job |
 
 All are `read_only=true`, `touches_external=false`, `allowed_in_internal_only=true`.
@@ -92,23 +98,38 @@ All are `read_only=true`, `touches_external=false`, `allowed_in_internal_only=tr
 
 | Tool | Wraps | Why low-risk |
 |------|-------|--------------|
-| `play_chapter` | `audio.service` | Starts TTS playback; reversible, cheap |
+| `play_chapter` | `reader.service` + client action | Sets progress + `play_chapter` payload for B4 player |
 | `resume_book` | `reader.service` | Updates "current" pointer; reversible |
-| `create_chapter_download` | `downloads.service` | **Single** chapter job; `idempotency_key` |
+| `create_chapter_download` | `downloads.service` | **Single** chapter job; reuses active job |
+| `summarize_book` / `ensure_book_summary` | summaries svc + `llm` | Writes/refreshes cached summary; bounded cost |
 
 `create_chapter_download` for a **single** chapter is low-risk; a **range/full book**
 download is `confirmation_required` (see below).
 
-### Confirmation-required (HITL) — **Batch 3 / Milestone C**
+`summarize_book` is low-risk but **budget-sensitive** — prefer return-cached-if-fresh;
+only call the LLM when missing/stale (content hash changed). See ADR-13.
+### Confirmation-required (HITL form / binary) — **Batch 3 / Milestone C**
 
-| Tool | Wraps | Why gated |
-|------|-------|-----------|
-| `scrape_book_range` | `scraping.service` | External + expensive + large range |
-| `scrape_full_book` | `scraping.service` | External + expensive |
-| `create_book_download` (range/full) | `downloads.service` | Large archive |
-| `retry_failed_job` (large) | `scraping`/`downloads` | Re-spends quota |
-| `delete_book` / `overwrite_chapters` | `library`/`chapters` | Destructive |
-| `import_discovered_book` | `discovery` (C) | External import |
+| Tool | Wraps | Why gated | Typical form fields |
+|------|-------|-----------|---------------------|
+| `scrape_book_range` | `scraping.service` | External + expensive + range | `start_chapter`, `chapter_count` (empty = entire) |
+| `scrape_full_book` | `scraping.service` | External + expensive | confirm only (or same as range) |
+| `create_book_download` (range/full) | `downloads.service` | Large archive | chapter range |
+| `retry_failed_job` (large) | `scraping`/`downloads` | Re-spends quota | binary |
+| `delete_book` / `overwrite_chapters` | `library`/`chapters` | Destructive | binary |
+| `import_discovered_book` | `discovery` (C) | External import | often → scrape form next |
+
+### Discovery (Milestone C) — read / low-risk then import
+
+| Tool (names illustrative) | Wraps | Role |
+|---------------------------|-------|------|
+| `search_discovered_books` | `discovery.service` | Title / theme / alias search; exclude owned |
+| `get_discovered_book` | `discovery.service` | Candidate detail + available `book_source`s |
+| `rank_book_sources` (or fold into get) | `discovery.service` | Prefer source with **more chapters** / fresher data |
+| `import_discovered_book` | discovery → scrape | Confirm → resolve URLs → HITL scrape form |
+
+Long-term scrape entry is **discovered book id** (or ranked source), not a raw URL.
+`scrape_book_range(url=…)` remains valid for power users / bootstrap.
 
 All `confirmation_required` tools with `touches_external=true` set
 `allowed_in_internal_only=false`.
@@ -121,8 +142,11 @@ All `confirmation_required` tools with `touches_external=true` set
    **2 read-only tools** (`search_user_books`, `get_book_details`) to exercise the loop.
 2. **B3.1** — the rest of **Batch 1** (read-only).
 3. **B3.2** — **Batch 2** (low-risk actions).
-4. **B3.3** — HITL gate + first **Batch 3** tool (`scrape_book_range`).
-5. **C** — remaining confirmation-required + discovery tools.
+4. **B3.3** — **form-aware** HITL gate + first **Batch 3** tool (`scrape_book_range`
+   with start/count fields).
+5. **C** — remaining confirmation-required + discovery + summarize-before-import +
+   **persisted `book_summaries`** (north star — see [00](./00-north-star.md); may pull
+   discovery earlier per [Q5]).
 
 **[Q1]** Alternative: a thin vertical slice (one read + `play_chapter`) first to prove
 the end-to-end action path earlier. Reviewer to weigh in.

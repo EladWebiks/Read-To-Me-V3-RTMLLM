@@ -3,9 +3,10 @@ import { useAssistantChat } from '../hooks/useAssistantChat'
 import { AssistantComposer } from './AssistantComposer'
 import { AssistantMessageList } from './AssistantMessageList'
 
-/** Live assistant chat (tool-less B2). */
+/** Live assistant chat with tools + HITL form cards. */
 export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
   const chat = useAssistantChat()
+  const blocked = Boolean(chat.pendingConfirm)
 
   return (
     <div
@@ -20,29 +21,27 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
             : 'flex min-h-0 flex-1 flex-col'
         }
       >
-        <ChatBody framed={expanded} chat={chat} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <AssistantMessageList
+            messages={chat.messages}
+            framed={expanded}
+            error={chat.error}
+            sending={chat.sending}
+            liveStatus={chat.liveStatus}
+            confirmBusy={chat.sending}
+            onResolveConfirm={(approved, values) =>
+              void chat.resolveConfirm(approved, values)
+            }
+          />
+          <AssistantComposer
+            draft={chat.draft}
+            setDraft={chat.setDraft}
+            sending={chat.sending}
+            blocked={blocked}
+            onSend={() => void chat.send()}
+          />
+        </div>
       </div>
-    </div>
-  )
-}
-
-type ChatApi = ReturnType<typeof useAssistantChat>
-
-function ChatBody({ framed, chat }: { framed: boolean; chat: ChatApi }) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <AssistantMessageList
-        messages={chat.messages}
-        framed={framed}
-        error={chat.error}
-        sending={chat.sending}
-      />
-      <AssistantComposer
-        draft={chat.draft}
-        setDraft={chat.setDraft}
-        sending={chat.sending}
-        onSend={() => void chat.send()}
-      />
     </div>
   )
 }

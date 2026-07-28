@@ -49,6 +49,22 @@ class ProgressRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def list_recent_for_user(
+        self,
+        user_id: UUID,
+        *,
+        limit: int = 10,
+    ) -> list[ReadingProgress]:
+        """Recent progress rows, newest first."""
+        stmt = (
+            select(ReadingProgress)
+            .where(ReadingProgress.user_id == user_id)
+            .order_by(ReadingProgress.updated_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def flush(self) -> None:
         """Flush pending updates."""
         await self._session.flush()

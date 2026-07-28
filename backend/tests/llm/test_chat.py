@@ -10,7 +10,7 @@ import pytest
 from app.core.config import Settings, get_settings
 from app.modules.llm.chat_service import ChatService, ChatSseEvent
 from app.modules.llm.repository import LlmRepository
-from app.modules.llm.types import StreamChunk, Usage
+from app.modules.llm.types import ToolCallingRequest, ToolCallingResponse, Usage
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -72,12 +72,20 @@ async def test_stream_chat_persists_with_fake_llm(
     user = await _user(chat_session)
     service = ChatService(chat_session, settings)
 
-    async def _fake_stream(_req: Any) -> AsyncIterator[StreamChunk]:
-        yield StreamChunk(text="Hello", done=False)
-        yield StreamChunk(text=" world", done=False)
-        yield StreamChunk(text="", done=True, usage=Usage(3, 2))
+    async def _fake_call_tools(
+        req: ToolCallingRequest,
+        **_kwargs: Any,
+    ) -> ToolCallingResponse:
+        assert req.tools
+        return ToolCallingResponse(
+            text="Hello world",
+            tool_calls=[],
+            usage=Usage(3, 2),
+            model="gemini-3.5-flash-lite",
+            provider="gemini",
+        )
 
-    monkeypatch.setattr(service._llm, "stream_text", _fake_stream)
+    monkeypatch.setattr(service._llm, "call_tools", _fake_call_tools)
 
     events: list[ChatSseEvent] = []
     async for event in service.stream_chat(user.id, "Say hi", None):

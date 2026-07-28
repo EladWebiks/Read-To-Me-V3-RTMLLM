@@ -91,6 +91,10 @@ class ChapterRepository:
         """Flush pending changes."""
         await self._session.flush()
 
+    async def refresh(self, chapter: Chapter) -> None:
+        """Reload ORM attrs after flush (server-side updated_at, etc.)."""
+        await self._session.refresh(chapter)
+
     async def soft_delete(self, chapter: Chapter) -> None:
         """Soft-delete one chapter."""
         chapter.deleted_at = datetime.now(UTC)
@@ -104,3 +108,38 @@ class ChapterRepository:
             .values(deleted_at=datetime.now(UTC))
         )
         await self._session.execute(stmt)
+
+    async def search_content(
+        self,
+        book_ids: list[UUID],
+        query: str,
+        *,
+        limit: int = 20,
+    ) -> list[tuple[Chapter, str]]:
+        """FTS over title+content for the given books; return (chapter, snippet)."""
+        cleaned = query.strip()
+        if not book_ids or not cleaned:
+            return []
+        document = func.to_tsvector(
+            "english",
+            func.concat(Chapter.title, " ", Chapter.content),
+        )
+        tsq = func.plainto_tsquery("english", cleaned)
+        headline = func.ts_headline(
+            "english",
+            Chapter.content,
+            tsq,
+            "MaxWords=40, MinWords=12, ShortWord=2, HighlightAll=false",
+        )
+        stmt = (
+            select(Chapter, headline)
+            .where(
+                Chapter.book_id.in_(book_ids),
+                Chapter.deleted_at.is_(None),
+                document.op("@@")(tsq),
+            )
+            .order_by(func.ts_rank(document, tsq).desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [(row[0], str(row[1] or "")) for row in result.all()]

@@ -251,7 +251,8 @@ body {
 
 .assistant-scroll:hover,
 .assistant-scroll:focus-within {
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent)
+    transparent;
 }
 
 .assistant-scroll::-webkit-scrollbar {

@@ -10,6 +10,7 @@ export type ScrapePreview = {
 export type ScrapeJob = {
   id: string
   book_id: string | null
+  book_title: string | null
   start_url: string
   mode: string
   chapter_from: number | null

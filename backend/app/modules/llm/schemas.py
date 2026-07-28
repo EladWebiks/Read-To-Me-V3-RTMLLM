@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -30,11 +31,31 @@ class ModelListResponse(BaseModel):
     models: list[ModelRead] = Field(default_factory=list)
 
 
+class UiContext(BaseModel):
+    """Current SPA screen (data only — ADR-14)."""
+
+    path: str = Field(min_length=1, max_length=512, pattern=r"^/")
+    book_id: UUID | None = None
+    chapter_id: UUID | None = None
+
+
 class ChatRequest(BaseModel):
     """POST /api/chat body."""
 
     message: str = Field(min_length=1, max_length=16_000)
     conversation_id: UUID | None = None
+    ui_context: UiContext | None = None
+
+
+class ConfirmRequest(BaseModel):
+    """POST /api/chat/{conversation_id}/confirm body."""
+
+    call_id: UUID
+    approved: bool
+    values: dict[str, Any] | None = Field(
+        default=None,
+        description="User-edited form fields (merged into frozen proposal)",
+    )
 
 
 class ChatMessageRead(BaseModel):

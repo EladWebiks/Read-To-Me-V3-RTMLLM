@@ -1,0 +1,589 @@
+"""OrchestrationService — bounded tool loop behind chat SSE."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any
+from uuid import UUID, uuid4
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import Settings
+from app.modules.llm.models import ConversationMessage, ToolCallRecord
+from app.modules.llm.repository import LlmRepository, ToolCallUpdate
+from app.modules.llm.service import LlmService
+from app.modules.llm.sse import ChatSseEvent
+from app.modules.llm.types import (
+    Message,
+    Role,
+    ToolCall,
+    ToolCallingRequest,
+    ToolCallingResponse,
+    Usage,
+)
+from app.modules.orchestration.budget import RunBudget
+from app.modules.orchestration.exceptions import BudgetExceededError, OrchestrationError
+from app.modules.orchestration.hitl_pause import (
+    FreezeRequest,
+    apply_budget_snapshot,
+    confirmation_event_data,
+    freeze_pending,
+    is_expired,
+    restore_snapshot,
+    snapshot_conversation_id,
+    snapshot_run_id,
+)
+from app.modules.orchestration.prompts import SYSTEM_PROMPT
+from app.modules.orchestration.ui_context import client_action_for_tool, format_ui_context_block
+from app.modules.tools.base import BaseTool, Mode, RiskLevel, ToolContext
+from app.modules.tools.catalog import build_default_registry
+from app.modules.tools.exceptions import (
+    ToolAuthzError,
+    ToolModeBlockedError,
+    ToolNotFoundError,
+    ToolValidationError,
+)
+from app.modules.tools.executor import ExecuteOptions, execute_tool_call, prepare_gated_call
+from app.modules.tools.hitl import merge_confirmed_args
+from app.modules.tools.registry import ToolRegistry
+
+_HISTORY_LIMIT = 40
+_MAX_TOOL_RESULT_CHARS = 6_000
+
+
+@dataclass(frozen=True, slots=True)
+class _ConfirmedExec:
+    """Bundle for post-HITL execute."""
+
+    ctx: ToolContext
+    messages: list[Message]
+    tool: BaseTool
+    call: ToolCall
+    row: ToolCallRecord
+    values: dict[str, Any] | None
+    budget: RunBudget
+
+
+@dataclass(frozen=True, slots=True)
+class _PausePack:
+    """Bundle for HITL pause."""
+
+    ctx: ToolContext
+    messages: list[Message]
+    tool: BaseTool
+    call: ToolCall
+    budget: RunBudget
+    usage: Usage
+    hitl_rounds: int
+
+
+@dataclass(frozen=True, slots=True)
+class _ToolRound:
+    """Bundle for one tool round in the loop."""
+
+    ctx: ToolContext
+    messages: list[Message]
+    call: ToolCall
+    budget: RunBudget
+    usage: Usage
+    hitl_rounds: int
+
+
+@dataclass(frozen=True, slots=True)
+class _LoopState:
+    """Mutable-ish loop counters carried across rounds."""
+
+    ctx: ToolContext
+    messages: list[Message]
+    budget: RunBudget
+    usage: Usage
+    hitl_rounds: int
+    final_text: str
+
+
+class OrchestrationService:
+    """Runs the tool loop for one assistant turn."""
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        settings: Settings,
+        llm: LlmService,
+        repo: LlmRepository,
+        registry: ToolRegistry | None = None,
+    ) -> None:
+        self._session = session
+        self._settings = settings
+        self._llm = llm
+        self._repo = repo
+        self._registry = registry or build_default_registry()
+
+    async def run(
+        self,
+        user_id: UUID,
+        conversation_id: UUID,
+        ui_context: dict[str, Any] | None = None,
+    ) -> AsyncIterator[ChatSseEvent]:
+        """Yield SSE events for one tool-using assistant turn."""
+        ctx = self._make_ctx(user_id, conversation_id, uuid4())
+        budget = RunBudget.from_settings(self._settings)
+        history = await self._repo.list_messages(conversation_id, limit=_HISTORY_LIMIT)
+        messages = _to_llm_messages(history, ui_context=ui_context)
+        async for event in self._safe_loop(ctx, messages, budget, Usage(0, 0), 0):
+            yield event
+
+    async def resume_confirm(
+        self,
+        user_id: UUID,
+        conversation_id: UUID,
+        call_id: UUID,
+        *,
+        approved: bool,
+        values: dict[str, Any] | None,
+    ) -> AsyncIterator[ChatSseEvent]:
+        """Resume after POST /confirm — new SSE stream for the same turn."""
+        try:
+            async for event in self._resume_confirm(
+                user_id,
+                conversation_id,
+                call_id,
+                approved=approved,
+                values=values,
+            ):
+                yield event
+        except BudgetExceededError as exc:
+            yield ChatSseEvent("error", {"detail": str(exc), "code": "budget_exceeded"})
+        except (
+            OrchestrationError,
+            ToolValidationError,
+            ToolAuthzError,
+            ToolModeBlockedError,
+        ) as exc:
+            yield ChatSseEvent("error", {"detail": str(exc)})
+
+    async def _resume_confirm(
+        self,
+        user_id: UUID,
+        conversation_id: UUID,
+        call_id: UUID,
+        *,
+        approved: bool,
+        values: dict[str, Any] | None,
+    ) -> AsyncIterator[ChatSseEvent]:
+        row = await self._require_pending(user_id, conversation_id, call_id)
+        messages, usage, budget_raw, hitl_rounds, provider_call_id = restore_snapshot(row)
+        ctx = self._make_ctx(user_id, conversation_id, snapshot_run_id(row) or uuid4())
+        budget = RunBudget.from_settings(self._settings)
+        apply_budget_snapshot(budget, budget_raw)
+        tool = self._registry.resolve(row.tool_name)
+        call = ToolCall(
+            id=provider_call_id or str(row.id),
+            name=tool.name,
+            arguments=dict(row.input),
+        )
+        if not approved or is_expired(row):
+            async for event in self._deny_pending(row, tool, call, messages):
+                yield event
+        else:
+            async for event in self._execute_confirmed(
+                _ConfirmedExec(ctx, messages, tool, call, row, values, budget)
+            ):
+                yield event
+        async for event in self._loop(ctx, messages, budget, usage, hitl_rounds):
+            yield event
+
+    async def _deny_pending(
+        self,
+        row: ToolCallRecord,
+        tool: BaseTool,
+        call: ToolCall,
+        messages: list[Message],
+    ) -> AsyncIterator[ChatSseEvent]:
+        status = "expired" if is_expired(row) else "rejected"
+        err = "confirmation expired" if status == "expired" else "user declined"
+        result = {"ok": False, "tool": tool.name, "error": err}
+        await self._repo.update_tool_call(
+            row,
+            ToolCallUpdate(status=status, confirmed_by_user=False, error=err),
+        )
+        await self._session.commit()
+        _append_tool_message(messages, call, result)
+        yield ChatSseEvent("tool_result", {"name": tool.name, "ok": False, "summary": err})
+
+    async def _execute_confirmed(self, pack: _ConfirmedExec) -> AsyncIterator[ChatSseEvent]:
+        final_args = merge_confirmed_args(pack.tool, dict(pack.row.input), pack.values)
+        if pack.tool.touches_external:
+            pack.budget.add_external()
+        yield ChatSseEvent("step", {"label": f"Running {pack.tool.name}…"})
+        result = await execute_tool_call(
+            pack.tool,
+            pack.call,
+            pack.ctx,
+            self._repo,
+            ExecuteOptions(confirmed=True, arguments=final_args, audit=False),
+        )
+        ok = bool(result.get("ok"))
+        await self._repo.update_tool_call(
+            pack.row,
+            ToolCallUpdate(
+                status="confirmed" if ok else "error",
+                input_data=final_args,
+                output_data=result.get("data") if ok else None,
+                confirmed_by_user=True,
+                error=None if ok else str(result.get("error")),
+            ),
+        )
+        await self._session.commit()
+        _append_tool_message(pack.messages, pack.call, result)
+        yield _tool_result_event(pack.tool.name, ok, result)
+
+    async def _require_pending(
+        self,
+        user_id: UUID,
+        conversation_id: UUID,
+        call_id: UUID,
+    ) -> ToolCallRecord:
+        conv = await self._repo.get_conversation_for_user(conversation_id, user_id)
+        if conv is None:
+            raise OrchestrationError("conversation not found")
+        row = await self._repo.get_tool_call(call_id)
+        if row is None or row.status != "pending_confirmation":
+            raise OrchestrationError("pending confirmation not found")
+        if snapshot_conversation_id(row) != conversation_id:
+            raise OrchestrationError("call_id does not belong to this conversation")
+        return row
+
+    async def _safe_loop(
+        self,
+        ctx: ToolContext,
+        messages: list[Message],
+        budget: RunBudget,
+        usage: Usage,
+        hitl_rounds: int,
+    ) -> AsyncIterator[ChatSseEvent]:
+        try:
+            async for event in self._loop(ctx, messages, budget, usage, hitl_rounds):
+                yield event
+        except BudgetExceededError as exc:
+            yield ChatSseEvent("error", {"detail": str(exc), "code": "budget_exceeded"})
+        except OrchestrationError as exc:
+            yield ChatSseEvent("error", {"detail": str(exc)})
+
+    async def _loop(
+        self,
+        ctx: ToolContext,
+        messages: list[Message],
+        budget: RunBudget,
+        usage: Usage,
+        hitl_rounds: int,
+    ) -> AsyncIterator[ChatSseEvent]:
+        state = _LoopState(ctx, messages, budget, usage, hitl_rounds, "")
+        while True:
+            events, state, outcome = await self._loop_round(state)
+            for event in events:
+                yield event
+            if outcome == "paused":
+                return
+            if outcome == "done":
+                break
+        yield await self._finish(state.ctx, state.final_text, state.usage, state.budget)
+
+    async def _loop_round(
+        self,
+        state: _LoopState,
+    ) -> tuple[list[ChatSseEvent], _LoopState, str]:
+        """One LLM round; outcome is continue | done | paused."""
+        state.budget.begin_iter()
+        out: list[ChatSseEvent] = [ChatSseEvent("step", {"label": "Thinking…"})]
+        resp = await self._call_llm(state.messages, state.ctx)
+        usage = _accumulate(state.budget, state.usage, resp)
+        text = state.final_text
+        if resp.text:
+            text = resp.text
+            out.append(ChatSseEvent("delta", {"text": resp.text}))
+        if not resp.tool_calls:
+            nxt = _LoopState(
+                state.ctx, state.messages, state.budget, usage, state.hitl_rounds, text
+            )
+            return out, nxt, "done"
+        state.messages.append(
+            Message(
+                role=Role.ASSISTANT,
+                content=resp.text or "",
+                tool_calls=tuple(resp.tool_calls),
+            )
+        )
+        base = _ToolRound(
+            state.ctx,
+            state.messages,
+            resp.tool_calls[0],
+            state.budget,
+            usage,
+            state.hitl_rounds,
+        )
+        hitl = state.hitl_rounds
+        paused = False
+        async for event in self._run_tools(resp, base):
+            out.append(event)
+            if event.event == "confirmation_request":
+                paused = True
+                hitl += 1
+        nxt = _LoopState(state.ctx, state.messages, state.budget, usage, hitl, text)
+        return out, nxt, "paused" if paused else "continue"
+
+    async def _call_llm(
+        self,
+        messages: list[Message],
+        ctx: ToolContext,
+    ) -> ToolCallingResponse:
+        return await self._llm.call_tools(
+            ToolCallingRequest(
+                messages=messages,
+                tools=self._registry.list_specs(ctx.mode),
+                max_output_tokens=self._settings.llm_max_output_tokens,
+                task="chat_tools",
+            ),
+            conversation_id=ctx.conversation_id,
+        )
+
+    async def _run_tools(
+        self,
+        resp: ToolCallingResponse,
+        round_base: _ToolRound,
+    ) -> AsyncIterator[ChatSseEvent]:
+        for call in resp.tool_calls:
+            round_base.budget.check_walltime()
+            round_ = _ToolRound(
+                round_base.ctx,
+                round_base.messages,
+                call,
+                round_base.budget,
+                round_base.usage,
+                round_base.hitl_rounds,
+            )
+            paused = False
+            async for event in self._one_tool(round_):
+                yield event
+                if event.event == "confirmation_request":
+                    paused = True
+                if paused and event.event == "done":
+                    return
+            if paused:
+                return
+
+    async def _one_tool(self, round_: _ToolRound) -> AsyncIterator[ChatSseEvent]:
+        try:
+            tool = self._registry.resolve(round_.call.name)
+        except ToolNotFoundError as exc:
+            async for event in _fail_tool(round_.messages, round_.call, str(exc)):
+                yield event
+            return
+        if tool.risk_level == RiskLevel.CONFIRMATION_REQUIRED:
+            pack = _PausePack(
+                round_.ctx,
+                round_.messages,
+                tool,
+                round_.call,
+                round_.budget,
+                round_.usage,
+                round_.hitl_rounds,
+            )
+            async for event in self._pause_for_confirm(pack):
+                yield event
+            return
+        if tool.touches_external:
+            round_.budget.add_external()
+        yield ChatSseEvent("step", {"label": f"Running {tool.name}…"})
+        result = await execute_tool_call(tool, round_.call, round_.ctx, self._repo)
+        _append_tool_message(round_.messages, round_.call, result)
+        yield _tool_result_event(tool.name, bool(result.get("ok")), result)
+
+    async def _pause_for_confirm(self, pack: _PausePack) -> AsyncIterator[ChatSseEvent]:
+        if pack.hitl_rounds >= self._settings.llm_max_hitl_rounds:
+            async for event in _fail_tool(
+                pack.messages, pack.call, "max confirmation rounds exceeded"
+            ):
+                yield event
+            return
+        try:
+            inp = await prepare_gated_call(pack.tool, pack.call, pack.ctx)
+        except (ToolAuthzError, ToolValidationError, ToolModeBlockedError) as exc:
+            async for event in _fail_tool(pack.messages, pack.call, str(exc)):
+                yield event
+            return
+        proposed = inp.model_dump(mode="json")
+        summary = (
+            f"Scrape from {proposed['url']}" if "url" in proposed else f"Confirm {pack.tool.name}"
+        )
+        row = await freeze_pending(
+            FreezeRequest(
+                repo=self._repo,
+                tool=pack.tool,
+                call=pack.call,
+                ctx=pack.ctx,
+                messages=pack.messages,
+                budget=pack.budget,
+                usage=pack.usage,
+                hitl_rounds=pack.hitl_rounds + 1,
+                ttl_seconds=self._settings.llm_hitl_ttl_seconds,
+                proposed=proposed,
+                summary=summary,
+            )
+        )
+        await self._session.commit()
+        yield ChatSseEvent("confirmation_request", confirmation_event_data(row, pack.tool))
+        yield ChatSseEvent(
+            "done",
+            {
+                "conversation_id": str(pack.ctx.conversation_id),
+                "run_id": str(pack.ctx.run_id),
+                "call_id": str(row.id),
+                "status": "awaiting_confirmation",
+                "tokens_in": pack.usage.tokens_in,
+                "tokens_out": pack.usage.tokens_out,
+                "cost_usd": pack.budget.cost_usd,
+                **pack.budget.summary(),
+            },
+        )
+
+    async def _finish(
+        self,
+        ctx: ToolContext,
+        text: str,
+        usage: Usage,
+        budget: RunBudget,
+    ) -> ChatSseEvent:
+        assistant = await self._repo.add_message(
+            ctx.conversation_id,
+            role=Role.ASSISTANT.value,
+            content=text,
+            tokens_in=usage.tokens_in,
+            tokens_out=usage.tokens_out,
+        )
+        await self._session.commit()
+        return ChatSseEvent(
+            "done",
+            {
+                "message_id": str(assistant.id),
+                "conversation_id": str(ctx.conversation_id),
+                "run_id": str(ctx.run_id),
+                "tokens_in": usage.tokens_in,
+                "tokens_out": usage.tokens_out,
+                "cost_usd": budget.cost_usd,
+                "status": "complete",
+                **budget.summary(),
+            },
+        )
+
+    def _make_ctx(self, user_id: UUID, conversation_id: UUID, run_id: UUID) -> ToolContext:
+        return ToolContext(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            run_id=run_id,
+            mode=_parse_mode(self._settings.llm_assistant_mode),
+            session=self._session,
+        )
+
+
+def _parse_mode(raw: str) -> Mode:
+    try:
+        return Mode(raw)
+    except ValueError:
+        return Mode.INTERNAL_ONLY
+
+
+def _to_llm_messages(
+    history: list[ConversationMessage],
+    *,
+    ui_context: dict[str, Any] | None = None,
+) -> list[Message]:
+    messages = [Message(role=Role.SYSTEM, content=SYSTEM_PROMPT)]
+    block = format_ui_context_block(ui_context)
+    if block:
+        messages.append(Message(role=Role.SYSTEM, content=block))
+    for row in history:
+        try:
+            role = Role(row.role)
+        except ValueError:
+            continue
+        if role == Role.SYSTEM:
+            continue
+        messages.append(Message(role=role, content=row.content))
+    return messages
+
+
+def _tool_result_event(name: str, ok: bool, result: dict[str, object]) -> ChatSseEvent:
+    data = result.get("data") if ok else None
+    payload: dict[str, object] = {
+        "name": name,
+        "ok": ok,
+        "summary": _summarize_result(result),
+    }
+    action = client_action_for_tool(name, ok, data if isinstance(data, dict) else None)
+    if action:
+        payload["client_action"] = action
+    return ChatSseEvent("tool_result", payload)
+
+
+def _accumulate(budget: RunBudget, usage_total: Usage, resp: ToolCallingResponse) -> Usage:
+    cost = resp.usage.cost_usd if resp.usage.cost_usd is not None else 0.0
+    budget.add_usage(resp.usage, cost_usd=cost)
+    return Usage(
+        usage_total.tokens_in + resp.usage.tokens_in,
+        usage_total.tokens_out + resp.usage.tokens_out,
+    )
+
+
+async def _fail_tool(
+    messages: list[Message],
+    call: ToolCall,
+    error: str,
+) -> AsyncIterator[ChatSseEvent]:
+    result = {"ok": False, "tool": call.name, "error": error}
+    _append_tool_message(messages, call, result)
+    yield ChatSseEvent("tool_result", {"name": call.name, "ok": False, "summary": error})
+
+
+def _append_tool_message(
+    messages: list[Message],
+    call: ToolCall,
+    result: dict[str, object],
+) -> None:
+    payload = json.dumps(result, ensure_ascii=False)
+    if len(payload) > _MAX_TOOL_RESULT_CHARS:
+        payload = payload[: _MAX_TOOL_RESULT_CHARS - 14] + "…[truncated]"
+    messages.append(
+        Message(
+            role=Role.TOOL,
+            content=payload,
+            name=str(result.get("tool") or call.name),
+            tool_call_id=call.id,
+        )
+    )
+
+
+def _summarize_result(result: dict[str, object]) -> str:
+    if not result.get("ok"):
+        return str(result.get("error") or "tool failed")
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return "ok"
+    return _summarize_ok_data(data)
+
+
+def _summarize_ok_data(data: dict[str, object]) -> str:
+    message = data.get("message")
+    if isinstance(message, str) and message.strip():
+        return message
+    hits = data.get("hits")
+    if isinstance(hits, list):
+        return f"{len(hits)} content hit(s)"
+    if "job_id" in data:
+        text: object = f"job {data['job_id']}"
+    elif data.get("total") is not None:
+        text = f"{data['total']} book(s)"
+    else:
+        text = data.get("title") or "ok"
+    return str(text)

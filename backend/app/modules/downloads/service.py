@@ -69,6 +69,45 @@ class DownloadService:
         await self._enqueue(created.id)
         return DownloadJobRead.model_validate(created)
 
+    async def create_single_chapter(
+        self,
+        user_id: UUID,
+        book_id: UUID,
+        chapter_number: int,
+    ) -> tuple[DownloadJobRead, bool]:
+        """Create or reuse a single-chapter download job. Returns (job, reused)."""
+        await self._library.assert_access(user_id, book_id)
+        await self._purge_expired(user_id, book_id)
+        existing = await self._find_active_single(user_id, book_id, chapter_number)
+        if existing is not None:
+            return DownloadJobRead.model_validate(existing), True
+        job = await self.create(
+            user_id,
+            DownloadCreate(
+                book_id=book_id,
+                chapter_from=chapter_number,
+                chapter_to=chapter_number,
+            ),
+        )
+        return job, False
+
+    async def _find_active_single(
+        self,
+        user_id: UUID,
+        book_id: UUID,
+        chapter_number: int,
+    ) -> DownloadJob | None:
+        jobs = await self._repo.list_for_user(user_id, book_id, limit=50)
+        active = {"pending", "processing", "complete"}
+        for job in jobs:
+            if (
+                job.chapter_from == chapter_number
+                and job.chapter_to == chapter_number
+                and job.status in active
+            ):
+                return job
+        return None
+
     async def get(self, user_id: UUID, job_id: UUID) -> DownloadJobRead:
         job = await self._require(user_id, job_id)
         return DownloadJobRead.model_validate(job)

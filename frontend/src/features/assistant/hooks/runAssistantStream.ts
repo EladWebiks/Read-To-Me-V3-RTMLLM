@@ -1,56 +1,56 @@
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import { streamChat, type ChatMessage } from '../api/chatApi'
-
-type Args = {
-  text: string
-  conversationId: string | null
-  assistantId: string
-  setConversationId: (id: string | null) => void
-  setMessages: Dispatch<SetStateAction<ChatMessage[]>>
-  setError: (detail: string | null) => void
-  abortRef: MutableRefObject<AbortController | null>
-}
+import { streamChat, streamConfirm, type ConfirmationPayload } from '../api/chatApi'
+import { buildStreamHandlers, type StreamArgs } from './streamHandlers'
 
 /** Run one SSE chat turn and update local message state. */
-export async function runAssistantStream(args: Args): Promise<void> {
-  const {
-    text,
-    conversationId,
-    assistantId,
-    setConversationId,
-    setMessages,
-    setError,
-    abortRef,
-  } = args
+export async function runAssistantStream(
+  args: StreamArgs & {
+    text: string
+    uiContext?: { path: string; book_id?: string; chapter_id?: string }
+  },
+  onAwaitingConfirm?: (payload: ConfirmationPayload) => void,
+): Promise<void> {
   const controller = new AbortController()
-  abortRef.current = controller
+  args.abortRef.current = controller
   try {
     await streamChat(
-      text,
-      conversationId,
-      {
-        onMeta: (id) => setConversationId(id),
-        onDelta: (delta) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId ? { ...m, content: m.content + delta } : m,
-            ),
-          )
-        },
-        onDone: ({ messageId }) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, id: messageId } : m)),
-          )
-        },
-        onError: (detail) => setError(detail),
-      },
+      args.text,
+      args.conversationId,
+      buildStreamHandlers(args, onAwaitingConfirm),
+      controller.signal,
+      args.uiContext,
+    )
+  } catch (err) {
+    if (!controller.signal.aborted) {
+      args.setError(err instanceof Error ? err.message : 'Chat failed')
+    }
+  } finally {
+    args.abortRef.current = null
+  }
+}
+
+/** Resume a paused turn after HITL OK/Cancel. */
+export async function runConfirmStream(
+  args: StreamArgs & {
+    conversationId: string
+    callId: string
+    approved: boolean
+    values?: Record<string, unknown>
+  },
+): Promise<void> {
+  const controller = new AbortController()
+  args.abortRef.current = controller
+  try {
+    await streamConfirm(
+      args.conversationId,
+      { callId: args.callId, approved: args.approved, values: args.values },
+      buildStreamHandlers(args),
       controller.signal,
     )
   } catch (err) {
     if (!controller.signal.aborted) {
-      setError(err instanceof Error ? err.message : 'Chat failed')
+      args.setError(err instanceof Error ? err.message : 'Confirm failed')
     }
   } finally {
-    abortRef.current = null
+    args.abortRef.current = null
   }
 }

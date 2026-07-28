@@ -1,110 +1,172 @@
 # 04 — Human-in-the-loop (HITL)
 
-> `confirmation_required` tools must **pause** and get explicit user approval before
-> executing. This is the single most important safety gate for destructive/expensive/
-> external actions. Modeled on phase-0 §7's "interrupt + resume endpoint, max-rounds cap".
+> Pauses the orchestrator when the user must decide something the model must not
+> auto-execute. Per the north star ([00](./00-north-star.md)), HITL is **not** only
+> Approve/Decline — it includes **structured forms**, and is distinct from **clarify /
+> choice** questions in normal chat.
 
-## 1. What requires confirmation **[U]**
+## 1. Two different “ask the user” modes **[R]**
+
+| Mode | When | Executes a tool? | Transport |
+|------|------|------------------|-----------|
+| **Clarify / choice** | Intent unclear, or several valid options (which book?) | No (or only after a later turn) | Assistant prose + optional `choice_request` UI chips |
+| **Confirmation (HITL)** | `confirmation_required` tool: destructive / expensive / external / import | Yes, only after user submits | `confirmation_request` + `POST /confirm` |
+
+Untrusted book/tool text can never auto-approve a HITL gate. Clarify is conversational;
+HITL is a **security and cost gate**.
+
+## 2. What requires confirmation **[U]**
 
 Anything **destructive, expensive, external, large-range, or an import**:
 
-- Scrape a full book or a large chapter range (external + costly).
+- Scrape a full book or a chapter range (external + costly).
 - Overwrite or delete chapters/books (destructive).
 - Create a large archive / full-book download.
 - Access external websites / import an externally discovered book.
 - Retry a large failed job (re-spends quota).
 
-These are classified `risk_level = confirmation_required` on the tool itself
+These are classified `risk_level = confirmation_required` on the tool
 (see [02-tools.md](./02-tools.md)); the orchestrator enforces the pause.
 
-## 2. Lifecycle
+## 3. Confirmation shapes **[R]**
+
+### 3a. Binary (Approve / Decline)
+
+Enough when args are fully known and safe to show as a summary
+(“Delete *Book X* from your library?”).
+
+### 3b. Form confirmation (structured params) — **required for north star**
+
+When the user must supply or edit parameters before execute. Canonical example:
+
+> Add this book to your library  
+> - Starting chapter *(optional, default 1)*  
+> - Amount of chapters to scrape *(empty = entire book)*  
+> [OK] [Cancel]
+
+Rules:
+
+- The tool declares a **`confirmation_schema`** (pydantic) — fields the user may edit —
+  separate from or a subset of `input_schema`.
+- At pause time the orchestrator freezes a **proposal**: tool name, model-suggested
+  args, and the form schema + defaults.
+- On submit, the **user-edited values** become the args that are re-validated against
+  `input_schema`. The model cannot swap in different args after the fact.
+- Empty/optional fields use documented defaults (e.g. empty count → entire book).
+- On approve, the orchestrator **re-runs the full execution contract** (validate →
+  authz → risk/mode → rate-limit) before execute. Approval is not a bypass.
+
+### 3c. Clarify / multi-choice (not a tool gate)
+
+Examples: “Which of these five books?”, “Did you mean scrape or download?”
+
+- Prefer assistant text; optionally emit `choice_request {options[]}` so the UI can
+  render chips that send a normal user message (or a short-circuit follow-up).
+- Choosing an option does **not** skip HITL if the next step is still
+  `confirmation_required`.
+
+## 4. Lifecycle
 
 ```mermaid
 stateDiagram-v2
     [*] --> Running
-    Running --> AwaitingConfirmation: tool is confirmation_required
-    AwaitingConfirmation --> Executing: user approves (POST /confirm approve=true)
-    AwaitingConfirmation --> Skipped: user rejects (approve=false)
+    Running --> AwaitingConfirmation: confirmation_required tool
+    AwaitingConfirmation --> Executing: user submits form / approve
+    AwaitingConfirmation --> Skipped: user cancels
     AwaitingConfirmation --> Expired: no answer before deadline
     Executing --> Running: result appended, loop continues
-    Skipped --> Running: model told "action was declined"
+    Skipped --> Running: model told action declined
     Expired --> Running: treated as declined
     Running --> Done
     Done --> [*]
 ```
 
-Key properties:
+Also:
 
-- The proposed **args are frozen** at pause time. The user approves the *exact* call
-  shown; the model cannot swap args after approval.
-- On approve, the orchestrator **re-runs the full execution contract** (validate →
-  authz → risk/mode → rate-limit) before executing. Approval is not a bypass.
-- On reject/expire, a `tool_result(denied)` is fed back so the model can respond
-  gracefully ("I didn't start the download").
-- A **max-rounds cap** limits how many confirmations one turn may request (prevents a
-  model from spamming approval prompts).
+- A **max-rounds cap** limits how many HITL pauses one turn may request.
+- Reject/expire → `tool_result(denied)` so the model can reply gracefully.
 
-## 3. Transport **[Q3]**
+## 5. Transport **[D → ADR-8]**
 
-**Proposed (recommended):** keep the single SSE stream and add a resume endpoint.
+SSE interrupt + resume endpoint (not websocket for B3):
 
-1. Loop reaches a gated tool → emits `confirmation_request {call_id, tool, args, risk}`
-   and **suspends** the run, persisting a pending record.
-2. Frontend renders an approve/reject affordance in the chat.
-3. Frontend calls `POST /api/chat/{conversation_id}/confirm { call_id, approved }`.
-4. Server resolves the pending run and **resumes** the loop; new events continue on a
-   (re-opened) SSE stream for that turn.
+1. Loop reaches a gated tool → emits `confirmation_request` (see payload below) and
+   **suspends**; persists pending `tool_call`.
+2. Frontend renders binary or **form** card from the schema.
+3. `POST /api/chat/{conversation_id}/confirm` with
+   `{ call_id, approved, values? }`.
+4. Server resumes; new SSE stream continues the turn (`run_id` + `call_id` stitch).
 
-**Alternative:** a websocket for bidirectional messaging. Heavier; not needed for
-single-user. Documented so the reviewer can push back.
+`confirmation_request` ends the current SSE response (`awaiting_confirmation`). Confirm
+opens a **new** SSE stream — avoids holding a socket open; survives reconnects.
 
-### Resume across a suspended stream
+### Payload (form-aware)
 
-Because plain SSE is one-directional and a suspended HTTP request is fragile, the
-cleanest model is:
+```json
+{
+  "type": "confirmation_request",
+  "call_id": "…",
+  "tool": "scrape_book_range",
+  "risk": "confirmation_required",
+  "summary": "Add «Book 2» to your library and scrape chapters",
+  "args": { "discovered_book_id": "…", "start_chapter": 1, "chapter_count": null },
+  "form": {
+    "fields": [
+      {
+        "name": "start_chapter",
+        "label": "Starting chapter",
+        "type": "integer",
+        "required": false,
+        "default": 1
+      },
+      {
+        "name": "chapter_count",
+        "label": "Amount of chapters (empty = entire book)",
+        "type": "integer",
+        "required": false,
+        "default": null
+      }
+    ]
+  }
+}
+```
 
-- The `confirmation_request` event ends the current SSE response with the run left in
-  `awaiting_confirmation`.
-- The `POST /confirm` starts a **new** SSE response that streams the continuation.
-- The frontend stitches both into one visual turn using `run_id` + `call_id`.
+Optional later: `choice_request` for clarify chips (B4+).
 
-This avoids holding a socket open indefinitely and survives client reconnects.
+## 6. Persistence
 
-## 4. Persistence
+Reuse `tool_call`:
 
-A pending confirmation is durable so a refresh/reconnect doesn't lose it:
+| Status | Meaning |
+|--------|---------|
+| `pending_confirmation` | Frozen proposal + form schema; `confirmed_by_user` null |
+| `confirmed` | User approved; store **final** `input` (after form merge) |
+| `rejected` / `expired` | Not executed |
 
-- Reuse `tool_call` with `status = 'pending_confirmation'`, `confirmed_by_user = null`,
-  storing the frozen `input`.
-- On approve → `status = 'confirmed'`, `confirmed_by_user = user_id`, then execute and
-  update to `success`/`error`.
-- On reject → `status = 'rejected'`. On expire → `status = 'expired'`.
+`confirmed_by_user` feeds confirmation-rate metrics ([05](./05-observability.md)).
 
-`confirmed_by_user` gives us the confirmation-rate metric ([05](./05-observability.md))
-and an audit trail of who approved what.
+## 7. Frontend UX (B4)
 
-## 5. Frontend UX (B4)
+- HITL + errors + user messages use **bubbles/cards**; assistant prose stays bubble-less
+  markdown (current chat UX).
+- Form card: labels, defaults, validation errors inline, **OK** / **Cancel**.
+- Composer disabled (or clearly secondary) while a HITL card is open for that turn.
+- After resolve: collapse to “Approved — scrape chapters 1–∞ of *X*” / “Declined”.
+- Clarify choices: chips preferred; sending a chip is just another user message.
 
-- Render the pending action as a distinct **card with a bubble** (per the user's UI
-  preference: HITL + errors + user messages get bubbles; assistant prose does not).
-- Show tool name, a human summary of args ("Download chapters 1–120 of *X*"), and the
-  risk level. Two buttons: **Approve** / **Decline**.
-- Disable the composer while awaiting confirmation for that turn; show a clear
-  "Waiting for your confirmation" state.
-- After resolution, collapse the card into a compact "Approved/Declined" line.
+## 8. Security notes
 
-## 6. Security notes
+- Approval + form values come from the **authenticated session**, never from the model
+  or from tool/book text.
+- Re-validate ownership and schema at execute time.
+- Rate-limit confirmations; cap form field sizes.
+- Defaults must be safe (never “delete all” as a silent default).
 
-- The approval decision comes from the **authenticated session**, never from the model
-  or from tool text. Untrusted content can never auto-approve.
-- Re-validate ownership at execute time (the user may have lost access between propose
-  and approve).
-- Rate-limit confirmations to avoid approval-fatigue attacks.
+## 9. Tests
 
-## 7. Tests
-
-- A `confirmation_required` tool never executes without a recorded `confirmed`.
-- Reject path feeds `denied` back and the turn completes cleanly.
-- Expire path behaves like reject.
-- Args are immutable between propose and execute (tamper attempt → rejected).
+- `confirmation_required` never executes without recorded confirmation.
+- Form submit merges user values; model-only args without confirm are rejected.
+- Tampered `call_id` / swapped tool name → rejected.
+- Reject and expire paths clean.
 - Ownership revoked between propose and approve → denied at execute.
+- Optional empty `chapter_count` → service receives “entire book” semantics.

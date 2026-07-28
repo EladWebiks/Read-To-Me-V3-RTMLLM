@@ -1,6 +1,6 @@
 import { useMemo, useState, type RefObject } from 'react'
 import { useFitRowPageSize } from '@/shared/hooks/useFitRowPageSize'
-import { useCancelScrapeJob, useScrapeJobs } from '../hooks'
+import { useCancelScrapeJob, useDeleteScrapeJob, useScrapeJobs } from '../hooks'
 import { MOCK_SCRAPE_JOBS, SCRAPER_APPEND_MOCKS } from '../mocks/mockScrapeJobs'
 import type { ScrapeJob } from '../types'
 
@@ -11,6 +11,7 @@ export const JOB_GAP_REM = 0.5
 export function useScrapeJobListState(listSlotRef: RefObject<HTMLElement | null>) {
   const jobs = useScrapeJobs()
   const cancel = useCancelScrapeJob()
+  const remove = useDeleteScrapeJob()
   const pageSize = useFitRowPageSize(listSlotRef, {
     rowRem: JOB_ROW_REM,
     gapRem: JOB_GAP_REM,
@@ -37,6 +38,11 @@ export function useScrapeJobListState(listSlotRef: RefObject<HTMLElement | null>
     void cancel.mutateAsync(job.id)
   }
 
+  function onRemove(job: ScrapeJob) {
+    if (job.id.startsWith('mock-')) return
+    void remove.mutateAsync(job.id)
+  }
+
   return {
     isLoading: jobs.isLoading && !SCRAPER_APPEND_MOCKS,
     items,
@@ -46,6 +52,7 @@ export function useScrapeJobListState(listSlotRef: RefObject<HTMLElement | null>
     pageSize: size,
     setPage,
     onCancel,
+    onRemove,
     showMocksHint: SCRAPER_APPEND_MOCKS,
   }
 }

@@ -2,23 +2,34 @@ import { MessageSquare } from 'lucide-react'
 import type { ChatMessage } from '../api/chatApi'
 import { useStickToBottom } from '../hooks/useStickToBottom'
 import { ChatTurn } from './ChatTurn'
+import { LiveStatusLine } from './LiveStatusLine'
 
 type Props = {
   messages: ChatMessage[]
   framed: boolean
   error: string | null
   sending: boolean
+  liveStatus?: string | null
+  confirmBusy?: boolean
+  onResolveConfirm?: (approved: boolean, values?: Record<string, unknown>) => void
 }
 
 /** Scrollable message list or empty state. */
-export function AssistantMessageList({ messages, framed, error, sending }: Props) {
-  const last = messages[messages.length - 1]
-  const contentKey = `${messages.length}:${last?.id ?? ''}:${last?.content.length ?? 0}`
+export function AssistantMessageList({
+  messages,
+  framed,
+  error,
+  sending,
+  liveStatus = null,
+  confirmBusy = false,
+  onResolveConfirm,
+}: Props) {
+  const visible = messages.filter((m) => m.role !== 'step')
+  const last = visible[visible.length - 1]
+  const contentKey = `${visible.length}:${last?.id ?? ''}:${last?.content.length ?? 0}:${liveStatus ?? ''}`
   const { containerRef, onScroll } = useStickToBottom(sending, contentKey)
 
-  if (!messages.length) {
-    return <EmptyState framed={framed} />
-  }
+  if (!visible.length && !liveStatus) return <EmptyState framed={framed} />
 
   return (
     <div
@@ -26,13 +37,16 @@ export function AssistantMessageList({ messages, framed, error, sending }: Props
       onScroll={onScroll}
       className="assistant-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 sm:px-4"
     >
-      {messages.map((m, index) => (
+      {visible.map((m, index) => (
         <ChatTurn
           key={m.id}
           message={m}
-          streaming={sending && m.role === 'assistant' && index === messages.length - 1}
+          streaming={sending && m.role === 'assistant' && index === visible.length - 1}
+          confirmBusy={confirmBusy}
+          onResolveConfirm={onResolveConfirm}
         />
       ))}
+      {liveStatus ? <LiveStatusLine label={liveStatus} /> : null}
       {error ? (
         <div
           role="alert"
@@ -58,7 +72,7 @@ function EmptyState({ framed }: { framed: boolean }) {
       <div className="max-w-sm space-y-1.5">
         <p className="text-sm font-medium text-foreground">Ask anything</p>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Free-form chat for now. Library tools and actions come next.
+          Library tools, play, downloads, and scrape confirmation when needed.
         </p>
       </div>
     </div>

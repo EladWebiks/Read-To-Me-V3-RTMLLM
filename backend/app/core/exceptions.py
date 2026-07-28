@@ -34,6 +34,7 @@ from app.modules.reader.exceptions import ProgressNotFoundError
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
+    ScrapeJobNotDeletableError,
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
@@ -164,6 +165,16 @@ def _register_scraping_handlers(app: FastAPI) -> None:
         _exc: ScrapeJobAlreadyCancelledError,
     ) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "Job already terminal"})
+
+    @app.exception_handler(ScrapeJobNotDeletableError)
+    async def _scrape_not_deletable(
+        _request: Request,
+        _exc: ScrapeJobNotDeletableError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Cancel the job before removing it from history"},
+        )
 
     @app.exception_handler(PreviewError)
     async def _preview_failed(

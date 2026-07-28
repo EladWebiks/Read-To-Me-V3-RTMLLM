@@ -2,6 +2,7 @@
 
 > How the assistant is wired once tools land. B1/B2 already built the left half
 > (provider + chat); B3 adds the `tools` and `orchestration` modules.
+> Product intent: [00-north-star.md](./00-north-star.md).
 
 ## 1. Module map
 
@@ -10,11 +11,12 @@ Two new bounded contexts join the modular monolith (phase-0 §11):
 ```
 backend/app/modules/
   llm/            # provider abstraction, router, telemetry  (B1 — done)
-  orchestration/  # the tool loop, budgets, HITL, tracing      (B3 — new)
+  orchestration/  # the tool loop, budgets, form HITL, tracing  (B3 — new)
   tools/          # tool registry + individual tool defs       (B3 — new)
   library/ books/ chapters/ reader/ audio/ downloads/ scraping/ (domain — exist)
+  discovery/      # search / import candidates                 (C — planned)
+  # book_summaries live in library (or a thin summaries module) — C, ADR-13
 ```
-
 ### Dependency direction (never inverted)
 
 ```
@@ -43,8 +45,8 @@ sequenceDiagram
     participant SVC as domain service
     participant DB as Postgres
 
-    FE->>API: POST /api/chat {message, conversation_id}
-    API->>ORCH: run(user, conversation, message)
+    FE->>API: POST /api/chat {message, conversation_id, ui_context?}
+    API->>ORCH: run(user, conversation, message, ui_context)
     ORCH->>DB: persist user message
     loop bounded loop (max iters/tokens/time)
         ORCH->>LLM: call_tools(messages, tool_specs, capability=TOOL_CALLING)
@@ -53,9 +55,9 @@ sequenceDiagram
             ORCH->>REG: resolve(tool_name)
             ORCH->>ORCH: validate args → authz → risk/mode → rate-limit
             alt confirmation_required
-                ORCH-->>FE: SSE confirmation_request (pause)
-                FE->>API: POST /confirm {approve}
-                API->>ORCH: resume
+                ORCH-->>FE: SSE confirmation_request (form or binary; pause)
+                FE->>API: POST /confirm {approve, values?}
+                API->>ORCH: resume with merged args
             end
             ORCH->>SVC: execute(input, ctx.user_id) with timeout
             SVC->>DB: read/write (ownership enforced)
@@ -117,3 +119,17 @@ without touching orchestration.
   `confirmation_required` tools.
 - **Executable-artifact safety:** treat any model-proposed action like untrusted
   output — parse, allowlist, authorize before executing.
+
+## 7. UI route context + client actions **[R][D → ADR-14]**
+
+The assistant panel is **app-wide**. Knowing the current screen improves grounding
+without giving the model control of the SPA.
+
+| Concern | Who | Rule |
+|---------|-----|------|
+| Current route / book / chapter | **Frontend → chat request** as `ui_context` | Injected as **data** in the turn (delimited); cannot select tools or skip HITL |
+| Refresh Scraper / library lists | **Frontend** on `tool_result` (invalidate queries) | Never ask the LLM to "refresh the page" |
+| Suggest / open Scraper or Reader | **Client action** from tool result or a small navigate chip | Same family as `play_chapter` payload — FE renders link/button or navigates |
+
+Examples: after `scrape_book_range` succeeds, offer "Open Scraper"; on `/read/...`,
+`play_chapter` can stay in-place; off-reader, navigate to the chapter.

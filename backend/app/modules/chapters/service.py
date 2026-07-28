@@ -13,6 +13,7 @@ from app.modules.chapters.exceptions import (
 from app.modules.chapters.models import Chapter
 from app.modules.chapters.repository import ChapterRepository
 from app.modules.chapters.schemas import (
+    ChapterContentHit,
     ChapterCreate,
     ChapterRead,
     ChapterSummary,
@@ -48,6 +49,13 @@ class ChapterService:
         chapter = await self._require(chapter_id)
         return ChapterRead.model_validate(chapter)
 
+    async def get_by_number(self, book_id: UUID, chapter_number: int) -> ChapterRead:
+        """Get chapter by book + number."""
+        chapter = await self._repo.get_by_number(book_id, chapter_number)
+        if chapter is None:
+            raise ChapterNotFoundError(f"{book_id}:{chapter_number}")
+        return ChapterRead.model_validate(chapter)
+
     async def create(
         self,
         book_id: UUID,
@@ -76,6 +84,7 @@ class ChapterService:
         chapter = await self._require(chapter_id)
         await self._apply_update(chapter, data)
         await self._repo.flush()
+        await self._repo.refresh(chapter)
         return ChapterRead.model_validate(chapter)
 
     async def soft_delete(self, chapter_id: UUID) -> None:
@@ -101,6 +110,7 @@ class ChapterService:
             existing.content = content
             existing.word_count = _word_count(content)
             await self._repo.flush()
+            await self._repo.refresh(existing)
             return ChapterRead.model_validate(existing)
         chapter = Chapter(
             book_id=book_id,
@@ -111,6 +121,26 @@ class ChapterService:
         )
         created = await self._repo.add(chapter)
         return ChapterRead.model_validate(created)
+
+    async def search_in_books(
+        self,
+        book_ids: list[UUID],
+        query: str,
+        *,
+        limit: int = 20,
+    ) -> list[ChapterContentHit]:
+        """Search chapter text within the given books (caller enforces ownership)."""
+        rows = await self._repo.search_content(book_ids, query, limit=limit)
+        return [
+            ChapterContentHit(
+                chapter_id=chapter.id,
+                book_id=chapter.book_id,
+                chapter_number=chapter.chapter_number,
+                chapter_title=chapter.title,
+                snippet=snippet,
+            )
+            for chapter, snippet in rows
+        ]
 
     async def _require(self, chapter_id: UUID) -> Chapter:
         chapter = await self._repo.get_by_id(chapter_id)

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { cancelScrapeJob, createScrapeJob, listScrapeJobs, previewScrape } from '../api'
+import {
+  cancelScrapeJob,
+  createScrapeJob,
+  deleteScrapeJob,
+  listScrapeJobs,
+  previewScrape,
+} from '../api'
 import type { ScrapeJobCreateInput } from '../types'
 
 export function useScrapePreview() {
@@ -18,6 +24,7 @@ export function useScrapeJobs() {
   return useQuery({
     queryKey: ['scraping', 'jobs'],
     queryFn: listScrapeJobs,
+    refetchOnMount: 'always',
     refetchInterval: (query) => {
       const jobs = query.state.data ?? []
       const busy = jobs.some((j) => j.status === 'pending' || j.status === 'running')
@@ -30,6 +37,14 @@ export function useCancelScrapeJob() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (jobId: string) => cancelScrapeJob(jobId),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ['scraping', 'jobs'] }),
+  })
+}
+
+export function useDeleteScrapeJob() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => deleteScrapeJob(jobId),
     onSuccess: () => void client.invalidateQueries({ queryKey: ['scraping', 'jobs'] }),
   })
 }

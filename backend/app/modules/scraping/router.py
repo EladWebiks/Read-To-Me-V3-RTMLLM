@@ -66,3 +66,12 @@ async def cancel_scrape_job(
     service: Annotated[ScrapingService, Depends(_svc)],
 ) -> ScrapeJobRead:
     return await service.cancel(user.id, job_id)
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+async def delete_scrape_job(
+    job_id: UUID,
+    user: Annotated[UserRead, Depends(get_current_user)],
+    service: Annotated[ScrapingService, Depends(_svc)],
+) -> None:
+    await service.delete_job(user.id, job_id)

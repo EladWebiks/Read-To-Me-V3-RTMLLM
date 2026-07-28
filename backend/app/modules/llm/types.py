@@ -20,6 +20,17 @@ class Role(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ToolCall:
+    """Model-proposed tool invocation."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    # Opaque provider state (e.g. Gemini thought_signature) for multi-turn tool loops.
+    thought_signature: bytes | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Message:
     """One chat turn."""
 
@@ -27,6 +38,7 @@ class Message:
     content: str
     name: str | None = None
     tool_call_id: str | None = None
+    tool_calls: tuple[ToolCall, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,15 +57,6 @@ class ToolSpec:
     name: str
     description: str
     parameters: dict[str, Any]
-
-
-@dataclass(frozen=True, slots=True)
-class ToolCall:
-    """Model-proposed tool invocation."""
-
-    id: str
-    name: str
-    arguments: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)

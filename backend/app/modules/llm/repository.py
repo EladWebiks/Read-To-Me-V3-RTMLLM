@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ from app.modules.llm.models import (
     LlmExecution,
     ModelConfiguration,
     ModelProvider,
+    ToolCallRecord,
 )
 from app.modules.llm.registry import ModelSpec
 
@@ -38,6 +40,33 @@ class ExecutionWrite:
     unit_cost_in: float
     unit_cost_out: float
     conversation_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCallWrite:
+    """Fields for one tool_call audit insert."""
+
+    tool_name: str
+    input_data: dict[str, Any]
+    status: str
+    risk_level: str
+    message_id: uuid.UUID | None = None
+    output_data: dict[str, Any] | None = None
+    duration_ms: int | None = None
+    confirmed_by_user: bool = False
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCallUpdate:
+    """Fields to patch on an existing tool_call."""
+
+    status: str
+    input_data: dict[str, Any] | None = None
+    output_data: dict[str, Any] | None = None
+    confirmed_by_user: bool | None = None
+    error: str | None = None
+    duration_ms: int | None = None
 
 
 class LlmRepository:
@@ -194,3 +223,40 @@ class LlmRepository:
             return
         row.title = title
         await self._session.flush()
+
+    async def record_tool_call(self, data: ToolCallWrite) -> ToolCallRecord:
+        """Insert a tool_call audit row."""
+        row = ToolCallRecord(
+            message_id=data.message_id,
+            tool_name=data.tool_name,
+            input=data.input_data,
+            output=data.output_data,
+            status=data.status,
+            duration_ms=data.duration_ms,
+            risk_level=data.risk_level,
+            confirmed_by_user=data.confirmed_by_user,
+            error=data.error,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get_tool_call(self, call_id: uuid.UUID) -> ToolCallRecord | None:
+        """Load one tool_call by id."""
+        return await self._session.get(ToolCallRecord, call_id)
+
+    async def update_tool_call(self, row: ToolCallRecord, data: ToolCallUpdate) -> ToolCallRecord:
+        """Mutate an existing tool_call (HITL resolve)."""
+        row.status = data.status
+        if data.input_data is not None:
+            row.input = data.input_data
+        if data.output_data is not None:
+            row.output = data.output_data
+        if data.confirmed_by_user is not None:
+            row.confirmed_by_user = data.confirmed_by_user
+        if data.error is not None:
+            row.error = data.error
+        if data.duration_ms is not None:
+            row.duration_ms = data.duration_ms
+        await self._session.flush()
+        return row

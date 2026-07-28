@@ -2,32 +2,34 @@
 
 > The engine that turns a user message into an assistant turn by calling tools under
 > hard caps. This is where budgets, cancellation, tracing, and the SSE protocol live.
+> Product target: [00-north-star.md](./00-north-star.md).
 
 ## 1. Decision: hand-rolled loop, not LangGraph (for B3) **[D → ADR-3]**
 
-Phase-0 Q11 and the B1 spec (ADR-3) locked a **hand-rolled** orchestrator for B1–B3.
-Restated here with the criteria a reviewer should weigh:
+**Maintainer lock (2026-07-28):** keep hand-rolled for B3. The north-star session
+(discovery → summarize → form-HITL scrape → queue) needs **tools + form HITL + a
+pausable loop**, not a graph framework. LangGraph would not replace those building
+blocks; it would only swap the loop implementation.
 
 **Why hand-rolled now**
 
-- Explicit **budgets** (tokens / cost / iterations / wall-clock) and **HITL gates** are
-  first-class, not bolted onto a framework's control flow.
+- Explicit **budgets** and **form-aware HITL gates** are first-class.
 - **Provider-agnostic** — no framework that assumes a particular SDK or message shape.
 - Full control over the **SSE progress protocol** and **audit** (`tool_call`,
   `llm_execution`) which we already own.
-- No framework lock-in while the loop is small (a few hundred lines).
+- Work is not thrown away: tools, schemas, and HITL payloads stay if we ever put
+  LangGraph *inside* `orchestration/` later.
 
 **When to revisit LangGraph** (any one triggers a re-evaluation):
 
 - We need **multi-agent branching** (planner/executor/critic as separate nodes).
 - We need **durable checkpoint/resume** of a long run across process restarts (beyond
-  the single HITL pause we implement ourselves).
+  the HITL pause we implement ourselves).
 - The loop module grows past **~400 lines of real control logic** or its branching
   becomes hard to test.
 
-If triggered: LangGraph would sit **inside `orchestration/`** only; tools, budgets,
-authz, and the SSE protocol stay ours. It never leaks into domain code. See
-[07-decision-log.md](./07-decision-log.md).
+If triggered: LangGraph sits **inside `orchestration/`** only; tools, budgets, authz,
+and SSE stay ours. See [07-decision-log.md](./07-decision-log.md).
 
 ## 2. The loop (pseudocode)
 
@@ -58,9 +60,11 @@ async def run(ctx: ToolContext, user_message: str) -> AsyncIterator[SseEvent]:
             await ratelimit(tool, ctx)                          # 4 rate/idempotency
 
             if tool.risk_level == CONFIRMATION_REQUIRED:
-                approval = yield ConfirmationRequest(call)      # 5a pause (HITL)
+                # 5a pause — binary or form; merge user values into args
+                approval = yield ConfirmationRequest(call, form=tool.confirmation_schema)
                 if not approval.approved:
                     messages.append(tool_result(call, denied=True)); continue
+                inp = tool.input_schema.model_validate(approval.values)
 
             out = await with_timeout(tool.execute(inp, ctx), tool.timeout_ms)  # 5b
             out = tool.output_schema.model_validate(out)
@@ -81,7 +85,7 @@ user-visible reason:
 |-----|--------------------|---------|
 | Max tool-call iterations | `llm_max_tool_iters` | 6 |
 | Max external requests / run | `llm_max_external_calls` | 3 |
-| Max tokens / conversation turn | `llm_max_turn_tokens` | 8k in + 2k out |
+| Max tokens / conversation turn | `llm_max_turn_tokens_in` / `_out` | 32k in + 8k out (cumulative across tool rounds) |
 | Max cost / turn (USD) | `llm_max_turn_cost_usd` | 0.05 |
 | Max wall-clock / run | `llm_run_deadline_seconds` | 60 |
 | Per-tool timeout | tool `timeout_ms` | tool-specific |
@@ -95,18 +99,24 @@ throughput; the router already classifies 429 as `RateLimitError`.
 One stream per turn; discriminated by `type`. Extends the B2 chat stream (which today
 only emits `token` / `done` / `error`).
 
+**Request (B4+):** `POST /api/chat` may include `ui_context` `{ path, book_id?, chapter_id? }`
+— injected into the turn as delimited data (ADR-14). Not an SSE event.
+
 | `type` | Payload | Meaning |
 |--------|---------|---------|
 | `step` | `{label}` | Human-readable progress ("Searching your library…") |
 | `token` | `{text}` | Streamed assistant text chunk |
-| `tool_result` | `{name, ok, summary}` | Redacted result of a tool call |
-| `confirmation_request` | `{call_id, tool, args, risk}` | Loop paused; awaiting approval |
+| `tool_result` | `{name, ok, summary, client_action?}` | Redacted result; optional navigate/play payload for FE |
+| `confirmation_request` | `{call_id, tool, args, risk, summary, form?}` | Loop paused; binary or **form** HITL — see [04](./04-hitl.md) |
+| `choice_request` | `{options[]}` | Optional clarify chips (B4+); not a tool gate |
 | `error` | `{code, message}` | Domain error (rate limit, budget exceeded, denied) |
 | `done` | `{usage, cost_usd, run_id}` | Turn complete + budget summary |
 
 Rules: text and results are separate event types so the frontend can render assistant
-prose (markdown) distinctly from tool affordances. Tool outputs are **redacted/summarized**
-for the stream; full output lives in the `tool_call` audit row.
+prose (markdown) distinctly from tool / HITL affordances. Tool outputs are
+**redacted/summarized** for the stream; full output lives in the `tool_call` audit row.
+List refreshes (Scraper/library) are **FE invalidation** on `tool_result`, not a model
+action — see ADR-14.
 
 ## 5. Cancellation
 

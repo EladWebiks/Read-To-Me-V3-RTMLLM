@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
@@ -184,17 +185,47 @@ def _to_contents(messages: Sequence[Message]) -> list[Any]:
 
     contents: list[Any] = []
     for msg in messages:
-        if msg.role == Role.SYSTEM:
-            # Fold system into a user preamble for models without system role.
-            contents.append(
-                types.Content(role="user", parts=[types.Part.from_text(text=msg.content)])
-            )
-            continue
-        role = "model" if msg.role == Role.ASSISTANT else "user"
-        if msg.role == Role.TOOL:
-            role = "user"
-        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
+        contents.append(_message_to_content(msg, types))
     return contents
+
+
+def _message_to_content(msg: Message, types: Any) -> Any:
+    if msg.role == Role.SYSTEM:
+        return types.Content(role="user", parts=[types.Part.from_text(text=msg.content)])
+    if msg.role == Role.TOOL:
+        name = msg.name or "tool"
+        payload = _tool_payload(msg.content)
+        return types.Content(
+            role="user",
+            parts=[types.Part.from_function_response(name=name, response=payload)],
+        )
+    if msg.role == Role.ASSISTANT and msg.tool_calls:
+        parts: list[Any] = []
+        if msg.content:
+            parts.append(types.Part.from_text(text=msg.content))
+        for call in msg.tool_calls:
+            parts.append(_function_call_part(types, call))
+        return types.Content(role="model", parts=parts)
+    role = "model" if msg.role == Role.ASSISTANT else "user"
+    return types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
+
+
+def _function_call_part(types: Any, call: ToolCall) -> Any:
+    """Rebuild a function-call Part, preserving Gemini thought_signature when present."""
+    return types.Part(
+        function_call=types.FunctionCall(name=call.name, args=call.arguments),
+        thought_signature=call.thought_signature,
+    )
+
+
+def _tool_payload(content: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        return {"result": content}
+    if isinstance(parsed, dict):
+        return parsed
+    return {"result": parsed}
 
 
 def _to_openai_messages(messages: Sequence[Message]) -> list[dict[str, str]]:
@@ -244,32 +275,50 @@ def _usage_from(raw: Any) -> Usage:
 
 
 def _parse_tool_calls(raw: Any) -> list[ToolCall]:
+    parts = _response_parts(raw)
     result: list[ToolCall] = []
+    for index, part in enumerate(parts):
+        call = _tool_call_from_part(part, index)
+        if call is not None:
+            result.append(call)
+    return result
+
+
+def _response_parts(raw: Any) -> list[Any]:
     try:
         candidates = getattr(raw, "candidates", None) or []
         if not candidates:
             return []
-        parts = getattr(candidates[0].content, "parts", None) or []
+        return list(getattr(candidates[0].content, "parts", None) or [])
     except (AttributeError, IndexError, TypeError):
         return []
-    for index, part in enumerate(parts):
-        fn = getattr(part, "function_call", None)
-        if fn is None:
-            continue
-        args = getattr(fn, "args", None) or {}
-        if not isinstance(args, dict):
-            try:
-                args = dict(args)
-            except (TypeError, ValueError):
-                args = {}
-        result.append(
-            ToolCall(
-                id=f"call_{index}",
-                name=str(getattr(fn, "name", "")),
-                arguments=cast(dict[str, Any], args),
-            )
-        )
-    return result
+
+
+def _tool_call_from_part(part: Any, index: int) -> ToolCall | None:
+    fn = getattr(part, "function_call", None)
+    if fn is None:
+        return None
+    args = _coerce_args(getattr(fn, "args", None))
+    signature = getattr(part, "thought_signature", None)
+    if signature is not None and not isinstance(signature, bytes):
+        signature = bytes(signature)
+    return ToolCall(
+        id=f"call_{index}",
+        name=str(getattr(fn, "name", "")),
+        arguments=args,
+        thought_signature=signature,
+    )
+
+
+def _coerce_args(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return cast(dict[str, Any], raw)
+    if raw is None:
+        return {}
+    try:
+        return dict(raw)
+    except (TypeError, ValueError):
+        return {}
 
 
 def _map_provider_error(exc: Exception) -> LlmProviderError:

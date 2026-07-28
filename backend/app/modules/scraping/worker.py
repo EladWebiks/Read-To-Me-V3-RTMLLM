@@ -17,6 +17,7 @@ from app.modules.books.service import BookService
 from app.modules.chapters.service import ChapterService
 from app.modules.scraping.adapters.base import ScrapeAdapter
 from app.modules.scraping.cleaning import clean_content
+from app.modules.scraping.job_messages import public_scrape_error
 from app.modules.scraping.models import ScrapingJob, ScrapingJobItem
 from app.modules.scraping.registry import get_adapter
 from app.modules.scraping.repository import ScrapingRepository
@@ -58,7 +59,7 @@ async def _process(session: AsyncSession, job_id: UUID) -> None:
     except Exception as exc:
         logger.exception("Scrape job %s failed", job_id)
         job.status = "failed"
-        job.error = str(exc)[:2000]
+        job.error = public_scrape_error(str(exc)) or "Scrape failed"
         job.message = "Failed"
     await repo.flush()
 
