@@ -14,6 +14,9 @@ from app.modules.books.models import Book as BookModel  # noqa: F401
 from app.modules.chapters.models import Chapter as ChapterModel  # noqa: F401
 from app.modules.downloads.models import DownloadJob as DownloadJobModel  # noqa: F401
 from app.modules.library.models import UserBook as UserBookModel  # noqa: F401
+from app.modules.llm.models import (  # noqa: F401
+    Conversation as ConversationModel,
+)
 from app.modules.reader.models import ReadingProgress as ProgressModel  # noqa: F401
 from app.modules.scraping.models import ScrapingJob as ScrapingJobModel  # noqa: F401
 from app.modules.scraping.models import ScrapingJobItem as ScrapingJobItemModel  # noqa: F401

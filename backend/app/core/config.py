@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     # How long generated MP3 jobs (and their objects) are kept before expiry.
     download_job_ttl_hours: int = 72
 
+    # LLM (Milestone B). Off by default so Milestone A stays LLM-free.
+    llm_enabled: bool = False
+    llm_provider: str = "gemini"
+    llm_model: str = "gemini-3.5-flash-lite"
+    gemini_api_key: str | None = None
+    llm_timeout_seconds: int = 30
+    llm_max_output_tokens: int = 2048
+    llm_max_retries: int = 2
+    langfuse_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

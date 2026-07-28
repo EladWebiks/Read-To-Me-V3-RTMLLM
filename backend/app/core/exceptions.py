@@ -20,6 +20,15 @@ from app.modules.downloads.exceptions import (
     InvalidChapterRangeError,
 )
 from app.modules.library.exceptions import BookAccessDeniedError
+from app.modules.llm.exceptions import (
+    CapabilityNotSupportedError,
+    LlmConfigError,
+    LlmDisabledError,
+    LlmProviderError,
+    LlmRateLimitError,
+    LlmTimeoutError,
+    NoCandidateModelError,
+)
 from app.modules.reader.exceptions import ProgressNotFoundError
 from app.modules.scraping.exceptions import (
     PreviewError,
@@ -37,6 +46,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_audio_handlers(app)
     _register_download_handlers(app)
     _register_scraping_handlers(app)
+    _register_llm_handlers(app)
 
 
 def _register_auth_handlers(app: FastAPI) -> None:
@@ -183,3 +193,54 @@ def _register_download_handlers(app: FastAPI) -> None:
         _exc: InvalidChapterRangeError,
     ) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": "Invalid chapter range"})
+
+
+def _register_llm_handlers(app: FastAPI) -> None:
+    @app.exception_handler(LlmDisabledError)
+    async def _llm_disabled(
+        _request: Request,
+        _exc: LlmDisabledError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": "LLM is disabled"})
+
+    @app.exception_handler(LlmConfigError)
+    async def _llm_config(
+        _request: Request,
+        exc: LlmConfigError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+    @app.exception_handler(CapabilityNotSupportedError)
+    async def _llm_capability(
+        _request: Request,
+        exc: CapabilityNotSupportedError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(LlmRateLimitError)
+    async def _llm_rate(
+        _request: Request,
+        exc: LlmRateLimitError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+    @app.exception_handler(LlmTimeoutError)
+    async def _llm_timeout(
+        _request: Request,
+        exc: LlmTimeoutError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=504, content={"detail": str(exc)})
+
+    @app.exception_handler(NoCandidateModelError)
+    async def _llm_no_candidate(
+        _request: Request,
+        exc: NoCandidateModelError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+    @app.exception_handler(LlmProviderError)
+    async def _llm_provider(
+        _request: Request,
+        exc: LlmProviderError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
