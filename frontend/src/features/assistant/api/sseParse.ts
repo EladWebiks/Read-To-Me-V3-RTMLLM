@@ -1,0 +1,70 @@
+import type {
+  ChoiceOption,
+  ChoicePayload,
+  ClientAction,
+  ConfirmationPayload,
+} from './chatTypes'
+
+export function parseClientAction(raw: unknown): ClientAction | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  const path = obj.path
+  const label = obj.label
+  const type = obj.type
+  if (typeof path !== 'string' || typeof label !== 'string' || typeof type !== 'string') {
+    return undefined
+  }
+  if (!path.startsWith('/')) return undefined
+  return { type, path, label }
+}
+
+export function parseChoice(data: Record<string, unknown>): ChoicePayload | null {
+  const raw = data.options
+  if (!Array.isArray(raw)) return null
+  const options: ChoiceOption[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    const id = typeof row.id === 'string' ? row.id : ''
+    const label = typeof row.label === 'string' ? row.label.trim() : ''
+    if (id && label) options.push({ id, label })
+  }
+  if (options.length < 2) return null
+  const prompt =
+    typeof data.prompt === 'string' && data.prompt.trim()
+      ? data.prompt.trim()
+      : 'Choose one:'
+  return { prompt, options }
+}
+
+export function parseConfirmation(data: Record<string, unknown>): ConfirmationPayload {
+  const formRaw = data.form
+  const form =
+    formRaw && typeof formRaw === 'object'
+      ? (formRaw as ConfirmationPayload['form'])
+      : null
+  return {
+    callId: String(data.call_id ?? ''),
+    tool: String(data.tool ?? ''),
+    risk: String(data.risk ?? ''),
+    summary: String(data.summary ?? 'Confirm action'),
+    args: (data.args as Record<string, unknown>) ?? {},
+    form,
+    status: 'pending',
+  }
+}
+
+export function parseSseBlock(block: string): {
+  event: string
+  data: Record<string, unknown> | null
+} {
+  const lines = block.split('\n')
+  let event = 'message'
+  const dataLines: string[] = []
+  for (const line of lines) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+  }
+  if (!dataLines.length) return { event, data: null }
+  return { event, data: JSON.parse(dataLines.join('\n')) as Record<string, unknown> }
+}

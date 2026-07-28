@@ -6,6 +6,8 @@ export type {
   ChatMessage,
   ChatRole,
   ChatStreamHandlers,
+  ChoiceOption,
+  ChoicePayload,
   ClientAction,
   ConfirmationFormField,
   ConfirmationPayload,

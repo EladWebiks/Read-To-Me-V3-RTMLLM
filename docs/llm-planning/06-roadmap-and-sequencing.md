@@ -68,17 +68,15 @@ Delivered as small vertical slices so the loop is exercised end-to-end early.
   `POST /api/chat/{id}/confirm` (composer blocked while pending).
 - Scrape success already invalidates Scraper/library queries (client side-effect —
   **not** the LLM's job to "refresh" the page).
-- Still open:
-  - **UI route context** on each chat turn (ADR-14): send current path + optional
-    `book_id` / `chapter_id` so the model can ground replies ("you're on Scraper",
-    "this reader chapter…"). Context is **data**, never instructions / tool selection.
-  - **Client navigate affordances**: after scrape (or on suggest), emit / render a
-    go-to-Scraper chip or link; wire `play_chapter` / `resume_book` → open reader.
-  - Choice chips, cost meter **[Q4]**.
+- **UI route context** + navigate chips (ADR-14): scrape → Open Scraper; play/resume
+  auto-navigates to the chapter when off-reader (chip remains).
+- **Choice chips:** `propose_choices` tool → `choice_request` SSE → tap sends a
+  normal user message (not a HITL gate).
+- Still open: cost meter visibility **[Q4]**.
 - **Accept (HITL path):** scrape confirm card renders, OK/Cancel resumes SSE; lint/tsc/build/tests green.
 - **Accept (context path):** chat request includes route context; scrape success can
   offer navigate-to-Scraper without asking the model to refresh React Query; reader
-  tools can navigate when on/away from `/read/...`.
+  tools auto-navigate when off `/read/...`.
 
 ## 4. Milestone C — north-star assistant
 

@@ -33,7 +33,7 @@ existing documents and does not replace them:
 | **B2 — Chat + SSE** | `POST /api/chat` streaming, conversation persistence, assistant panel wired to real (tool-less) replies | Done |
 | **B2.5 — Chat UX polish** | Markdown rendering (streamdown), no-bubble assistant turns, auto-scroll, themed scrollbar, smooth expand/shrink, "New chat" | Done |
 | **B3 — Tools + orchestrator** | Tool registry, hand-rolled loop, budgets, read-only + low-risk tools, form HITL | **In progress (B3.3 form HITL done; B3 exit = Langfuse profile optional)** |
-| **B4 — Frontend chat (tools)** | Tool-step affordances, form confirmation cards, clarify choices, **UI route context + navigate chips**, cost/status UI | **In progress (HITL form card; scrape list invalidate)** |
+| **B4 — Frontend chat (tools)** | Tool-step affordances, form confirmation cards, clarify choices, **UI route context + navigate chips**, cost/status UI | **In progress (HITL, navigate, choice chips; cost meter open)** |
 | **C — Full assistant** | Discovery search, **persisted book summaries**, gated scrape/import, richer Q&A / discuss | Planned |
 
 ## How to read these docs

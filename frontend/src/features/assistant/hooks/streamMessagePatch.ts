@@ -1,5 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { ChatMessage, ClientAction, ConfirmationPayload } from '../api/chatApi'
+import type {
+  ChatMessage,
+  ChoicePayload,
+  ClientAction,
+  ConfirmationPayload,
+} from '../api/chatApi'
 
 export function appendToolResult(
   prev: ChatMessage[],
@@ -39,6 +44,18 @@ export function appendConfirmation(
       role: 'confirmation',
       content: payload.summary,
       confirmation: payload,
+    },
+  ]
+}
+
+export function appendChoice(prev: ChatMessage[], payload: ChoicePayload): ChatMessage[] {
+  return [
+    ...prev,
+    {
+      id: localId('choice'),
+      role: 'choice',
+      content: payload.prompt,
+      choice: payload,
     },
   ]
 }

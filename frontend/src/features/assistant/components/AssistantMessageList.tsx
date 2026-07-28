@@ -11,7 +11,9 @@ type Props = {
   sending: boolean
   liveStatus?: string | null
   confirmBusy?: boolean
+  choicesDisabled?: boolean
   onResolveConfirm?: (approved: boolean, values?: Record<string, unknown>) => void
+  onPickChoice?: (label: string) => void
 }
 
 /** Scrollable message list or empty state. */
@@ -22,9 +24,13 @@ export function AssistantMessageList({
   sending,
   liveStatus = null,
   confirmBusy = false,
+  choicesDisabled = false,
   onResolveConfirm,
+  onPickChoice,
 }: Props) {
-  const visible = messages.filter((m) => m.role !== 'step')
+  const visible = messages.filter(
+    (m) => m.role !== 'step' && !(m.role === 'tool' && m.toolName === 'propose_choices'),
+  )
   const last = visible[visible.length - 1]
   const contentKey = `${visible.length}:${last?.id ?? ''}:${last?.content.length ?? 0}:${liveStatus ?? ''}`
   const { containerRef, onScroll } = useStickToBottom(sending, contentKey)
@@ -43,7 +49,9 @@ export function AssistantMessageList({
           message={m}
           streaming={sending && m.role === 'assistant' && index === visible.length - 1}
           confirmBusy={confirmBusy}
+          choicesDisabled={choicesDisabled}
           onResolveConfirm={onResolveConfirm}
+          onPickChoice={onPickChoice}
         />
       ))}
       {liveStatus ? <LiveStatusLine label={liveStatus} /> : null}

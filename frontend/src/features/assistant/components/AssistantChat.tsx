@@ -29,9 +29,11 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
             sending={chat.sending}
             liveStatus={chat.liveStatus}
             confirmBusy={chat.sending}
+            choicesDisabled={chat.sending || Boolean(chat.pendingConfirm)}
             onResolveConfirm={(approved, values) =>
               void chat.resolveConfirm(approved, values)
             }
+            onPickChoice={(label) => void chat.sendText(label)}
           />
           <AssistantComposer
             draft={chat.draft}

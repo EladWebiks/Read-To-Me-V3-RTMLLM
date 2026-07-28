@@ -1,6 +1,13 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { ChatMessage, ChatStreamHandlers, ConfirmationPayload } from '../api/chatApi'
+import type {
+  ChatMessage,
+  ChatStreamHandlers,
+  ChoicePayload,
+  ClientAction,
+  ConfirmationPayload,
+} from '../api/chatApi'
 import {
+  appendChoice,
   appendConfirmation,
   appendToolResult,
   patchAssistant,
@@ -15,6 +22,7 @@ export type StreamArgs = {
   setError: (detail: string | null) => void
   setLiveStatus: (label: string | null) => void
   abortRef: MutableRefObject<AbortController | null>
+  onClientAction?: (action: ClientAction) => void
 }
 
 /** Shared SSE handler wiring for chat + confirm streams. */
@@ -22,7 +30,14 @@ export function buildStreamHandlers(
   args: StreamArgs,
   onAwaitingConfirm?: (payload: ConfirmationPayload) => void,
 ): ChatStreamHandlers {
-  const { assistantId, setConversationId, setMessages, setError, setLiveStatus } = args
+  const {
+    assistantId,
+    setConversationId,
+    setMessages,
+    setError,
+    setLiveStatus,
+    onClientAction,
+  } = args
   return {
     onMeta: (id) => setConversationId(id),
     onDelta: (delta) => {
@@ -36,11 +51,16 @@ export function buildStreamHandlers(
       setMessages((prev) =>
         appendToolResult(prev, assistantId, name, ok, summary, clientAction),
       )
+      if (clientAction) onClientAction?.(clientAction)
     },
     onConfirmation: (payload) => {
       setLiveStatus(null)
       setMessages((prev) => appendConfirmation(prev, assistantId, payload))
       onAwaitingConfirm?.(payload)
+    },
+    onChoiceRequest: (payload: ChoicePayload) => {
+      setLiveStatus(null)
+      setMessages((prev) => appendChoice(prev, payload))
     },
     onDone: ({ messageId, status }) => {
       if (status !== 'awaiting_confirmation') setLiveStatus(null)

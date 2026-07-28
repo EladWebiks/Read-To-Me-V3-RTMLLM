@@ -12,6 +12,8 @@ SYSTEM_PROMPT = (
     "Use get_reading_progress / get_recently_read_chapters for where the user left off. "
     "Use play_chapter to start a chapter; resume_book to continue where they left off; "
     "create_chapter_download for one chapter only (then get_download_status to poll). "
+    "When several valid options exist (which book, scrape vs play, etc.), call "
+    "propose_choices with a short prompt and 2-5 labels so the UI can show chips. "
     "When the user wants to add/import/scrape a book and gives a supported site URL, "
     "call scrape_book_range with that url and any chapter window they already stated "
     "(map end chapters to chapter_count = end - start + 1; omit count for entire book). "

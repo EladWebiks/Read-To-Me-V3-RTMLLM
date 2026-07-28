@@ -1,7 +1,9 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import type { ChatMessage, ConfirmationPayload } from '../api/chatApi'
 import { useAssistantStore } from '../assistantStore'
 import { useHydrateConversation, useNewChatReset } from './chatLifecycle'
+import { shouldAutoNavigate } from './navigatePolicy'
 import { useChatActions } from './useChatActions'
 import { uiContextPayload, useUiContext } from './useUiContext'
 
@@ -11,13 +13,15 @@ export function useAssistantChat() {
   const setConversationId = useAssistantStore((s) => s.setConversationId)
   const newChatNonce = useAssistantStore((s) => s.newChatNonce)
   const uiContext = useUiContext()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [liveStatus, setLiveStatus] = useState<string | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmationPayload | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const [abortRef] = useState(() => ({ current: null as AbortController | null }))
 
   useHydrateConversation(setMessages, setConversationId)
 
@@ -31,7 +35,14 @@ export function useAssistantChat() {
   }, [])
   useNewChatReset(newChatNonce, abortRef, clearLocal)
 
-  const { send, resolveConfirm } = useChatActions({
+  const onClientAction = useCallback(
+    (action: { type: string; path: string; label: string }) => {
+      if (shouldAutoNavigate(action, pathname)) void navigate(action.path)
+    },
+    [navigate, pathname],
+  )
+
+  const { send, sendText, resolveConfirm } = useChatActions({
     conversationId,
     draft,
     setDraft,
@@ -45,6 +56,7 @@ export function useAssistantChat() {
     setConversationId,
     abortRef,
     uiContext: uiContextPayload(uiContext),
+    onClientAction,
   })
 
   return {
@@ -56,6 +68,7 @@ export function useAssistantChat() {
     liveStatus,
     pendingConfirm,
     send,
+    sendText,
     resolveConfirm,
   }
 }

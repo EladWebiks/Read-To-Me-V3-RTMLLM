@@ -30,6 +30,7 @@ def test_default_registry_exposes_read_only_specs() -> None:
         "play_chapter",
         "resume_book",
         "create_chapter_download",
+        "propose_choices",
     }
     assert "scrape_book_range" not in names
 

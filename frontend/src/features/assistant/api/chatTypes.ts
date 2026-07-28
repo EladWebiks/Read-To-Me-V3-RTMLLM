@@ -1,6 +1,7 @@
 /** Shared chat / SSE types for the assistant. */
 
-export type ChatRole = 'user' | 'assistant' | 'system' | 'step' | 'tool' | 'confirmation'
+export type ChatRole =
+  'user' | 'assistant' | 'system' | 'step' | 'tool' | 'confirmation' | 'choice'
 
 export type ConfirmationFormField = {
   name: string
@@ -28,6 +29,16 @@ export type ClientAction = {
   label: string
 }
 
+export type ChoiceOption = {
+  id: string
+  label: string
+}
+
+export type ChoicePayload = {
+  prompt: string
+  options: ChoiceOption[]
+}
+
 export type ChatMessage = {
   id: string
   role: ChatRole
@@ -37,6 +48,7 @@ export type ChatMessage = {
   toolOk?: boolean
   clientAction?: ClientAction
   confirmation?: ConfirmationPayload
+  choice?: ChoicePayload
 }
 
 export type Conversation = {
@@ -63,6 +75,7 @@ export type ChatStreamHandlers = {
     clientAction?: ClientAction
   }) => void
   onConfirmation?: (payload: ConfirmationPayload) => void
+  onChoiceRequest?: (payload: ChoicePayload) => void
   onDone: (payload: DonePayload) => void
   onError: (detail: string) => void
 }

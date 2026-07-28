@@ -6,6 +6,8 @@ from typing import Any
 from uuid import UUID
 
 _MAX_PATH_LEN = 512
+_MIN_CHOICES = 2
+_MAX_CHOICES = 5
 
 
 def format_ui_context_block(raw: dict[str, Any] | None) -> str | None:
@@ -54,3 +56,26 @@ def client_action_for_tool(
                 "label": "Open chapter",
             }
     return None
+
+
+def choice_request_for_tool(
+    tool_name: str,
+    ok: bool,
+    data: dict[str, object] | None,
+) -> dict[str, object] | None:
+    """Optional clarify chips (not a HITL gate) from propose_choices."""
+    if not ok or tool_name != "propose_choices" or not data:
+        return None
+    raw = data.get("options")
+    if not isinstance(raw, list):
+        return None
+    labels = [str(item).strip() for item in raw if str(item).strip()]
+    if len(labels) < _MIN_CHOICES:
+        return None
+    prompt = data.get("prompt") or data.get("message") or "Choose one:"
+    return {
+        "prompt": str(prompt).strip() or "Choose one:",
+        "options": [
+            {"id": str(i), "label": label} for i, label in enumerate(labels[:_MAX_CHOICES])
+        ],
+    }

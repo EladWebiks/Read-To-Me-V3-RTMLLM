@@ -14,6 +14,7 @@ ChatEventKind = Literal[
     "step",
     "tool_result",
     "confirmation_request",
+    "choice_request",
 ]
 
 

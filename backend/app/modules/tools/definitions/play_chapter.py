@@ -78,6 +78,7 @@ class PlayChapterTool(BaseTool):
             message=(
                 f"Ready to play chapter {chapter.chapter_number}"
                 f"{f' ({chapter.title})' if chapter.title else ''}. "
-                "Open the reader to hear TTS if playback UI is available."
+                "Opening the reader when you are not already on that chapter "
+                "(Open chapter button is also available)."
             ),
         )

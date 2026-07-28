@@ -36,7 +36,11 @@ from app.modules.orchestration.hitl_pause import (
     snapshot_run_id,
 )
 from app.modules.orchestration.prompts import SYSTEM_PROMPT
-from app.modules.orchestration.ui_context import client_action_for_tool, format_ui_context_block
+from app.modules.orchestration.ui_context import (
+    choice_request_for_tool,
+    client_action_for_tool,
+    format_ui_context_block,
+)
 from app.modules.tools.base import BaseTool, Mode, RiskLevel, ToolContext
 from app.modules.tools.catalog import build_default_registry
 from app.modules.tools.exceptions import (
@@ -237,7 +241,8 @@ class OrchestrationService:
         )
         await self._session.commit()
         _append_tool_message(pack.messages, pack.call, result)
-        yield _tool_result_event(pack.tool.name, ok, result)
+        for event in _tool_outcome_events(pack.tool.name, ok, result):
+            yield event
 
     async def _require_pending(
         self,
@@ -398,7 +403,8 @@ class OrchestrationService:
         yield ChatSseEvent("step", {"label": f"Running {tool.name}…"})
         result = await execute_tool_call(tool, round_.call, round_.ctx, self._repo)
         _append_tool_message(round_.messages, round_.call, result)
-        yield _tool_result_event(tool.name, bool(result.get("ok")), result)
+        for event in _tool_outcome_events(tool.name, bool(result.get("ok")), result):
+            yield event
 
     async def _pause_for_confirm(self, pack: _PausePack) -> AsyncIterator[ChatSseEvent]:
         if pack.hitl_rounds >= self._settings.llm_max_hitl_rounds:
@@ -512,6 +518,15 @@ def _to_llm_messages(
             continue
         messages.append(Message(role=role, content=row.content))
     return messages
+
+
+def _tool_outcome_events(name: str, ok: bool, result: dict[str, object]) -> list[ChatSseEvent]:
+    events = [_tool_result_event(name, ok, result)]
+    data = result.get("data") if ok else None
+    choice = choice_request_for_tool(name, ok, data if isinstance(data, dict) else None)
+    if choice:
+        events.append(ChatSseEvent("choice_request", choice))
+    return events
 
 
 def _tool_result_event(name: str, ok: bool, result: dict[str, object]) -> ChatSseEvent:
