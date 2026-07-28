@@ -43,6 +43,11 @@ async def _clear_library(engine: AsyncEngine) -> None:
         await conn.execute(text("DELETE FROM chapters"))
         await conn.execute(text("DELETE FROM user_books"))
         await conn.execute(text("DELETE FROM books"))
+        await conn.execute(text("DELETE FROM cost_records"))
+        await conn.execute(text("DELETE FROM llm_executions"))
+        await conn.execute(text("DELETE FROM tool_calls"))
+        await conn.execute(text("DELETE FROM conversation_messages"))
+        await conn.execute(text("DELETE FROM conversations"))
         await conn.execute(text("DELETE FROM users"))
 
 

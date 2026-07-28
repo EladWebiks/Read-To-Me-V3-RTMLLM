@@ -1,67 +1,72 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { useMotionValue, type MotionValue } from 'motion/react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
+import { animate, type MotionValue } from 'motion/react'
 import {
-  ASSISTANT_COMPACT_MQ,
   clampPosition,
-  isCompactViewport,
   panelSizeOrFallback,
   resolveFloatingPosition,
   type AssistantPoint,
 } from './assistantGeometry'
+import { expandedPanelRect } from './expandedPanelRect'
+import { assistantLayoutTransition } from './assistantPanelStyle'
 
-type DragGate = {
-  onDragStart: () => void
-  onDragEnd: () => void
+export type PanelMotion = {
+  x: MotionValue<number>
+  y: MotionValue<number>
+  width: MotionValue<number>
+  height: MotionValue<number>
 }
 
-/**
- * Sync placement from the store on open/position change only.
- * Resize reclamps the live motion values — never rewinds to a stale store point
- * (mobile URL-bar resize was snapping the panel mid-drag).
- */
+type DragGate = { onDragStart: () => void; onDragEnd: () => void }
+
+function applyRect(
+  motion: PanelMotion,
+  rect: { x: number; y: number; width: number; height: number },
+  tween: boolean,
+) {
+  const { x, y, width, height } = motion
+  if (tween) {
+    void animate(x, rect.x, assistantLayoutTransition)
+    void animate(y, rect.y, assistantLayoutTransition)
+    void animate(width, rect.width, assistantLayoutTransition)
+    void animate(height, rect.height, assistantLayoutTransition)
+    return
+  }
+  x.set(rect.x)
+  y.set(rect.y)
+  width.set(rect.width)
+  height.set(rect.height)
+}
+
+/** Drive panel x/y/width/height for float vs fullscreen. */
 export function useAssistantFloatingPosition(
   expanded: boolean,
   position: AssistantPoint | null,
   panelRef: RefObject<HTMLDivElement | null>,
-  x: MotionValue<number>,
-  y: MotionValue<number>,
+  motion: PanelMotion,
 ): DragGate {
   const draggingRef = useRef(false)
+  const expandedRef = useRef(expanded)
+  const bootedRef = useRef(false)
 
   useLayoutEffect(() => {
+    const wasExpanded = expandedRef.current
+    expandedRef.current = expanded
+    const tween = bootedRef.current && wasExpanded !== expanded
+
     if (expanded) {
-      x.set(0)
-      y.set(0)
+      applyRect(motion, expandedPanelRect(), tween)
+      bootedRef.current = true
       return
     }
     if (draggingRef.current) return
-    const el = panelRef.current
-    const { width, height } = panelSizeOrFallback(el?.offsetWidth, el?.offsetHeight)
-    const next = resolveFloatingPosition(position, width, height)
-    x.set(next.x)
-    y.set(next.y)
-  }, [expanded, position, panelRef, x, y])
+    const size = panelSizeOrFallback(undefined, undefined)
+    const next = resolveFloatingPosition(position, size.width, size.height)
+    applyRect(motion, { ...next, ...size }, tween)
+    bootedRef.current = true
+  }, [expanded, position, panelRef, motion])
 
-  useLayoutEffect(() => {
-    if (expanded) return
-
-    function reclampLive() {
-      if (draggingRef.current) return
-      const el = panelRef.current
-      const { width, height } = panelSizeOrFallback(el?.offsetWidth, el?.offsetHeight)
-      const next = clampPosition(x.get(), y.get(), width, height)
-      x.set(next.x)
-      y.set(next.y)
-    }
-
-    const mq = window.matchMedia(ASSISTANT_COMPACT_MQ)
-    mq.addEventListener('change', reclampLive)
-    window.addEventListener('resize', reclampLive)
-    return () => {
-      mq.removeEventListener('change', reclampLive)
-      window.removeEventListener('resize', reclampLive)
-    }
-  }, [expanded, panelRef, x, y])
+  useFloatResize(expanded, draggingRef, motion)
+  useExpandedResize(expanded, motion)
 
   return {
     onDragStart: () => {
@@ -73,25 +78,32 @@ export function useAssistantFloatingPosition(
   }
 }
 
-export function useCompactViewport(): boolean {
-  const [compact, setCompact] = useState(isCompactViewport)
+function useFloatResize(
+  expanded: boolean,
+  draggingRef: { current: boolean },
+  motion: PanelMotion,
+) {
+  const { x, y } = motion
   useLayoutEffect(() => {
-    const mq = window.matchMedia(ASSISTANT_COMPACT_MQ)
-    function sync() {
-      setCompact(mq.matches)
+    if (expanded) return
+    function reclampLive() {
+      if (draggingRef.current) return
+      const size = panelSizeOrFallback(undefined, undefined)
+      const next = clampPosition(x.get(), y.get(), size.width, size.height)
+      applyRect(motion, { ...next, ...size }, false)
     }
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-  return compact
+    window.addEventListener('resize', reclampLive)
+    return () => window.removeEventListener('resize', reclampLive)
+  }, [expanded, draggingRef, motion, x, y])
 }
 
-export function useAssistantMotionValues() {
-  const x = useMotionValue(0)
-  const y = useMotionValue(0)
-  const boundsRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const titleRef = useRef<HTMLHeadingElement>(null)
-  return { x, y, boundsRef, panelRef, titleRef }
+function useExpandedResize(expanded: boolean, motion: PanelMotion) {
+  useLayoutEffect(() => {
+    if (!expanded) return
+    function syncExpanded() {
+      applyRect(motion, expandedPanelRect(), false)
+    }
+    window.addEventListener('resize', syncExpanded)
+    return () => window.removeEventListener('resize', syncExpanded)
+  }, [expanded, motion])
 }

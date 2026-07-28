@@ -21,7 +21,14 @@ dependencies = [
     "httpx>=0.28.1",
     "beautifulsoup4>=4.15.0",
     "python-multipart>=0.0.32",
+    "google-genai>=1.0.0",
+    "instructor>=1.7.0",
 ]
+
+[project.optional-dependencies]
+langfuse = ["langfuse>=2.0.0"]
+# Prefer litellm for multi-vendor later when platform wheels install cleanly.
+litellm = ["litellm>=1.60.0"]
 
 [dependency-groups]
 dev = [
@@ -53,10 +60,13 @@ ignore = ["E501", "RET504", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106", "PLR2004"]
-"migrations/**" = ["ERA", "E402", "S608"]
+"migrations/**" = ["ERA", "E402", "S608", "PLR0915"]
 "app/core/config.py" = ["S105"]  # local defaults are not production secrets
 "app/modules/scraping/adapters/**" = ["PLR2004"]
 "app/modules/scraping/worker.py" = ["PLR0911", "S101"]
+"app/modules/llm/providers/gemini_provider.py" = ["PLR0911"]
+"app/modules/llm/service.py" = ["PLR0911"]
+"app/core/exceptions.py" = ["PLR0915"]
 
 
 [tool.ruff.lint.mccabe]

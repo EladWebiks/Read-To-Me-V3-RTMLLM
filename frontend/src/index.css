@@ -236,6 +236,145 @@ body {
   .assistant-spark-c {
     animation: none;
   }
+
+  .assistant-stream-caret {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Assistant chat scroller — thin, theme-matched, hover/focus only */
+.assistant-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.assistant-scroll:hover,
+.assistant-scroll:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
+}
+
+.assistant-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.assistant-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.assistant-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.assistant-scroll:hover::-webkit-scrollbar-thumb,
+.assistant-scroll:focus-within::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+}
+
+.assistant-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 65%, transparent);
+}
+
+@keyframes assistant-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.assistant-stream-caret {
+  display: inline-block;
+  width: 0.45em;
+  height: 1.05em;
+  margin-left: 0.12em;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: currentColor;
+  animation: assistant-caret-blink 1s step-end infinite;
+}
+
+/* Natural assistant markdown (no bubble) */
+.assistant-md {
+  line-height: 1.55;
+  max-width: 42rem;
+}
+
+.assistant-md :where(p, ul, ol, pre, blockquote, table) {
+  margin: 0 0 0.75em;
+}
+
+.assistant-md :where(p:last-child, ul:last-child, ol:last-child, pre:last-child) {
+  margin-bottom: 0;
+}
+
+.assistant-md :where(h1, h2, h3, h4) {
+  margin: 1em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+
+.assistant-md h1 {
+  font-size: 1.15em;
+}
+
+.assistant-md h2 {
+  font-size: 1.05em;
+}
+
+.assistant-md h3,
+.assistant-md h4 {
+  font-size: 1em;
+}
+
+.assistant-md :where(ul, ol) {
+  padding-left: 1.25em;
+}
+
+.assistant-md li {
+  margin: 0.2em 0;
+}
+
+.assistant-md :where(strong) {
+  font-weight: 600;
+}
+
+.assistant-md :where(a) {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.assistant-md :where(code) {
+  border-radius: 0.3em;
+  background: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+
+.assistant-md :where(pre) {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 80%, transparent);
+  padding: 0.75rem 0.9rem;
+}
+
+.assistant-md :where(pre code) {
+  background: transparent;
+  padding: 0;
+}
+
+.assistant-md :where(blockquote) {
+  border-left: 3px solid var(--border);
+  padding-left: 0.75em;
+  color: var(--muted-foreground);
 }
 
 @keyframes rtm-tooltip-in {
