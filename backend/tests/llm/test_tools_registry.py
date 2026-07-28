@@ -40,6 +40,13 @@ def test_scrape_visible_in_external_mode() -> None:
     registry = build_default_registry()
     names = {s.name for s in registry.list_specs(Mode.EXTERNAL_ALLOWED)}
     assert "scrape_book_range" in names
+    assert "search_discovered_books" in names
+
+
+def test_discovery_hidden_in_internal_mode() -> None:
+    registry = build_default_registry()
+    names = {s.name for s in registry.list_specs(Mode.INTERNAL_ONLY)}
+    assert "search_discovered_books" not in names
 
 
 @pytest.mark.unit

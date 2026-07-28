@@ -19,13 +19,14 @@ from app.modules.tools.definitions.play_chapter import PlayChapterTool
 from app.modules.tools.definitions.propose_choices import ProposeChoicesTool
 from app.modules.tools.definitions.resume_book import ResumeBookTool
 from app.modules.tools.definitions.scrape_book_range import ScrapeBookRangeTool
+from app.modules.tools.definitions.search_discovered_books import SearchDiscoveredBooksTool
 from app.modules.tools.definitions.search_library_content import SearchLibraryContentTool
 from app.modules.tools.definitions.search_user_books import SearchUserBooksTool
 from app.modules.tools.registry import ToolRegistry
 
 
 def build_default_registry() -> ToolRegistry:
-    """Registry with B3.1-B3.3 tools (scrape is mode-gated)."""
+    """Registry with B3/B4 tools + C discovery search (mode-gated)."""
     return ToolRegistry(
         [
             SearchUserBooksTool(),
@@ -40,6 +41,7 @@ def build_default_registry() -> ToolRegistry:
             ResumeBookTool(),
             CreateChapterDownloadTool(),
             ProposeChoicesTool(),
+            SearchDiscoveredBooksTool(),
             ScrapeBookRangeTool(),
         ]
     )

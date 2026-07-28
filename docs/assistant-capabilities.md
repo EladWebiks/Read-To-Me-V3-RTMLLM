@@ -150,7 +150,8 @@ Scrape https://novelbin.com/b/some-slug starting at chapter 10, only 20 chapters
 
 ## מה עדיין לא (בכוונה / בהמשך)
 
-- חיפוש ספר **לפי כותרת בלבד** בלי URL (discovery / בחירת מקור חכמה) — Milestone C
+- ייבוא מועמד discovery → HITL scrape בלי URL (חלקית: חיפוש כותרת ב־NovelFull + כלי
+  `search_discovered_books` כבר קיים; בחירת מקור חכמה + import עדיין לא)
 - הורדת אודיו ל**טווח פרקים** דרך העוזר
 - דילוג על טופס האישור גם כשכל הפרמטרים כבר בפרומפט (HITL נשאר שער אבטחה/עלות)
 - אתרים שלא ברשימת האדפטרים

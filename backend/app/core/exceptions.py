@@ -14,6 +14,10 @@ from app.modules.chapters.exceptions import (
     ChapterNotFoundError,
     ChapterNumberConflictError,
 )
+from app.modules.discovery.exceptions import (
+    DiscoveredBookNotFoundError,
+    DiscoverySearchError,
+)
 from app.modules.downloads.exceptions import (
     DownloadJobNotFoundError,
     DownloadNotReadyError,
@@ -48,6 +52,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_audio_handlers(app)
     _register_download_handlers(app)
     _register_scraping_handlers(app)
+    _register_discovery_handlers(app)
     _register_llm_handlers(app)
 
 
@@ -182,6 +187,22 @@ def _register_scraping_handlers(app: FastAPI) -> None:
         _exc: PreviewError,
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(_exc)})
+
+
+def _register_discovery_handlers(app: FastAPI) -> None:
+    @app.exception_handler(DiscoverySearchError)
+    async def _discovery_search_failed(
+        _request: Request,
+        _exc: DiscoverySearchError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": str(_exc)})
+
+    @app.exception_handler(DiscoveredBookNotFoundError)
+    async def _discovered_missing(
+        _request: Request,
+        _exc: DiscoveredBookNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Discovered book not found"})
 
 
 def _register_download_handlers(app: FastAPI) -> None:

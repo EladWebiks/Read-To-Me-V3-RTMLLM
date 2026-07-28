@@ -8,6 +8,7 @@ def import_all_models() -> None:
     # Import order does not matter; side effect is mapper registration.
     from app.modules.books import models as books_models
     from app.modules.chapters import models as chapters_models
+    from app.modules.discovery import models as discovery_models
     from app.modules.downloads import models as downloads_models
     from app.modules.library import models as library_models
     from app.modules.llm import models as llm_models
@@ -18,6 +19,7 @@ def import_all_models() -> None:
     _ = (
         books_models,
         chapters_models,
+        discovery_models,
         downloads_models,
         library_models,
         llm_models,

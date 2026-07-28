@@ -12,6 +12,8 @@ from app.core.db import Base
 # Import models so Alembic autogenerate can see metadata.
 from app.modules.books.models import Book as BookModel  # noqa: F401
 from app.modules.chapters.models import Chapter as ChapterModel  # noqa: F401
+from app.modules.discovery.models import BookSource as BookSourceModel  # noqa: F401
+from app.modules.discovery.models import DiscoveredBook as DiscoveredBookModel  # noqa: F401
 from app.modules.downloads.models import DownloadJob as DownloadJobModel  # noqa: F401
 from app.modules.library.models import UserBook as UserBookModel  # noqa: F401
 from app.modules.llm.models import (  # noqa: F401
