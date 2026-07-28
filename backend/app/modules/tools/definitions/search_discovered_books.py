@@ -30,8 +30,9 @@ class SearchDiscoveredBooksTool(BaseTool):
 
     name = "search_discovered_books"
     description = (
-        "Search for books by title (or alias) across supported novel sites when the "
-        "user did not paste a URL. Returns candidates with source book URLs. "
+        "Search for books by title (or alias) across supported novel sites "
+        "(novelfull, novelbin, freewebnovel, novellunar) when the user did not paste "
+        "a URL. Returns candidates with source book URLs. "
         "If several matches, call propose_choices so the user can pick. "
         "Requires external_allowed mode. Prefer this over asking the user for a URL."
     )

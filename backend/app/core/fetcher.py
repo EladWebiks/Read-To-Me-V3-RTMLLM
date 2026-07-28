@@ -56,17 +56,46 @@ def validate_url(url: str, allowlist: set[str]) -> None:
         raise FetchError(f"Private/loopback IP blocked: {host}")
 
 
-async def fetch_html(url: str, allowlist: set[str]) -> str:
+async def fetch_html(
+    url: str,
+    allowlist: set[str],
+    *,
+    headers: dict[str, str] | None = None,
+) -> str:
     """Fetch *url* and return the response text, enforcing SSRF protections."""
     validate_url(url, allowlist)
     settings = get_settings()
+    req_headers = {"User-Agent": _USER_AGENT, **(headers or {})}
     async with httpx.AsyncClient(
         timeout=settings.scrape_timeout_seconds,
         follow_redirects=True,
         max_redirects=5,
-        headers={"User-Agent": _USER_AGENT},
+        headers=req_headers,
     ) as client:
         resp = await client.get(url)
+        resp.raise_for_status()
+        raw = resp.content[: settings.scrape_max_bytes]
+        return raw.decode(resp.encoding or "utf-8", errors="replace")
+
+
+async def post_form_html(
+    url: str,
+    allowlist: set[str],
+    form: dict[str, str],
+    *,
+    headers: dict[str, str] | None = None,
+) -> str:
+    """POST form-urlencoded body and return response text (SSRF-safe)."""
+    validate_url(url, allowlist)
+    settings = get_settings()
+    req_headers = {"User-Agent": _USER_AGENT, **(headers or {})}
+    async with httpx.AsyncClient(
+        timeout=settings.scrape_timeout_seconds,
+        follow_redirects=True,
+        max_redirects=5,
+        headers=req_headers,
+    ) as client:
+        resp = await client.post(url, data=form)
         resp.raise_for_status()
         raw = resp.content[: settings.scrape_max_bytes]
         return raw.decode(resp.encoding or "utf-8", errors="replace")

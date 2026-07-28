@@ -6,9 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fetcher import FetchError, fetch_html
 from app.core.normalize import normalize_title
-from app.modules.discovery.exceptions import DiscoverySearchError
 from app.modules.discovery.models import BookSource, DiscoveredBook
 from app.modules.discovery.repository import DiscoveryRepository
 from app.modules.discovery.schemas import (
@@ -16,13 +14,9 @@ from app.modules.discovery.schemas import (
     DiscoveredBookRead,
     DiscoverySearchResponse,
 )
-from app.modules.discovery.sources.novelfull_search import (
-    novelfull_search_url,
-    parse_novelfull_search,
-)
+from app.modules.discovery.sources.registry import search_all_sources
 from app.modules.discovery.types import ExternalSearchHit
 from app.modules.library.service import LibraryService
-from app.modules.scraping.registry import ALL_ALLOWED_HOSTS
 
 _DEFAULT_LIMIT = 8
 
@@ -43,7 +37,7 @@ class DiscoveryService:
         external: bool = True,
         limit: int = _DEFAULT_LIMIT,
     ) -> DiscoverySearchResponse:
-        """Search internal candidates, optionally refresh from NovelFull."""
+        """Search internal candidates; optionally refresh from all scrape sources."""
         cleaned = query.strip()
         if not cleaned:
             return DiscoverySearchResponse(query=cleaned, results=[])
@@ -58,17 +52,14 @@ class DiscoveryService:
         )
 
     async def _ingest_external(self, query: str) -> None:
-        url = novelfull_search_url(query)
-        try:
-            html = await fetch_html(url, allowlist=ALL_ALLOWED_HOSTS)
-        except FetchError as exc:
-            raise DiscoverySearchError(str(exc)) from exc
-        for hit in parse_novelfull_search(html):
+        for hit in await search_all_sources(query):
             await self._upsert_hit(hit)
 
     async def _upsert_hit(self, hit: ExternalSearchHit) -> None:
         existing_source = await self._repo.get_source_by_url(hit.source, hit.book_url)
         if existing_source is not None:
+            if hit.chapter_count_estimate is not None:
+                existing_source.chapter_count_estimate = hit.chapter_count_estimate
             return
         normalized = normalize_title(hit.title)
         book = await self._repo.find_by_normalized_title(normalized)

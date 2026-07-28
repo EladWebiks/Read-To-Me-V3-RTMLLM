@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "_id": "1",
+      "slug": "shadow-slave",
+      "title": "Shadow Slave",
+      "totalChapters": 2000
+    },
+    {
+      "_id": "2",
+      "slug": "duality-of-shadows",
+      "title": "Duality of Shadows",
+      "totalChapters": 100
+    }
+  ]
+}

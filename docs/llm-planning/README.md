@@ -34,7 +34,7 @@ existing documents and does not replace them:
 | **B2.5 — Chat UX polish** | Markdown rendering (streamdown), no-bubble assistant turns, auto-scroll, themed scrollbar, smooth expand/shrink, "New chat" | Done |
 | **B3 — Tools + orchestrator** | Tool registry, hand-rolled loop, budgets, read-only + low-risk tools, form HITL | **In progress (B3.3 form HITL done; B3 exit = Langfuse profile optional)** |
 | **B4 — Frontend chat (tools)** | Tool-step affordances, form confirmation cards, clarify choices, **UI route context + navigate chips**, cost/status UI | **In progress (HITL, navigate, choice chips; cost meter open)** |
-| **C — Full assistant** | Discovery search, **persisted book summaries**, gated scrape/import, richer Q&A / discuss | **Started** (title search via NovelFull + `search_discovered_books`) |
+| **C — Full assistant** | Discovery search, **persisted book summaries**, gated scrape/import, richer Q&A / discuss | **Started** (title search on all 4 scrape sources + `search_discovered_books`) |
 
 ## How to read these docs
 
