@@ -21,9 +21,19 @@ from httpx import Response
 
 CLIENT_ID = "test-client-id.apps.googleusercontent.com"
 KID = "test-kid"
+FORGED_KID = "forged-kid"
 
 _PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 _PRIVATE_PEM = _PRIVATE_KEY.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+)
+
+# A second, unrelated key pair used to simulate a forged/attacker-controlled
+# token. Its public half is never published in the mocked JWKS.
+_FORGED_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_FORGED_PRIVATE_PEM = _FORGED_PRIVATE_KEY.private_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PrivateFormat.PKCS8,
     encryption_algorithm=serialization.NoEncryption(),
@@ -58,6 +68,22 @@ def _id_token(**overrides: Any) -> str:
     }
     payload.update(overrides)
     return jwt.encode(payload, _PRIVATE_PEM, algorithm="RS256", headers={"kid": KID})
+
+
+def _forged_id_token(*, kid: str = FORGED_KID, **overrides: Any) -> str:
+    """A token signed by a key the mocked JWKS never publishes."""
+    now = int(time.time())
+    payload: dict[str, Any] = {
+        "iss": "https://accounts.google.com",
+        "aud": CLIENT_ID,
+        "sub": "attacker-sub",
+        "email": "attacker@example.com",
+        "email_verified": True,
+        "iat": now,
+        "exp": now + 600,
+    }
+    payload.update(overrides)
+    return jwt.encode(payload, _FORGED_PRIVATE_PEM, algorithm="RS256", headers={"kid": kid})
 
 
 @pytest.fixture(autouse=True)
@@ -124,3 +150,99 @@ async def test_verify_id_token_rejects_bad_claims(overrides: dict[str, Any], rea
     with pytest.raises(GoogleAuthError) as excinfo:
         await GoogleOAuthClient(_settings()).verify_id_token(_id_token(**overrides))
     assert excinfo.value.reason == reason
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_verify_id_token_rejects_unknown_kid_after_forced_refetch() -> None:
+    """A token whose kid is absent from the JWKS (forged or rotated-out) is rejected.
+
+    Confirms the forced-refetch-on-unknown-kid path (finding 3): the JWKS
+    endpoint is hit twice — the normal cache-miss fetch, then one forced
+    re-fetch before giving up — rather than trusting a stale cache forever.
+    """
+    route = respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).verify_id_token(_forged_id_token())
+    assert excinfo.value.reason == "unknown_signing_key"
+    assert route.call_count == 2
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_unknown_kid_forced_refetch_is_rate_limited() -> None:
+    """A second unknown-kid token shortly after does not trigger another refetch."""
+    route = respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    client = GoogleOAuthClient(_settings())
+    with pytest.raises(GoogleAuthError):
+        await client.verify_id_token(_forged_id_token())
+    assert route.call_count == 2
+    with pytest.raises(GoogleAuthError):
+        await client.verify_id_token(_forged_id_token(kid=FORGED_KID))
+    assert route.call_count == 2  # rate-limited: no extra forced refetch
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_verify_id_token_rejects_forged_signature_with_known_kid() -> None:
+    """A token claiming a real kid but signed with an unrelated key must still fail."""
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    forged_but_known_kid = _forged_id_token(kid=KID)
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).verify_id_token(forged_but_known_kid)
+    assert excinfo.value.reason == "invalid_id_token"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_verify_id_token_jwks_fetch_failure_raises() -> None:
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(500))
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).verify_id_token(_id_token())
+    assert excinfo.value.reason == "jwks_fetch_failed"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_verify_id_token_jwks_malformed_json_raises() -> None:
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, content=b"not-json"))
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).verify_id_token(_id_token())
+    assert excinfo.value.reason == "jwks_fetch_failed"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_verify_id_token_rejects_malformed_claims() -> None:
+    """A signature-valid token missing a required claim (email) fails validation."""
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    now = int(time.time())
+    payload = {
+        "iss": "https://accounts.google.com",
+        "aud": CLIENT_ID,
+        "sub": "google-sub-123",
+        "iat": now,
+        "exp": now + 600,
+    }
+    token = jwt.encode(payload, _PRIVATE_PEM, algorithm="RS256", headers={"kid": KID})
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).verify_id_token(token)
+    assert excinfo.value.reason == "invalid_id_token"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_exchange_code_missing_id_token_raises() -> None:
+    respx.post(GOOGLE_TOKEN_URL).mock(return_value=Response(200, json={}))
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).exchange_code("auth-code")
+    assert excinfo.value.reason == "missing_id_token"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_exchange_code_malformed_json_raises() -> None:
+    respx.post(GOOGLE_TOKEN_URL).mock(return_value=Response(200, content=b"not-json"))
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await GoogleOAuthClient(_settings()).exchange_code("auth-code")
+    assert excinfo.value.reason == "token_exchange_failed"

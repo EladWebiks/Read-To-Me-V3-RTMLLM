@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ValidationError
 
 from app.core.config import Settings
 from app.modules.auth.exceptions import GoogleAuthError, GoogleNotConfiguredError
@@ -21,9 +21,13 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 — publi
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 _ACCEPTED_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 _JWKS_TTL_SECONDS = 3600
+# Minimum gap between forced (cache-bypassing) JWKS refetches triggered by an
+# unrecognized `kid`. Bounds request amplification from tokens carrying random
+# `kid` values while still letting legitimate key rotation resolve promptly.
+_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS = 300
 _HTTP_TIMEOUT_SECONDS = 10.0
 
-_jwks_cache: dict[str, Any] = {"jwks": None, "fetched_at": 0.0}
+_jwks_cache: dict[str, Any] = {"jwks": None, "fetched_at": 0.0, "forced_at": 0.0}
 
 
 class GoogleClaims(BaseModel):
@@ -39,6 +43,7 @@ def reset_jwks_cache() -> None:
     """Test hook: forget cached Google signing keys."""
     _jwks_cache["jwks"] = None
     _jwks_cache["fetched_at"] = 0.0
+    _jwks_cache["forced_at"] = 0.0
 
 
 class GoogleOAuthClient:
@@ -83,7 +88,11 @@ class GoogleOAuthClient:
             raise GoogleAuthError("token_exchange_failed") from exc
         if response.status_code != httpx.codes.OK:
             raise GoogleAuthError("token_exchange_failed")
-        id_token = response.json().get("id_token")
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise GoogleAuthError("token_exchange_failed") from exc
+        id_token = body.get("id_token")
         if not isinstance(id_token, str) or not id_token:
             raise GoogleAuthError("missing_id_token")
         return id_token
@@ -103,7 +112,10 @@ class GoogleOAuthClient:
             raise GoogleAuthError("invalid_id_token") from exc
         if payload.get("iss") not in _ACCEPTED_ISSUERS:
             raise GoogleAuthError("invalid_issuer")
-        claims = GoogleClaims.model_validate(payload)
+        try:
+            claims = GoogleClaims.model_validate(payload)
+        except ValidationError as exc:
+            raise GoogleAuthError("invalid_id_token") from exc
         if not claims.email_verified:
             raise GoogleAuthError("email_not_verified")
         return claims
@@ -114,16 +126,37 @@ class GoogleOAuthClient:
         except jwt.PyJWTError as exc:
             raise GoogleAuthError("invalid_id_token") from exc
         jwks = await _fetch_jwks()
-        for entry in jwks.get("keys", []):
-            if entry.get("kid") == kid:
-                return jwt.PyJWK(entry).key
-        raise GoogleAuthError("unknown_signing_key")
+        key = _find_key(jwks, kid)
+        if key is not None:
+            return key
+        # Unrecognized kid: the cached JWKS may be stale (key rotation). Force
+        # exactly one re-fetch, rate-limited, before giving up.
+        if not _forced_refresh_allowed():
+            raise GoogleAuthError("unknown_signing_key")
+        jwks = await _fetch_jwks(force=True)
+        key = _find_key(jwks, kid)
+        if key is None:
+            raise GoogleAuthError("unknown_signing_key")
+        return key
 
 
-async def _fetch_jwks() -> dict[str, Any]:
+def _find_key(jwks: dict[str, Any], kid: str | None) -> Any:
+    for entry in jwks.get("keys", []):
+        if entry.get("kid") == kid:
+            return jwt.PyJWK(entry).key
+    return None
+
+
+def _forced_refresh_allowed() -> bool:
+    elapsed = time.time() - float(_jwks_cache["forced_at"])
+    return elapsed >= _JWKS_FORCED_REFRESH_MIN_GAP_SECONDS
+
+
+async def _fetch_jwks(*, force: bool = False) -> dict[str, Any]:
     now = time.time()
     cached = _jwks_cache["jwks"]
-    if cached is not None and now - float(_jwks_cache["fetched_at"]) < _JWKS_TTL_SECONDS:
+    is_fresh = cached is not None and now - float(_jwks_cache["fetched_at"]) < _JWKS_TTL_SECONDS
+    if is_fresh and not force:
         return dict(cached)
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
@@ -132,7 +165,12 @@ async def _fetch_jwks() -> dict[str, Any]:
         raise GoogleAuthError("jwks_fetch_failed") from exc
     if response.status_code != httpx.codes.OK:
         raise GoogleAuthError("jwks_fetch_failed")
-    jwks: dict[str, Any] = response.json()
+    try:
+        jwks: dict[str, Any] = response.json()
+    except ValueError as exc:
+        raise GoogleAuthError("jwks_fetch_failed") from exc
     _jwks_cache["jwks"] = jwks
     _jwks_cache["fetched_at"] = now
+    if force:
+        _jwks_cache["forced_at"] = now
     return jwks
