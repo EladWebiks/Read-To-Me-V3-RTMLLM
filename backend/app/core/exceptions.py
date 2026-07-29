@@ -8,7 +8,11 @@ from app.modules.audio.exceptions import (
     TextTooLongError,
     UnknownProviderError,
 )
-from app.modules.auth.exceptions import InvalidCredentialsError, NotAuthenticatedError
+from app.modules.auth.exceptions import (
+    GoogleNotConfiguredError,
+    InvalidCredentialsError,
+    NotAuthenticatedError,
+)
 from app.modules.books.exceptions import BookNotFoundError
 from app.modules.chapters.exceptions import (
     ChapterNotFoundError,
@@ -86,6 +90,16 @@ def _register_auth_handlers(app: FastAPI) -> None:
         _exc: UserAlreadyExistsError,
     ) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "User already exists"})
+
+    @app.exception_handler(GoogleNotConfiguredError)
+    async def _google_not_configured(
+        _request: Request,
+        _exc: GoogleNotConfiguredError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Google sign-in is not configured"},
+        )
 
 
 def _register_library_handlers(app: FastAPI) -> None:
