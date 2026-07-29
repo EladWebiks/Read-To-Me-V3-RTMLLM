@@ -20,7 +20,7 @@ export function JobStatus({
     return (
       <button
         type="button"
-        className="text-sm font-medium text-stone-800 underline"
+        className="text-sm font-medium text-foreground underline"
         onClick={() => {
           void getDownloadUrl(jobId).then((data) => {
             window.location.href = data.url
@@ -32,7 +32,7 @@ export function JobStatus({
     )
   }
   return (
-    <p className="text-sm text-stone-500">
+    <p className="text-sm text-muted-foreground">
       Job {status ?? '…'}
       {ready != null && total != null ? ` (${ready}/${total})` : ''}
       {error ? ` — ${error}` : ''}

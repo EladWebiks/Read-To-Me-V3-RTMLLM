@@ -12,9 +12,11 @@ from app.modules.library.service import LibraryService
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
+    ScrapeJobNotDeletableError,
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
+from app.modules.scraping.job_messages import public_scrape_error
 from app.modules.scraping.models import ScrapingJob
 from app.modules.scraping.registry import ALL_ALLOWED_HOSTS, get_adapter
 from app.modules.scraping.repository import ScrapingRepository
@@ -73,7 +75,7 @@ class ScrapingService:
             user_id=user_id,
             source_id=source.id,
             book_id=book.id,
-            start_url=data.url,
+            start_url=resolve_walk_start(adapter, data.url, meta.first_chapter_url),
             mode=data.mode,
             chapter_from=start_chapter,
             chapter_to=data.chapter_to,
@@ -84,15 +86,18 @@ class ScrapingService:
         created = await self._repo.add_job(job)
         await self._session.commit()
         await _enqueue(created.id)
-        return ScrapeJobRead.model_validate(created)
+        title = (meta.title or book_url or "Untitled").strip() or "Untitled"
+        return _to_read(created, title)
 
     async def get_job(self, user_id: UUID, job_id: UUID) -> ScrapeJobRead:
         job = await self._require(user_id, job_id)
-        return ScrapeJobRead.model_validate(job)
+        return await self._read_with_title(job)
 
     async def list_jobs(self, user_id: UUID) -> list[ScrapeJobRead]:
+        await self._prune_jobs_for_missing_books(user_id)
         jobs = await self._repo.list_jobs_for_user(user_id)
-        return [ScrapeJobRead.model_validate(job) for job in jobs]
+        titles = await self._book_titles(jobs)
+        return [_to_read(job, titles.get(job.book_id) if job.book_id else None) for job in jobs]
 
     async def cancel(self, user_id: UUID, job_id: UUID) -> ScrapeJobRead:
         job = await self._require(user_id, job_id)
@@ -102,13 +107,81 @@ class ScrapingService:
         job.message = "Cancel requested"
         await self._repo.flush()
         await self._session.commit()
-        return ScrapeJobRead.model_validate(job)
+        return await self._read_with_title(job)
+
+    async def delete_job(self, user_id: UUID, job_id: UUID) -> None:
+        """Remove a finished job from history (does not delete the book)."""
+        job = await self._require(user_id, job_id)
+        if job.status not in _TERMINAL:
+            raise ScrapeJobNotDeletableError(str(job_id))
+        await self._repo.delete_job(job)
+        await self._session.commit()
+
+    async def delete_jobs_for_book(self, book_id: UUID) -> None:
+        """Drop scrape history when the library book is removed."""
+        await self._repo.delete_jobs_for_book(book_id)
+
+    async def _prune_jobs_for_missing_books(self, user_id: UUID) -> None:
+        """Remove orphan jobs whose book was soft-deleted earlier."""
+        from app.modules.books.service import BookService
+
+        jobs = await self._repo.list_jobs_for_user(user_id)
+        book_ids = [job.book_id for job in jobs if job.book_id is not None]
+        if not book_ids:
+            return
+        alive = {book.id for book in await BookService(self._session).list_read(book_ids, {})}
+        removed = False
+        for job in jobs:
+            if job.book_id is not None and job.book_id not in alive:
+                await self._repo.delete_job(job)
+                removed = True
+        if removed:
+            await self._session.commit()
 
     async def _require(self, user_id: UUID, job_id: UUID) -> ScrapingJob:
         job = await self._repo.get_job_for_user(job_id, user_id)
         if job is None:
             raise ScrapeJobNotFoundError(str(job_id))
         return job
+
+    async def _read_with_title(self, job: ScrapingJob) -> ScrapeJobRead:
+        titles = await self._book_titles([job])
+        title = titles.get(job.book_id) if job.book_id is not None else None
+        return _to_read(job, title)
+
+    async def _book_titles(self, jobs: list[ScrapingJob]) -> dict[UUID, str]:
+        from app.modules.books.service import BookService
+
+        book_ids = [job.book_id for job in jobs if job.book_id is not None]
+        if not book_ids:
+            return {}
+        books = await BookService(self._session).list_read(book_ids, {})
+        return {book.id: book.title for book in books}
+
+
+def _to_read(job: ScrapingJob, book_title: str | None = None) -> ScrapeJobRead:
+    read = ScrapeJobRead.model_validate(job)
+    return read.model_copy(
+        update={
+            "error": public_scrape_error(job.error),
+            "book_title": book_title,
+        }
+    )
+
+
+def resolve_walk_start(adapter: object, requested_url: str, first_chapter_url: str) -> str:
+    """Walk from the first chapter when the request URL is a book page.
+
+    Chapter URLs (where ``derive_book_url`` succeeds) are used as-is so mid-book
+    starts still work. Book pages have no chapter body, so using them as
+    ``start_url`` finishes with 0 chapters scraped.
+    """
+    if not first_chapter_url:
+        return requested_url
+    derived = adapter.derive_book_url(requested_url)  # type: ignore[attr-defined]
+    if derived is None:
+        return first_chapter_url
+    return requested_url
 
 
 async def _fetch_book_meta(adapter: object, url: str) -> tuple[str, BookMetadata]:

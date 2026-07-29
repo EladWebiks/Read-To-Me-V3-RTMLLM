@@ -14,11 +14,16 @@ from app.modules.chapters.exceptions import (
     ChapterNotFoundError,
     ChapterNumberConflictError,
 )
+from app.modules.discovery.exceptions import (
+    DiscoveredBookNotFoundError,
+    DiscoverySearchError,
+)
 from app.modules.downloads.exceptions import (
     DownloadJobNotFoundError,
     DownloadNotReadyError,
     InvalidChapterRangeError,
 )
+from app.modules.imports.exceptions import ImportJobNotFoundError, InvalidEpubUploadError
 from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.llm.exceptions import (
     CapabilityNotSupportedError,
@@ -34,6 +39,7 @@ from app.modules.reader.exceptions import ProgressNotFoundError
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
+    ScrapeJobNotDeletableError,
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
@@ -47,6 +53,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_audio_handlers(app)
     _register_download_handlers(app)
     _register_scraping_handlers(app)
+    _register_import_handlers(app)
+    _register_discovery_handlers(app)
     _register_llm_handlers(app)
 
 
@@ -165,12 +173,54 @@ def _register_scraping_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "Job already terminal"})
 
+    @app.exception_handler(ScrapeJobNotDeletableError)
+    async def _scrape_not_deletable(
+        _request: Request,
+        _exc: ScrapeJobNotDeletableError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Cancel the job before removing it from history"},
+        )
+
     @app.exception_handler(PreviewError)
     async def _preview_failed(
         _request: Request,
         _exc: PreviewError,
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(_exc)})
+
+
+def _register_import_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ImportJobNotFoundError)
+    async def _import_job_missing(
+        _request: Request,
+        _exc: ImportJobNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Import job not found"})
+
+    @app.exception_handler(InvalidEpubUploadError)
+    async def _invalid_epub(
+        _request: Request,
+        _exc: InvalidEpubUploadError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(_exc)})
+
+
+def _register_discovery_handlers(app: FastAPI) -> None:
+    @app.exception_handler(DiscoverySearchError)
+    async def _discovery_search_failed(
+        _request: Request,
+        _exc: DiscoverySearchError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": str(_exc)})
+
+    @app.exception_handler(DiscoveredBookNotFoundError)
+    async def _discovered_missing(
+        _request: Request,
+        _exc: DiscoveredBookNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Discovered book not found"})
 
 
 def _register_download_handlers(app: FastAPI) -> None:

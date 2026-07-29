@@ -11,7 +11,7 @@ export function ProviderSelect({
     <label className="flex items-center gap-1">
       Provider
       <select
-        className="border border-stone-300 px-2 py-1"
+        className="rounded-md border border-border bg-background px-2 py-1 text-foreground"
         value={value}
         onChange={(event) => onChange(event.target.value as DownloadProvider)}
       >
@@ -40,7 +40,7 @@ export function NumField({
       {label}
       <input
         type="number"
-        className="w-20 border border-stone-300 px-2 py-1"
+        className="w-20 rounded-md border border-border bg-background px-2 py-1 text-foreground"
         value={value}
         min={min}
         max={max}

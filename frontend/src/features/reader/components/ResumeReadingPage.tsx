@@ -9,17 +9,17 @@ export function ResumeReadingPage() {
   const chaptersQuery = useChapters(bookId)
 
   if (progressQuery.isLoading || chaptersQuery.isLoading) {
-    return <p className="text-sm text-stone-500">Opening book…</p>
+    return <p className="text-sm text-muted-foreground">Opening book…</p>
   }
   if (chaptersQuery.isError) {
-    return <p className="text-sm text-red-700">Could not load chapters.</p>
+    return <Navigate to="/library" replace />
   }
 
   const chapters = chaptersQuery.data ?? []
   const targetId = progressQuery.data?.chapter_id ?? chapters[0]?.id
   if (!targetId) {
     return (
-      <p className="text-sm text-stone-500">
+      <p className="text-sm text-muted-foreground">
         No chapters to read.{' '}
         <Link to={libraryBookHref(bookId)} className="underline">
           Add one

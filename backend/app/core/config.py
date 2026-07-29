@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     """Runtime configuration loaded from environment / `.env`."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Repo-root `.env` (compose / local) plus optional `backend/.env` override.
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -48,8 +49,8 @@ class Settings(BaseSettings):
 
     sapi_proxy_enabled: bool = True
     signed_url_expires_seconds: int = 3600
-    # How long generated MP3 jobs (and their objects) are kept before expiry.
-    download_job_ttl_hours: int = 72
+    # Retention for generated MP3 jobs and MinIO objects (hours).
+    download_job_ttl_hours: int = 24
 
     # LLM (Milestone B). Off by default so Milestone A stays LLM-free.
     llm_enabled: bool = False
@@ -60,6 +61,21 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = 2048
     llm_max_retries: int = 2
     langfuse_enabled: bool = False
+    # Orchestration budgets (B3). Exceeding any one ends the run.
+    # Caps are cumulative across all LLM rounds in one user turn (tool loop).
+    llm_max_tool_iters: int = 6
+    llm_max_external_calls: int = 3
+    llm_max_turn_tokens_in: int = 64_000
+    llm_max_turn_tokens_out: int = 8_192
+    llm_max_turn_cost_usd: float = 0.05
+    llm_run_deadline_seconds: int = 60
+    llm_context_recent_messages: int = 10
+    llm_summary_trigger_tokens: int = 12_000
+    llm_summary_max_output_tokens: int = 1_200
+    llm_assistant_mode: str = "internal_only"
+    # HITL: how long a pending confirmation stays valid; max pauses per turn.
+    llm_hitl_ttl_seconds: int = 900
+    llm_max_hitl_rounds: int = 3
 
 
 @lru_cache

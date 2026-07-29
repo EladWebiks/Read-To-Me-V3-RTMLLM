@@ -5,7 +5,7 @@ export function PublicOnlyRoute() {
   const { data, isLoading, isError, error } = useMe()
 
   if (isLoading) {
-    return <p className="p-8 text-sm text-stone-500">Checking session…</p>
+    return <p className="p-8 text-sm text-muted-foreground">Checking session…</p>
   }
 
   if (data?.user && !(isError && isUnauthorized(error))) {

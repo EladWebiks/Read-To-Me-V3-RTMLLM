@@ -10,23 +10,23 @@ export function JobFeedback({
   mode: 'download' | 'listen' | null
 }) {
   if (error) {
-    return <p className="mt-3 text-sm text-red-700">{error}</p>
+    return <p className="mt-3 text-sm text-destructive">{error}</p>
   }
   if (!job || !mode) {
     return null
   }
   if (job.status === 'complete' && mode === 'download') {
     return (
-      <p className="mt-3 text-sm text-green-700">
+      <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">
         Audio ready — download should start automatically.
       </p>
     )
   }
   if (job.status === 'failed') {
-    return <p className="mt-3 text-sm text-red-700">{job.error ?? 'Job failed'}</p>
+    return <p className="mt-3 text-sm text-destructive">{job.error ?? 'Job failed'}</p>
   }
   return (
-    <p className="mt-3 text-sm text-stone-500">
+    <p className="mt-3 text-sm text-muted-foreground">
       {job.status} ({job.ready_count}/{job.total_count})
     </p>
   )

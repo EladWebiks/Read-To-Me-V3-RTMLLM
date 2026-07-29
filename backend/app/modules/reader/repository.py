@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.reader.models import ReadingProgress
@@ -48,6 +48,30 @@ class ProgressRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_recent_for_user(
+        self,
+        user_id: UUID,
+        *,
+        limit: int = 10,
+    ) -> list[ReadingProgress]:
+        """Recent progress rows, newest first."""
+        stmt = (
+            select(ReadingProgress)
+            .where(ReadingProgress.user_id == user_id)
+            .order_by(ReadingProgress.updated_at.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def delete_for_user_book(self, user_id: UUID, book_id: UUID) -> None:
+        """Remove progress for a user/book pair (e.g. after book delete)."""
+        stmt = delete(ReadingProgress).where(
+            ReadingProgress.user_id == user_id,
+            ReadingProgress.book_id == book_id,
+        )
+        await self._session.execute(stmt)
 
     async def flush(self) -> None:
         """Flush pending updates."""

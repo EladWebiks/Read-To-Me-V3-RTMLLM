@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, literal, select, update
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chapters.models import Chapter
@@ -80,6 +81,26 @@ class ChapterRepository:
         result = await self._session.execute(stmt)
         return {book_id: int(count) for book_id, count in result.all()}
 
+    async def content_digest(self, book_id: UUID) -> str:
+        """Database-side digest of active ordered chapter content."""
+        chapter_value = func.concat(
+            Chapter.chapter_number,
+            "\x1f",
+            Chapter.title,
+            "\x1f",
+            Chapter.content,
+        )
+        joined = func.string_agg(
+            chapter_value,
+            aggregate_order_by(literal(""), Chapter.chapter_number.asc()),
+        )
+        stmt = select(func.md5(joined)).where(
+            Chapter.book_id == book_id,
+            Chapter.deleted_at.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return str(result.scalar_one_or_none() or "")
+
     async def add(self, chapter: Chapter) -> Chapter:
         """Persist a chapter."""
         self._session.add(chapter)
@@ -90,6 +111,10 @@ class ChapterRepository:
     async def flush(self) -> None:
         """Flush pending changes."""
         await self._session.flush()
+
+    async def refresh(self, chapter: Chapter) -> None:
+        """Reload ORM attrs after flush (server-side updated_at, etc.)."""
+        await self._session.refresh(chapter)
 
     async def soft_delete(self, chapter: Chapter) -> None:
         """Soft-delete one chapter."""
@@ -104,3 +129,38 @@ class ChapterRepository:
             .values(deleted_at=datetime.now(UTC))
         )
         await self._session.execute(stmt)
+
+    async def search_content(
+        self,
+        book_ids: list[UUID],
+        query: str,
+        *,
+        limit: int = 20,
+    ) -> list[tuple[Chapter, str]]:
+        """FTS over title+content for the given books; return (chapter, snippet)."""
+        cleaned = query.strip()
+        if not book_ids or not cleaned:
+            return []
+        document = func.to_tsvector(
+            "english",
+            func.concat(Chapter.title, " ", Chapter.content),
+        )
+        tsq = func.plainto_tsquery("english", cleaned)
+        headline = func.ts_headline(
+            "english",
+            Chapter.content,
+            tsq,
+            "MaxWords=40, MinWords=12, ShortWord=2, HighlightAll=false",
+        )
+        stmt = (
+            select(Chapter, headline)
+            .where(
+                Chapter.book_id.in_(book_ids),
+                Chapter.deleted_at.is_(None),
+                document.op("@@")(tsq),
+            )
+            .order_by(func.ts_rank(document, tsq).desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [(row[0], str(row[1] or "")) for row in result.all()]

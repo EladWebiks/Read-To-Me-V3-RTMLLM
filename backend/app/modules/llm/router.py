@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user, get_db
 from app.modules.llm.chat_service import ChatService
-from app.modules.llm.schemas import ChatRequest, ConversationRead, ModelListResponse
+from app.modules.llm.schemas import (
+    ChatRequest,
+    ConfirmRequest,
+    ConversationRead,
+    ModelListResponse,
+)
 from app.modules.llm.service import LlmService
 from app.modules.users.schemas import UserRead
 
@@ -33,6 +38,18 @@ def _chat_service(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ChatService:
     return ChatService(session, settings)
+
+
+def _sse(events: AsyncIterator[str]) -> StreamingResponse:
+    return StreamingResponse(
+        events,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/models", response_model=ModelListResponse)
@@ -57,18 +74,33 @@ async def stream_chat(
             user.id,
             body.message,
             body.conversation_id,
+            ui_context=body.ui_context.model_dump(mode="json") if body.ui_context else None,
         ):
             yield event.encode()
 
-    return StreamingResponse(
-        _events(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return _sse(_events())
+
+
+@chat_router.post("/{conversation_id}/confirm")
+async def stream_confirm(
+    conversation_id: UUID,
+    body: ConfirmRequest,
+    user: Annotated[UserRead, Depends(get_current_user)],
+    service: Annotated[ChatService, Depends(_chat_service)],
+) -> StreamingResponse:
+    """Resume a paused turn after HITL approve/decline (new SSE stream)."""
+
+    async def _events() -> AsyncIterator[str]:
+        async for event in service.stream_confirm(
+            user.id,
+            conversation_id,
+            body.call_id,
+            approved=body.approved,
+            values=body.values,
+        ):
+            yield event.encode()
+
+    return _sse(_events())
 
 
 @chat_router.get("/{conversation_id}", response_model=ConversationRead)

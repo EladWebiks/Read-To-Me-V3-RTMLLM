@@ -11,7 +11,6 @@ import { useChapterReader } from '@/features/reader/hooks/useChapterReader'
 import { useTtsSettings } from '@/features/reader/hooks/ttsSettingsStore'
 import { useMediaSession, useWakeLock } from '@/features/reader/hooks/useMediaSession'
 import type { ReaderCursor } from '@/features/reader/types'
-
 type Props = {
   bookId: string
   bookTitle: string
@@ -23,7 +22,7 @@ type Props = {
   initialCursor: ReaderCursor
   prevChapterId: string | null
   nextChapterId: string | null
-  autoPlay: boolean
+  autoPlayKey: string | null
 }
 
 export function ReaderSession(props: Props) {
@@ -36,6 +35,7 @@ export function ReaderSession(props: Props) {
     })
   }
   const reader = useReader(props, go)
+  const autoPlay = Boolean(props.autoPlayKey)
   return (
     <ReaderWidthFrame>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border">
@@ -47,7 +47,7 @@ export function ReaderSession(props: Props) {
             chapterNumber={props.chapterNumber}
           />
           <div className="pb-3">
-            <ReaderPlayer reader={reader} />
+            <ReaderPlayer reader={reader} autoPlayRequested={autoPlay} />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
@@ -89,7 +89,7 @@ function useReader(props: Props, go: (id: string, autoPlay?: boolean) => void) {
     chapterNumber: props.chapterNumber,
     content: props.content,
     initialCursor: props.initialCursor,
-    autoPlay: props.autoPlay,
+    autoPlayKey: props.autoPlayKey,
     onChapterEnd: () => {
       if (useTtsSettings.getState().autoNext && props.nextChapterId) {
         go(props.nextChapterId, true)

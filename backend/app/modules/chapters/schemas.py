@@ -40,3 +40,13 @@ class ChapterRead(ChapterSummary):
     """Full chapter including content."""
 
     content: str
+
+
+class ChapterContentHit(BaseModel):
+    """One chapter match with a short snippet (not full content)."""
+
+    chapter_id: UUID
+    book_id: UUID
+    chapter_number: int
+    chapter_title: str
+    snippet: str = Field(description="Short highlight around the match")

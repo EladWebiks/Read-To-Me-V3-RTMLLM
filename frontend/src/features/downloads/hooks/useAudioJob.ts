@@ -76,7 +76,7 @@ function useAutoDownload(
     if (downloadedRef.current === jobId) return
     downloadedRef.current = jobId
     void getDownloadUrl(jobId)
-      .then((data) => downloadFileFromUrl(data.url, `rtm-${jobId.slice(0, 8)}.mp3`))
+      .then((data) => downloadFileFromUrl(data.url, data.filename))
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Download URL failed')
       })

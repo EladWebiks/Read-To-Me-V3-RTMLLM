@@ -34,6 +34,7 @@ class ScrapeJobRead(BaseModel):
 
     id: UUID
     book_id: UUID | None
+    book_title: str | None = None
     start_url: str
     mode: str
     chapter_from: int | None

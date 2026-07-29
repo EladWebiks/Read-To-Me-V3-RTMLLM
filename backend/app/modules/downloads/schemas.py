@@ -45,6 +45,7 @@ class DownloadUrlRead(BaseModel):
     """Signed download URL."""
 
     url: str
+    filename: str
     expires_at: datetime
 
 

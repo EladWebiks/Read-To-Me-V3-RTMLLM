@@ -23,6 +23,7 @@ export const MOCK_SCRAPE_JOBS: ScrapeJob[] = Array.from({ length: 28 }, (_, inde
   return {
     id: `mock-job-${String(n).padStart(2, '0')}`,
     book_id: status === 'complete' ? `mock-book-${String(n).padStart(2, '0')}` : null,
+    book_title: `Mock Novel ${n}`,
     start_url: `https://example.com/novel/mock-${n}`,
     mode: index % 2 === 0 ? 'full' : 'range',
     chapter_from: index % 2 === 0 ? null : 1,

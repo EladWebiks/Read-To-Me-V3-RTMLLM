@@ -8,7 +8,7 @@ type Props = {
   onOpen: (book: Book) => void
   onEdit: (book: Book) => void
   onRead: (book: Book) => void
-  onDelete: (bookId: string) => void
+  onDelete: (book: Book) => void
   isDeleting: boolean
 }
 

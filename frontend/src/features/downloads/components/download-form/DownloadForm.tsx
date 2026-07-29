@@ -26,7 +26,7 @@ export function DownloadForm({ bookId, minChapter, maxChapter }: DownloadFormPro
   }
 
   return (
-    <div className="space-y-3 border border-stone-200 bg-white p-4">
+    <div className="space-y-3 rounded-lg border border-border bg-card p-4 text-card-foreground">
       <h2 className="font-medium">Download MP3</h2>
       <div className="flex flex-wrap gap-3 text-sm">
         <NumField
@@ -46,7 +46,7 @@ export function DownloadForm({ bookId, minChapter, maxChapter }: DownloadFormPro
         <ProviderSelect value={provider} onChange={setProvider} />
         <button
           type="button"
-          className="border border-stone-300 bg-stone-50 px-3 py-1 hover:bg-stone-100 disabled:opacity-50"
+          className="rounded-md border border-border bg-background px-3 py-1 hover:bg-muted disabled:opacity-50"
           disabled={create.isPending}
           onClick={start}
         >

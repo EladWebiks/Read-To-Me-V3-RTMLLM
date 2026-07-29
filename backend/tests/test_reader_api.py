@@ -120,3 +120,45 @@ async def test_progress_upsert_and_get(client: AsyncClient) -> None:
     again = await client.get(f"/api/library/books/{book['id']}/progress")
     assert again.status_code == 200
     assert again.json()["chapter_id"] == chapter["id"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_continue_clears_after_book_delete(client: AsyncClient) -> None:
+    """Deleting a book must not leave continue-reading on a dead chapter."""
+    book = (
+        await client.post(
+            "/api/library/books",
+            json={"title": "Gone Book"},
+        )
+    ).json()
+    chapter = (
+        await client.post(
+            f"/api/library/books/{book['id']}/chapters",
+            json={"title": "One", "content": "Soon deleted"},
+        )
+    ).json()
+    saved = await client.put(
+        f"/api/library/books/{book['id']}/progress",
+        json={
+            "chapter_id": chapter["id"],
+            "chapter_number": chapter["chapter_number"],
+            "paragraph_index": 0,
+            "word_index": 0,
+        },
+    )
+    assert saved.status_code == 200
+
+    cont = await client.get("/api/library/reading/continue")
+    assert cont.status_code == 200
+    assert cont.json()["book_id"] == book["id"]
+
+    deleted = await client.delete(f"/api/library/books/{book['id']}")
+    assert deleted.status_code == 204
+
+    after = await client.get("/api/library/reading/continue")
+    assert after.status_code == 200
+    assert after.json() is None
+
+    chapter_get = await client.get(f"/api/chapters/{chapter['id']}")
+    assert chapter_get.status_code == 404

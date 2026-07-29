@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from '@/shared/lib/api'
+import { apiDelete, apiGet, apiPost } from '@/shared/lib/api'
 import type { ScrapeJob, ScrapeJobCreateInput, ScrapePreview } from '../types'
 
 export function previewScrape(url: string): Promise<ScrapePreview> {
@@ -19,4 +19,8 @@ export function getScrapeJob(jobId: string): Promise<ScrapeJob> {
 
 export function cancelScrapeJob(jobId: string): Promise<ScrapeJob> {
   return apiPost<ScrapeJob>(`/api/scraping/jobs/${jobId}/cancel`)
+}
+
+export function deleteScrapeJob(jobId: string): Promise<void> {
+  return apiDelete(`/api/scraping/jobs/${jobId}`)
 }

@@ -1,6 +1,6 @@
 # RTM v3 — Milestone B: LLM Foundation Spec & Decisions
 
-> **Status:** Locked for B1 implementation · **Date:** 2026-07-28
+> **Status:** B1 locked and implemented; B2–B4 shipped · **Updated:** 2026-07-29
 >
 > Companion to [phase-0-discovery.md](./phase-0-discovery.md). Phase 0 locked the
 > architecture; this document locks **how** we implement the provider-agnostic LLM
@@ -23,10 +23,10 @@ assistant. It is delivered in four slices:
 
 | Slice | Deliverable | Depends on |
 |-------|-------------|------------|
-| **B1 — Foundation** (this branch) | Spec doc, `modules/llm`, Gemini adapter, capability router, all LLM tables + migration, telemetry, contract tests | Milestone A |
-| **B2 — Chat + SSE** | `/api/chat` streaming endpoint, conversation persistence, wire assistant panel to real (tool-less) replies | B1 |
-| **B3 — Tools + orchestrator** | Tool registry, hand-rolled loop, read-only / low-risk tools, HITL stubs for confirmation-required | B2 |
-| **B4 — Frontend chat** | Message list, streaming UI, confirmation prompts, cost/status affordances | B3 |
+| **B1 — Foundation (done)** | `modules/llm`, Gemini adapter, capability router, LLM tables, telemetry, contract tests | Milestone A |
+| **B2 — Chat + SSE (done)** | `/api/chat`, conversation persistence, streamed assistant panel | B1 |
+| **B3 — Tools + orchestrator (done)** | Registry, bounded loop, true tool streaming, budgets, full form HITL, rolling context | B2 |
+| **B4 — Frontend chat (done)** | Tool/status UX, confirmation forms, choices, playback/download/settings actions | B3 |
 
 ### B1 in scope **[R]**
 
@@ -67,6 +67,9 @@ class LLMProvider(Protocol):
         self, req: StructuredOutputRequest[T]
     ) -> T: ...
     async def call_tools(self, req: ToolCallingRequest) -> ToolCallingResponse: ...
+    async def stream_tools(
+        self, req: ToolCallingRequest
+    ) -> AsyncGenerator[ToolCallingStreamChunk, None]: ...
     async def create_embeddings(self, req: EmbeddingRequest) -> EmbeddingResponse: ...
 ```
 
@@ -77,7 +80,7 @@ adapter is registered.
 
 `Message`, `Role` (`system` | `user` | `assistant` | `tool`), `GenerateTextRequest`,
 `GenerateTextResponse`, `StreamChunk`, `ToolSpec`, `ToolCall`, `ToolCallingRequest`,
-`ToolCallingResponse`, `Usage` (`tokens_in`, `tokens_out`, optional `cost_usd`),
+`ToolCallingResponse`, `ToolCallingStreamChunk`, `Usage` (`tokens_in`, `tokens_out`, optional `cost_usd`),
 `StructuredOutputRequest[T]`, `EmbeddingRequest`, `EmbeddingResponse`.
 
 Adapters normalize vendor quirks (tool schema, token accounting, system-prompt
@@ -161,7 +164,9 @@ B1 enforces:
 
 On HTTP 429 / quota errors: classify as `RateLimitError`, do **not** burn the circuit
 breaker as a hard failure until retries are exhausted; surface a clear domain error.
-Conversation/token budgets land in B2/B3 with the orchestrator.
+Conversation/token budgets are shipped in the orchestrator: default
+`LLM_MAX_TURN_TOKENS_IN=64000`. Tool rounds enforce the cap; a completed final answer
+may record soft-limit overage instead of being discarded.
 
 `LLM_ENABLED=false` (default) → Milestone A behaviour unchanged; no provider calls.
 
@@ -304,20 +309,20 @@ Manual smoke (not CI): `LLM_ENABLED=true` + real key → one scripted call → r
 
 ## 10. Definition of done (B1)
 
-- [ ] This spec committed under `docs/`
-- [ ] `modules/llm` implements protocol + Gemini adapter + router + telemetry
-- [ ] Alembic migration applied and reversible
-- [ ] Model catalog seeded
-- [ ] `GET /api/llm/models` works for authenticated users
-- [ ] `ruff` / `mypy` / `pytest -m "unit or integration"` green
-- [ ] App unchanged when `LLM_ENABLED=false`
+- [x] This spec committed under `docs/`
+- [x] `modules/llm` implements protocol + Gemini adapter + router + telemetry
+- [x] Alembic migration applied and reversible
+- [x] Model catalog seeded
+- [x] `GET /api/llm/models` works for authenticated users
+- [x] `ruff` / `mypy` / `pytest -m "unit or integration"` green
+- [x] App unchanged when `LLM_ENABLED=false`
 
 ---
 
 ## 11. Follow-ups (not B1)
 
-- B2: chat API + SSE + conversation persistence
-- B3: tools + hand-rolled orchestrator + budgets per conversation
-- B4: frontend chat UX
+- B2/B3/B4 are complete; see `docs/llm-planning/README.md`.
+- Milestone C next: theme/trope discovery, candidate summaries, richer grounded discuss,
+  gated destructive/large actions, and an eval harness.
 - Additional adapters (OpenRouter, OpenAI, Anthropic, Local)
 - Compose `langfuse` profile when first needed

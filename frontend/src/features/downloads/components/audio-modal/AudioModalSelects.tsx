@@ -19,7 +19,7 @@ export function ChapterSelect({
     <label className="flex flex-col gap-1">
       {label}
       <select
-        className="border border-stone-300 px-2 py-1.5"
+        className="rounded-md border border-border bg-background px-2 py-1.5 text-foreground"
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -44,14 +44,16 @@ export function ProviderToggle({
   onChange: (value: DownloadProvider) => void
 }) {
   return (
-    <div className="flex overflow-hidden border border-stone-300">
+    <div className="flex overflow-hidden rounded-md border border-border">
       {(['sapi', 'edge'] as const).map((provider) => (
         <button
           key={provider}
           type="button"
           disabled={disabled}
           className={`flex-1 px-3 py-2 ${
-            value === provider ? 'bg-stone-800 text-white' : 'bg-white hover:bg-stone-50'
+            value === provider
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-background text-foreground hover:bg-muted'
           }`}
           onClick={() => onChange(provider)}
         >
@@ -77,7 +79,7 @@ export function VoiceSelect({
     <label className="flex flex-col gap-1">
       Voice
       <select
-        className="border border-stone-300 px-2 py-1.5"
+        className="rounded-md border border-border bg-background px-2 py-1.5 text-foreground"
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}

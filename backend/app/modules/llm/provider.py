@@ -16,6 +16,7 @@ from app.modules.llm.types import (
     StructuredOutputRequest,
     ToolCallingRequest,
     ToolCallingResponse,
+    ToolCallingStreamChunk,
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -47,6 +48,13 @@ class LLMProvider(Protocol):
 
     async def call_tools(self, req: ToolCallingRequest) -> ToolCallingResponse:
         """Complete a turn that may include tool calls."""
+
+    async def stream_tools(
+        self,
+        req: ToolCallingRequest,
+    ) -> AsyncIterator[ToolCallingStreamChunk]:
+        """Stream assistant text and finish with normalized tool calls + usage."""
+        ...
 
     async def create_embeddings(self, req: EmbeddingRequest) -> EmbeddingResponse:
         """Embed texts; may raise CapabilityNotSupportedError."""

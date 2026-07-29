@@ -1,7 +1,9 @@
 # 01 — Target architecture & request flow
 
-> How the assistant is wired once tools land. B1/B2 already built the left half
-> (provider + chat); B3 adds the `tools` and `orchestration` modules.
+> Current assistant architecture. B1–B3 and most of B4 are shipped; the optional B4
+> cost meter remains open. Milestone C extends the same boundaries with discovery,
+> summaries, and richer grounded discussion.
+> Product intent: [00-north-star.md](./00-north-star.md).
 
 ## 1. Module map
 
@@ -10,11 +12,13 @@ Two new bounded contexts join the modular monolith (phase-0 §11):
 ```
 backend/app/modules/
   llm/            # provider abstraction, router, telemetry  (B1 — done)
-  orchestration/  # the tool loop, budgets, HITL, tracing      (B3 — new)
-  tools/          # tool registry + individual tool defs       (B3 — new)
+  orchestration/  # bounded tool loop, budgets, form HITL, tracing (B3 — shipped)
+  tools/          # registry + validated/audited tool definitions (B3 — shipped)
   library/ books/ chapters/ reader/ audio/ downloads/ scraping/ (domain — exist)
+  discovery/      # multi-source title search + ranked candidates (C — shipped)
+  imports/        # bounded EPUB parse/import                    (A/C — shipped)
+  summaries/      # owned content-hash-invalidated book summaries (C — shipped)
 ```
-
 ### Dependency direction (never inverted)
 
 ```
@@ -43,19 +47,19 @@ sequenceDiagram
     participant SVC as domain service
     participant DB as Postgres
 
-    FE->>API: POST /api/chat {message, conversation_id}
-    API->>ORCH: run(user, conversation, message)
+    FE->>API: POST /api/chat {message, conversation_id, ui_context?}
+    API->>ORCH: run(user, conversation, message, ui_context)
     ORCH->>DB: persist user message
     loop bounded loop (max iters/tokens/time)
-        ORCH->>LLM: call_tools(messages, tool_specs, capability=TOOL_CALLING)
-        LLM-->>ORCH: assistant text and/or tool_call(s)
+        ORCH->>LLM: stream_tools(messages, tool_specs, capability=TOOL_CALLING)
+        LLM-->>ORCH: text deltas and/or complete normalized tool_call(s)
         alt tool proposed
             ORCH->>REG: resolve(tool_name)
             ORCH->>ORCH: validate args → authz → risk/mode → rate-limit
             alt confirmation_required
-                ORCH-->>FE: SSE confirmation_request (pause)
-                FE->>API: POST /confirm {approve}
-                API->>ORCH: resume
+                ORCH-->>FE: SSE confirmation_request (form or binary; pause)
+                FE->>API: POST /confirm {approve, values?}
+                API->>ORCH: resume with merged args
             end
             ORCH->>SVC: execute(input, ctx.user_id) with timeout
             SVC->>DB: read/write (ownership enforced)
@@ -63,7 +67,7 @@ sequenceDiagram
             ORCH->>DB: audit tool_call
             ORCH-->>FE: SSE tool_result (redacted)
         else final answer
-            ORCH-->>FE: SSE token stream → done
+            ORCH-->>FE: SSE delta stream → done
         end
     end
     ORCH->>DB: persist assistant message + llm_execution + cost_record
@@ -117,3 +121,20 @@ without touching orchestration.
   `confirmation_required` tools.
 - **Executable-artifact safety:** treat any model-proposed action like untrusted
   output — parse, allowlist, authorize before executing.
+
+## 7. UI route context + client actions **[R][D → ADR-14]**
+
+The assistant panel is **app-wide**. Knowing the current screen improves grounding
+without giving the model control of the SPA.
+
+| Concern | Who | Rule |
+|---------|-----|------|
+| Current route / book / chapter | **Frontend → chat request** as `ui_context` | Injected as **data** in the turn (delimited); cannot select tools or skip HITL |
+| Refresh Scraper / library lists | **Frontend** on `tool_result` (invalidate queries) | Never ask the LLM to "refresh the page" |
+| Suggest / open Scraper or Reader | **Client action** from tool result or a small navigate chip | FE renders link/button or applies strict navigation policy |
+| Track confirmed audio generation | **Download client action** containing owned job metadata | FE polls status, auto-downloads when complete, keeps a retry button |
+
+Examples: after `scrape_book_range` succeeds, offer "Open Scraper"; on `/read/...`,
+`play_chapter` can stay in-place; off-reader, navigate to the chapter. After an approved
+audio-range download, remove the confirmation form and show the authoritative job card
+instead of asking the model to narrate approval state.

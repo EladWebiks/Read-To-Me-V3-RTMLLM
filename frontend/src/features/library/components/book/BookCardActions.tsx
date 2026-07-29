@@ -7,7 +7,7 @@ type Props = {
   book: Book
   onEdit: (book: Book) => void
   onRead: (book: Book) => void
-  onDelete: (bookId: string) => void
+  onDelete: (book: Book) => void
   isDeleting: boolean
 }
 
@@ -38,7 +38,7 @@ export function BookCardActions(props: Props) {
         title="Delete"
         disabled={isDeleting}
         danger
-        onClick={() => onDelete(book.id)}
+        onClick={() => onDelete(book)}
       >
         <Trash2 className="h-3.5 w-3.5 transition-transform duration-150 group-hover/btn:scale-110" />
       </IconBtn>

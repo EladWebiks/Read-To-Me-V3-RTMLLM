@@ -1,20 +1,24 @@
-import { useLocation, useParams } from 'react-router'
+import { Navigate, useLocation, useParams } from 'react-router'
 import { useBook, useChapter, useChapters } from '@/features/library/hooks'
 import type { ChapterSummary } from '@/features/library/types'
 import { useProgress } from '@/features/reader/hooks'
 import { ReaderSession } from './ReaderSession'
 import type { ReaderCursor } from '@/features/reader/types'
 
-type LocationState = { autoPlay?: boolean }
+type LocationState = { autoPlay?: boolean; playbackRequestId?: string }
 
 export function ReaderPage() {
   const { bookId = '', chapterId = '' } = useParams()
   const location = useLocation()
-  const autoPlay = Boolean((location.state as LocationState | null)?.autoPlay)
+  const locationState = location.state as LocationState | null
   const bookQuery = useBook(bookId)
   const chapterQuery = useChapter(chapterId)
   const chaptersQuery = useChapters(bookId)
   const progressQuery = useProgress(bookId)
+  // Wait for saved progress so resume starts at the right cursor, not the top.
+  const autoPlayKey = progressQuery.isLoading
+    ? null
+    : autoPlayRequest(locationState, chapterId)
 
   if (bookQuery.isLoading || chapterQuery.isLoading || chaptersQuery.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading chapter…</p>
@@ -25,7 +29,8 @@ export function ReaderPage() {
     chapterQuery.isError ||
     !chapterQuery.data
   ) {
-    return <p className="text-sm text-destructive">Chapter not found.</p>
+    // Book/chapter deleted (or bad URL) — leave the mounted reader route.
+    return <Navigate to="/library" replace />
   }
 
   const book = bookQuery.data
@@ -47,10 +52,14 @@ export function ReaderPage() {
         initialCursor={cursorFromProgress(progressQuery.data, chapterId)}
         prevChapterId={prevId}
         nextChapterId={nextId}
-        autoPlay={autoPlay}
+        autoPlayKey={autoPlayKey}
       />
     </section>
   )
+}
+
+function autoPlayRequest(state: LocationState | null, chapterId: string): string | null {
+  return state?.playbackRequestId ?? (state?.autoPlay ? chapterId : null)
 }
 
 function cursorFromProgress(

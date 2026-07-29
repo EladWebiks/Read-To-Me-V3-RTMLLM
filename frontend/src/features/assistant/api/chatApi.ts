@@ -1,39 +1,33 @@
 import { apiGet } from '@/shared/lib/api'
+import type { ChatStreamHandlers, Conversation } from './chatTypes'
+import { dispatchSseBlock } from './sseDispatch'
+
+export type {
+  ChatMessage,
+  ChatRole,
+  ChatStreamHandlers,
+  ChoiceOption,
+  ChoicePayload,
+  ClientAction,
+  ConfirmationFormField,
+  ConfirmationPayload,
+  Conversation,
+  DonePayload,
+} from './chatTypes'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
-
-export type ChatRole = 'user' | 'assistant' | 'system'
-
-export type ChatMessage = {
-  id: string
-  role: ChatRole
-  content: string
-  created_at?: string
-}
-
-export type Conversation = {
-  id: string
-  title: string | null
-  messages: ChatMessage[]
-}
-
-export type ChatStreamHandlers = {
-  onMeta: (conversationId: string) => void
-  onDelta: (text: string) => void
-  onDone: (payload: { messageId: string; conversationId: string }) => void
-  onError: (detail: string) => void
-}
 
 export function getConversation(conversationId: string): Promise<Conversation> {
   return apiGet<Conversation>(`/api/chat/${conversationId}`)
 }
 
-/** POST /api/chat and parse SSE events (meta / delta / done / error). */
+/** POST /api/chat and parse SSE events. */
 export async function streamChat(
   message: string,
   conversationId: string | null,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
+  uiContext?: { path: string; book_id?: string; chapter_id?: string },
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: 'POST',
@@ -42,11 +36,36 @@ export async function streamChat(
     body: JSON.stringify({
       message,
       conversation_id: conversationId,
+      ui_context: uiContext ?? null,
     }),
     signal,
   })
   if (!response.ok || !response.body) {
     throw new Error(`Chat failed: ${response.status}`)
+  }
+  await readSse(response.body, handlers)
+}
+
+/** POST /api/chat/{id}/confirm — resume after HITL. */
+export async function streamConfirm(
+  conversationId: string,
+  body: { callId: string; approved: boolean; values?: Record<string, unknown> },
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/chat/${conversationId}/confirm`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      call_id: body.callId,
+      approved: body.approved,
+      values: body.values ?? null,
+    }),
+    signal,
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`Confirm failed: ${response.status}`)
   }
   await readSse(response.body, handlers)
 }
@@ -64,32 +83,6 @@ async function readSse(
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split('\n\n')
     buffer = parts.pop() ?? ''
-    for (const block of parts) {
-      dispatchSseBlock(block, handlers)
-    }
-  }
-}
-
-function dispatchSseBlock(block: string, handlers: ChatStreamHandlers): void {
-  const lines = block.split('\n')
-  let event = 'message'
-  const dataLines: string[] = []
-  for (const line of lines) {
-    if (line.startsWith('event:')) event = line.slice(6).trim()
-    if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-  }
-  if (!dataLines.length) return
-  const data = JSON.parse(dataLines.join('\n')) as Record<string, unknown>
-  if (event === 'meta' && typeof data.conversation_id === 'string') {
-    handlers.onMeta(data.conversation_id)
-  } else if (event === 'delta' && typeof data.text === 'string') {
-    handlers.onDelta(data.text)
-  } else if (event === 'done') {
-    handlers.onDone({
-      messageId: String(data.message_id ?? ''),
-      conversationId: String(data.conversation_id ?? ''),
-    })
-  } else if (event === 'error') {
-    handlers.onError(String(data.detail ?? 'Chat error'))
+    for (const block of parts) dispatchSseBlock(block, handlers)
   }
 }

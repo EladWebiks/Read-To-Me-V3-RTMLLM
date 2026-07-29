@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,10 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.llm.models import (
     Conversation,
     ConversationMessage,
+    ConversationSummary,
     CostRecord,
     LlmExecution,
     ModelConfiguration,
     ModelProvider,
+    ToolCallRecord,
 )
 from app.modules.llm.registry import ModelSpec
 
@@ -38,6 +41,44 @@ class ExecutionWrite:
     unit_cost_in: float
     unit_cost_out: float
     conversation_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCallWrite:
+    """Fields for one tool_call audit insert."""
+
+    tool_name: str
+    input_data: dict[str, Any]
+    status: str
+    risk_level: str
+    message_id: uuid.UUID | None = None
+    output_data: dict[str, Any] | None = None
+    duration_ms: int | None = None
+    confirmed_by_user: bool = False
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCallUpdate:
+    """Fields to patch on an existing tool_call."""
+
+    status: str
+    input_data: dict[str, Any] | None = None
+    output_data: dict[str, Any] | None = None
+    confirmed_by_user: bool | None = None
+    error: str | None = None
+    duration_ms: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationSummaryWrite:
+    """Fields for a compact conversation-prefix summary."""
+
+    conversation_id: uuid.UUID
+    user_id: uuid.UUID
+    summary: str
+    through_message_id: uuid.UUID
+    source_message_count: int
 
 
 class LlmRepository:
@@ -183,6 +224,56 @@ class LlmRepository:
         rows.reverse()
         return rows
 
+    async def list_all_messages(self, conversation_id: uuid.UUID) -> list[ConversationMessage]:
+        """Return complete oldest-first history for context reconstruction."""
+        result = await self._session.execute(
+            select(ConversationMessage)
+            .where(ConversationMessage.conversation_id == conversation_id)
+            .order_by(ConversationMessage.created_at, ConversationMessage.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_conversation_summary(
+        self,
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> ConversationSummary | None:
+        """Return a summary only when it belongs to the authenticated owner."""
+        result = await self._session.execute(
+            select(ConversationSummary).where(
+                ConversationSummary.conversation_id == conversation_id,
+                ConversationSummary.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_conversation_summary(
+        self,
+        data: ConversationSummaryWrite,
+    ) -> ConversationSummary:
+        """Insert or replace the compact prefix for one conversation."""
+        row = await self.get_conversation_summary(data.conversation_id, data.user_id)
+        if row is None:
+            row = ConversationSummary(
+                conversation_id=data.conversation_id,
+                user_id=data.user_id,
+                summary=data.summary,
+                through_message_id=data.through_message_id,
+                source_message_count=data.source_message_count,
+            )
+            self._session.add(row)
+        else:
+            row.summary = data.summary
+            row.through_message_id = data.through_message_id
+            row.source_message_count = data.source_message_count
+        await self._session.flush()
+        return row
+
+    async def delete_conversation_summary(self, row: ConversationSummary) -> None:
+        """Invalidate a stale summary row."""
+        await self._session.delete(row)
+        await self._session.flush()
+
     async def set_conversation_title(
         self,
         conversation_id: uuid.UUID,
@@ -194,3 +285,40 @@ class LlmRepository:
             return
         row.title = title
         await self._session.flush()
+
+    async def record_tool_call(self, data: ToolCallWrite) -> ToolCallRecord:
+        """Insert a tool_call audit row."""
+        row = ToolCallRecord(
+            message_id=data.message_id,
+            tool_name=data.tool_name,
+            input=data.input_data,
+            output=data.output_data,
+            status=data.status,
+            duration_ms=data.duration_ms,
+            risk_level=data.risk_level,
+            confirmed_by_user=data.confirmed_by_user,
+            error=data.error,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get_tool_call(self, call_id: uuid.UUID) -> ToolCallRecord | None:
+        """Load one tool_call by id."""
+        return await self._session.get(ToolCallRecord, call_id)
+
+    async def update_tool_call(self, row: ToolCallRecord, data: ToolCallUpdate) -> ToolCallRecord:
+        """Mutate an existing tool_call (HITL resolve)."""
+        row.status = data.status
+        if data.input_data is not None:
+            row.input = data.input_data
+        if data.output_data is not None:
+            row.output = data.output_data
+        if data.confirmed_by_user is not None:
+            row.confirmed_by_user = data.confirmed_by_user
+        if data.error is not None:
+            row.error = data.error
+        if data.duration_ms is not None:
+            row.duration_ms = data.duration_ms
+        await self._session.flush()
+        return row

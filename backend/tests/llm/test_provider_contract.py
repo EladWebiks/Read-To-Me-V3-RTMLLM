@@ -17,6 +17,7 @@ from app.modules.llm.types import (
     StructuredOutputRequest,
     ToolCallingRequest,
     ToolCallingResponse,
+    ToolCallingStreamChunk,
     ToolSpec,
     Usage,
 )
@@ -68,6 +69,14 @@ class FakeProvider:
             model="fake-model",
             provider=self.name,
         )
+
+    async def stream_tools(
+        self,
+        req: ToolCallingRequest,
+    ) -> AsyncIterator[ToolCallingStreamChunk]:
+        response = await self.call_tools(req)
+        yield ToolCallingStreamChunk(text="answer")
+        yield ToolCallingStreamChunk(done=True, response=response)
 
     async def create_embeddings(self, req: EmbeddingRequest) -> EmbeddingResponse:
         raise CapabilityNotSupportedError("embeddings")
@@ -129,6 +138,22 @@ async def test_tools_feature_detection() -> None:
                 ],
             )
         )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_tool_stream_has_deltas_and_terminal_response() -> None:
+    provider = FakeProvider()
+    request = ToolCallingRequest(
+        messages=[Message(role=Role.USER, content="go")],
+        tools=[],
+    )
+
+    chunks = [chunk async for chunk in provider.stream_tools(request)]
+
+    assert chunks[0].text == "answer"
+    assert chunks[-1].done is True
+    assert chunks[-1].response is not None
 
 
 @pytest.mark.unit

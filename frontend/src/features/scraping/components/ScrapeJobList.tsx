@@ -26,6 +26,7 @@ export function ScrapeJobList() {
                   key={job.id}
                   job={job}
                   onCancel={() => state.onCancel(job)}
+                  onRemove={() => state.onRemove(job)}
                   onOpenHref={
                     job.book_id && !job.id.startsWith('mock-')
                       ? libraryBookHref(job.book_id)

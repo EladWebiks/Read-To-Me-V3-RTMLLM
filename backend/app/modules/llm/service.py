@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import asyncio
+import time
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from typing import TypeVar
 from uuid import UUID
 
@@ -11,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.modules.llm.capabilities import ModelCapability
-from app.modules.llm.exceptions import LlmConfigError, LlmDisabledError, NoCandidateModelError
+from app.modules.llm.exceptions import (
+    LlmConfigError,
+    LlmDisabledError,
+    LlmProviderError,
+    NoCandidateModelError,
+)
 from app.modules.llm.model_router import ModelRouter
 from app.modules.llm.providers.gemini_provider import GeminiProvider
 from app.modules.llm.registry import ModelSpec, list_models
@@ -26,6 +34,7 @@ from app.modules.llm.types import (
     StructuredOutputRequest,
     ToolCallingRequest,
     ToolCallingResponse,
+    ToolCallingStreamChunk,
     Usage,
 )
 
@@ -121,6 +130,56 @@ class LlmService:
         result, model, fallback = await self._router.run(capability, _call)
         return await self._record(req.task, model, fallback, conversation_id, result, result.usage)
 
+    async def stream_tools(
+        self,
+        req: ToolCallingRequest,
+        *,
+        capability: ModelCapability = ModelCapability.TOOL_CALLING,
+        conversation_id: UUID | None = None,
+    ) -> AsyncGenerator[ToolCallingStreamChunk, None]:
+        """Stream a tool-capable round from one provider; no mid-stream fallback."""
+        self.ensure_enabled()
+        matches = self._router.candidates(capability)
+        if not matches:
+            raise NoCandidateModelError(capability.value)
+        model = matches[0]
+        provider = self._router.build(model)
+        context = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=False,
+            conversation_id=conversation_id,
+        )
+        async with aclosing(self._stream_tools_from(provider, req, context)) as stream:
+            async for chunk in stream:
+                yield chunk
+
+    async def _stream_tools_from(
+        self,
+        provider: GeminiProvider,
+        req: ToolCallingRequest,
+        context: TelemetryContext,
+    ) -> AsyncGenerator[ToolCallingStreamChunk, None]:
+        started = time.perf_counter()
+        terminal: ToolCallingResponse | None = None
+        status, error = "cancelled", None
+        try:
+            async with aclosing(provider.stream_tools(req)) as stream:
+                async for chunk in stream:
+                    if chunk.done:
+                        terminal = chunk.response
+                    yield chunk
+            terminal = _require_terminal(terminal)
+            status = "ok"
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            status, error = "error", str(exc)
+            raise
+        finally:
+            usage = terminal.usage if terminal is not None else Usage(0, 0)
+            await self._record_stream(context, started, usage, status, error)
+
     async def generate_structured(
         self,
         req: StructuredOutputRequest[T],
@@ -129,13 +188,36 @@ class LlmService:
         conversation_id: UUID | None = None,
     ) -> T:
         """Structured output via routed provider."""
+        result, _provider, _model = await self.generate_structured_with_model(
+            req,
+            capability=capability,
+            conversation_id=conversation_id,
+        )
+        return result
+
+    async def generate_structured_with_model(
+        self,
+        req: StructuredOutputRequest[T],
+        *,
+        capability: ModelCapability = ModelCapability.STRUCTURED_EXTRACTION,
+        conversation_id: UUID | None = None,
+    ) -> tuple[T, str, str]:
+        """Structured output plus provider/model provenance."""
         self.ensure_enabled()
 
         async def _call(provider: GeminiProvider, _model: ModelSpec) -> T:
             return await provider.generate_structured_output(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, conversation_id, result, Usage(0, 0))
+        recorded = await self._record(
+            req.task,
+            model,
+            fallback,
+            conversation_id,
+            result,
+            Usage(0, 0),
+        )
+        return recorded, model.provider, model.model_name
 
     async def stream_text(
         self,
@@ -191,3 +273,25 @@ class LlmService:
             ),
             _once,
         )
+
+    async def _record_stream(
+        self,
+        context: TelemetryContext,
+        started: float,
+        usage: Usage,
+        status: str,
+        error: str | None,
+    ) -> None:
+        await self._telemetry.write_result(
+            context,
+            usage=usage,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            status=status,
+            error=error,
+        )
+
+
+def _require_terminal(response: ToolCallingResponse | None) -> ToolCallingResponse:
+    if response is None:
+        raise LlmProviderError("Provider tool stream ended without a terminal response")
+    return response

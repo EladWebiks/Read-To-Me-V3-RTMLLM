@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.scraping.models import ScrapingJob, ScrapingJobItem, ScrapingSource
@@ -69,6 +69,22 @@ class ScrapingRepository:
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def delete_job(self, job: ScrapingJob) -> None:
+        """Hard-delete a job and its chapter items (book is kept)."""
+        await self._session.execute(
+            delete(ScrapingJobItem).where(ScrapingJobItem.job_id == job.id)
+        )
+        await self._session.delete(job)
+        await self._session.flush()
+
+    async def delete_jobs_for_book(self, book_id: UUID) -> None:
+        """Hard-delete every scrape job tied to a book."""
+        stmt = select(ScrapingJob).where(ScrapingJob.book_id == book_id)
+        result = await self._session.execute(stmt)
+        jobs = list(result.scalars().all())
+        for job in jobs:
+            await self.delete_job(job)
 
     # ── job items ────────────────────────────────────────
 
