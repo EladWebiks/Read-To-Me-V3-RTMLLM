@@ -34,7 +34,7 @@ existing documents and does not replace them:
 | **B2.5 — Chat UX polish** | Markdown rendering (streamdown), no-bubble assistant turns, auto-scroll, themed scrollbar, smooth expand/shrink, "New chat" | Done |
 | **B3 — Tools + orchestrator** | Tool registry, bounded hand-rolled loop, true streaming, tools, form HITL, rolling context | Done |
 | **B4 — Frontend chat (tools)** | Tool progress, HITL forms, choices, route context, playback/download/settings client actions | Done (cost meter intentionally optional) |
-| **C — Full assistant** | Discovery/import, persisted summaries, richer grounded discuss/Q&A | **In progress** (title discovery/import + summaries done; theme discovery/discuss next) |
+| **C — Full assistant** | Discovery/import, persisted summaries, richer grounded discuss/Q&A | **In progress** (title discovery/import + summaries done; batched theme/trope discovery next, then richer discuss) |
 
 ## How to read these docs
 
