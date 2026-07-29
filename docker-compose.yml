@@ -88,6 +88,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-to-a-long-random-secret}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google/callback}
       COOKIE_SECURE: "false"
       SAPI_PROXY_ENABLED: "true"
       LLM_ENABLED: ${LLM_ENABLED:-false}
@@ -138,6 +141,9 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-rtm}
       MINIO_SECURE: "false"
       SAPI_PROXY_ENABLED: "true"
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google/callback}
       LLM_ENABLED: ${LLM_ENABLED:-false}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}

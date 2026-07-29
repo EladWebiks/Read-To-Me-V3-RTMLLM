@@ -457,6 +457,12 @@ Important groups:
 - **Redis:** `REDIS_URL`, `REDIS_PORT`
 - **MinIO:** `MINIO_ENDPOINT`, `MINIO_PUBLIC_ENDPOINT`, credentials, bucket, TLS flag
 - **HTTP/auth:** ports, CORS origins, `JWT_SECRET`, admin credentials, cookie flags
+- **Google SSO:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — all
+  three must be set for Google sign-in to work; login endpoints return 503 while unset.
+  Create an OAuth 2.0 Web client in the Google Cloud console: **APIs & Services →
+  Credentials → Create OAuth client ID → Web application**, then add both
+  `http://localhost:5173/api/auth/google/callback` (Vite dev) and
+  `http://localhost:3000/api/auth/google/callback` (Docker) as Authorized redirect URIs.
 - **Downloads:** `DOWNLOAD_JOB_TTL_HOURS`, `SIGNED_URL_EXPIRES_SECONDS`
 - **LLM:** provider/model/key, timeout, retries, token/context limits, assistant mode,
   HITL expiry/round limits, optional Langfuse flag

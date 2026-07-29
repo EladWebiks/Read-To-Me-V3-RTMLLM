@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "changeme123"
 
+    # Google SSO (server-side authorization-code flow). All three are required
+    # for login to work; endpoints return 503 when unset.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    # Browser-facing callback, e.g. http://localhost:5173/api/auth/google/callback
+    google_redirect_uri: str | None = None
+
     scrape_timeout_seconds: int = 20
     scrape_max_bytes: int = 2_097_152  # 2 MB
     scrape_delay_seconds: float = 1.5
