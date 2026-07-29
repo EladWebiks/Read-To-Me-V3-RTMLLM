@@ -2,7 +2,7 @@
 
 > One place for every LLM/assistant architectural decision. ADR-1..6 were locked in the
 > B1 spec ([milestone-b-llm-spec.md](../milestone-b-llm-spec.md) §7) and are summarized
-> here; ADR-7..12 cover B3+ (some locked by maintainer 2026-07-28).
+> here; ADR-7..15 cover the shipped B3/B4 spine and Milestone C direction.
 
 ## Status key
 
@@ -43,7 +43,7 @@ Static registry seeds DB; domain never hardcodes model names.
 
 ## B3+ decisions
 
-### ADR-7 — Split `tools` and `orchestration` into two modules — **Proposed**
+### ADR-7 — Split `tools` and `orchestration` into two modules — **Locked**
 **Decision:** `tools/` = catalog + registry; `orchestration/` = loop/budgets/HITL/tracing.
 **Rationale:** isolate unit tests; adding a tool never touches the engine.
 **Alternatives:** one combined module.
@@ -65,13 +65,13 @@ store proposal + **final merged input** and `confirmed_by_user`.
 **Alternatives:** separate `confirmations` table.
 **Revisit:** only if workflows need multi-step approval chains beyond one form.
 
-### ADR-10 — Budgets are explicit settings enforced by the loop — **Proposed**
+### ADR-10 — Budgets are explicit settings enforced by the loop — **Locked**
 **Decision:** iteration/external-call/token/cost/wall-clock caps per run
 ([03](./03-orchestration.md) §3).
 **Rationale:** no uncontrolled agent loops [U]; free-tier predictability.
 **Revisit:** tune from telemetry; per-user overrides later.
 
-### ADR-11 — Orchestration runs in-process for B3; arq worker deferred — **Proposed**
+### ADR-11 — Orchestration runs in-process for B3; arq worker deferred — **Locked**
 **Decision:** loop behind the SSE request in-process for B3.
 **Rationale:** simplest for single-user; Redis pub/sub later if needed.
 **Revisit:** event-loop blocking or concurrency pressure.
@@ -85,7 +85,7 @@ user-editable fields (e.g. start chapter, chapter count). Clarify / multi-choice
 **Alternatives:** binary-only HITL (rejected — too weak for scrape params).
 **Revisit:** if forms need conditional fields or multi-page wizards.
 
-### ADR-13 — Persist LLM book summaries for search + reuse — **Locked (design)**
+### ADR-13 — Persist LLM book summaries for search + reuse — **Locked (implemented)**
 **Decision:** Milestone C **must** ship a `book_summaries` (or equivalent) table and
 tools to read/ensure summaries. Summaries are a cache of derived data with
 `content_hash` / `prompt_version` invalidation. Search prefers summary/metadata, then
@@ -98,7 +98,7 @@ re-scan full chapter text every turn; title-only search is insufficient.
 **Revisit:** shared/global summaries across users; embedding index over summary text.
 **Detail:** [06-roadmap-and-sequencing.md](./06-roadmap-and-sequencing.md) §4a.
 
-### ADR-14 — UI route context + client navigate actions (not LLM-driven refresh) — **Locked (design)**
+### ADR-14 — UI route context + client actions (not LLM-driven refresh) — **Locked (implemented)**
 **Decision:** B4 ships (1) **`ui_context` on chat turns** — current path plus optional
 `book_id` / `chapter_id` when in the reader — injected as delimited **data** for
 grounding; (2) **client-side list refresh** via React Query invalidation on relevant
@@ -113,6 +113,16 @@ control of routing — rejected (unsafe / overbuilt).
 **Revisit:** richer context (selected text, visible job id) once basic route context
 proves useful.
 **Detail:** [01-architecture.md](./01-architecture.md) §7, [06](./06-roadmap-and-sequencing.md) §3.
+
+### ADR-15 — Async action completion is backend-authoritative — **Locked**
+**Decision:** after confirmed async actions such as `create_audio_download`, the backend
+emits deterministic queued copy and a typed client action. The frontend replaces the
+confirmation form with the real job state, polls progress, and exposes completion actions.
+The model does not narrate whether execution happened.
+**Rationale:** approval is not the outcome; only the domain service knows whether the job
+was created. This prevents contradictory “please confirm” replies after approval.
+**Revisit:** generalize into a shared async-job client action when scrape/import need the
+same in-chat progress treatment.
 
 ---
 

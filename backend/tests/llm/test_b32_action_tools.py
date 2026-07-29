@@ -17,6 +17,11 @@ from app.modules.reader.schemas import ProgressUpsert
 from app.modules.reader.service import ReaderService
 from app.modules.tools.base import Mode, ToolContext
 from app.modules.tools.definitions.chapter_ref import ChapterRefInput
+from app.modules.tools.definitions.create_audio_download import (
+    CreateAudioDownloadInput,
+    CreateAudioDownloadOutput,
+    CreateAudioDownloadTool,
+)
 from app.modules.tools.definitions.create_chapter_download import (
     CreateChapterDownloadOutput,
     CreateChapterDownloadTool,
@@ -163,3 +168,48 @@ async def test_create_chapter_download_idempotent(
     assert isinstance(second, CreateChapterDownloadOutput)
     assert second.reused is True
     assert second.job_id == first.job_id
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_create_audio_download_with_selected_voice(
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(DownloadService, "_enqueue", AsyncMock(return_value=None))
+    user = await _user(session)
+    book_id, _ = await _book_with_chapter(session, user.id)
+    tool = CreateAudioDownloadTool()
+
+    out = await tool.execute(
+        CreateAudioDownloadInput(
+            book_id=book_id,
+            chapter_from=1,
+            chapter_to=1,
+            provider="edge",
+            voice="en-US-AriaNeural",
+            rate=1.25,
+        ),
+        _ctx(session, user.id),
+    )
+
+    assert isinstance(out, CreateAudioDownloadOutput)
+    assert out.chapter_from == 1
+    assert out.chapter_to == 1
+    assert out.provider == "edge"
+    assert out.voice == "en-US-AriaNeural"
+    assert out.rate == "1.25"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_create_audio_download_denied_for_other_user(session: AsyncSession) -> None:
+    owner = await _user(session)
+    other = await _user(session)
+    book_id, _ = await _book_with_chapter(session, owner.id)
+
+    with pytest.raises(ToolAuthzError):
+        await CreateAudioDownloadTool().authorize(
+            CreateAudioDownloadInput(book_id=book_id, chapter_from=1, chapter_to=1),
+            _ctx(session, other.id),
+        )

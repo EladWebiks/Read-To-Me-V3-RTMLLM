@@ -32,9 +32,10 @@ class SearchDiscoveredBooksTool(BaseTool):
     description = (
         "Search for books by title (or alias) across supported novel sites "
         "(novelfull, novelbin, freewebnovel, novellunar) when the user did not paste "
-        "a URL. Returns candidates with source book URLs. "
-        "If several matches, call propose_choices so the user can pick. "
-        "Requires external_allowed mode. Prefer this over asking the user for a URL."
+        "a URL. Returns candidates with ranked sources (recommended = richest known "
+        "chapter count). If several title matches, call propose_choices so the user "
+        "can pick. Then call import_discovered_book with the chosen discovered_book_id "
+        "(no URL needed). Requires external_allowed mode."
     )
     input_model = SearchDiscoveredBooksInput
     output_model = SearchDiscoveredBooksOutput
@@ -69,8 +70,14 @@ def _message(query: str, results: list[DiscoveredBookRead]) -> str:
         return f"No discovery matches for '{query}'."
     labels: list[str] = []
     for row in results[:5]:
-        if row.sources:
-            labels.append(f"{row.title} ({row.sources[0].source})")
-        else:
-            labels.append(row.title)
+        labels.append(_label(row))
     return f"Found {len(results)} candidate(s) for '{query}': {', '.join(labels)}."
+
+
+def _label(row: DiscoveredBookRead) -> str:
+    if not row.sources:
+        return row.title
+    top = row.sources[0]
+    if top.chapter_count_estimate is not None:
+        return f"{row.title} ({top.source} ~{top.chapter_count_estimate} ch)"
+    return f"{row.title} ({top.source})"

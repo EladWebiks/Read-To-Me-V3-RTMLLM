@@ -23,6 +23,7 @@ from app.modules.reader.models import ReadingProgress as ProgressModel  # noqa: 
 from app.modules.scraping.models import ScrapingJob as ScrapingJobModel  # noqa: F401
 from app.modules.scraping.models import ScrapingJobItem as ScrapingJobItemModel  # noqa: F401
 from app.modules.scraping.models import ScrapingSource as ScrapingSourceModel  # noqa: F401
+from app.modules.summaries.models import BookSummary as BookSummaryModel  # noqa: F401
 from app.modules.users.models import User as UserModel  # noqa: F401
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection

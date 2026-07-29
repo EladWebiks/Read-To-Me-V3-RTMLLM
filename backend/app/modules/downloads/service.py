@@ -16,7 +16,7 @@ from app.modules.downloads.exceptions import (
     DownloadNotReadyError,
     InvalidChapterRangeError,
 )
-from app.modules.downloads.keys import chapter_object_key, job_prefix
+from app.modules.downloads.keys import chapter_object_key, download_filename, job_prefix
 from app.modules.downloads.models import DownloadJob
 from app.modules.downloads.repository import DownloadRepository
 from app.modules.downloads.schemas import (
@@ -42,6 +42,7 @@ class DownloadService:
         if data.chapter_to < data.chapter_from:
             raise InvalidChapterRangeError("chapter_to < chapter_from")
         await self._library.assert_access(user_id, data.book_id)
+        await self._purge_expired(user_id, data.book_id)
         chapters = await self._chapters.list_summaries(data.book_id)
         selected = [
             chapter
@@ -150,7 +151,9 @@ class DownloadService:
         job = await self._require(user_id, job_id)
         if job.status != "complete" or not job.object_key:
             raise DownloadNotReadyError(str(job_id))
-        return await self._presign(job.object_key)
+        book = await self._library.get_book(user_id, job.book_id)
+        filename = download_filename(book.title, job.chapter_from, job.chapter_to, job.id)
+        return await self._presign(job.object_key, filename)
 
     async def chapter_signed_url(
         self,
@@ -163,7 +166,9 @@ class DownloadService:
         if not await self._chapter_ready(job, chapter_number):
             raise DownloadNotReadyError(str(job_id))
         key = chapter_object_key(job.user_id, job.id, chapter_number)
-        return await self._presign(key)
+        book = await self._library.get_book(user_id, job.book_id)
+        filename = download_filename(book.title, chapter_number, chapter_number, job.id)
+        return await self._presign(key, filename)
 
     async def _purge_expired(self, user_id: UUID, book_id: UUID | None) -> None:
         expired = await self._repo.list_expired(user_id, book_id)
@@ -173,15 +178,26 @@ class DownloadService:
         if expired:
             await self._session.commit()
 
+    async def purge_all_expired(self, *, limit: int = 200) -> int:
+        """Delete expired jobs + MinIO objects (background cleanup)."""
+        expired = await self._repo.list_all_expired(limit=limit)
+        for job in expired:
+            await self._delete_assets(job)
+            await self._repo.delete(job)
+        if expired:
+            await self._session.commit()
+        return len(expired)
+
     async def _delete_assets(self, job: DownloadJob) -> None:
         await delete_prefix(job_prefix(job.user_id, job.id))
 
-    async def _presign(self, object_key: str) -> DownloadUrlRead:
+    async def _presign(self, object_key: str, filename: str) -> DownloadUrlRead:
         settings = get_settings()
         expires = settings.signed_url_expires_seconds
         url = await presigned_get(object_key, expires)
         return DownloadUrlRead(
             url=url,
+            filename=filename,
             expires_at=datetime.now(UTC) + timedelta(seconds=expires),
         )
 

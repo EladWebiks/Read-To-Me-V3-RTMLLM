@@ -30,6 +30,7 @@ class FreezeRequest:
     hitl_rounds: int
     ttl_seconds: int
     proposed: dict[str, Any]
+    provided_fields: set[str]
     summary: str
 
 
@@ -56,7 +57,7 @@ async def freeze_pending(req: FreezeRequest) -> ToolCallRecord:
         "hitl_rounds": req.hitl_rounds,
         "expires_at": expires.isoformat(),
         "summary": req.summary,
-        "form": build_form_payload(req.tool, req.proposed),
+        "form": build_form_payload(req.tool, req.proposed, req.provided_fields),
         "risk": req.tool.risk_level.value,
     }
     return await req.repo.record_tool_call(

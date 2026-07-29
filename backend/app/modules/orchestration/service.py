@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
@@ -11,6 +12,10 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.modules.llm.conversation_context import (
+    ConversationContextService,
+    summary_context_block,
+)
 from app.modules.llm.models import ConversationMessage, ToolCallRecord
 from app.modules.llm.repository import LlmRepository, ToolCallUpdate
 from app.modules.llm.service import LlmService
@@ -53,7 +58,6 @@ from app.modules.tools.executor import ExecuteOptions, execute_tool_call, prepar
 from app.modules.tools.hitl import merge_confirmed_args
 from app.modules.tools.registry import ToolRegistry
 
-_HISTORY_LIMIT = 40
 _MAX_TOOL_RESULT_CHARS = 6_000
 
 
@@ -107,6 +111,34 @@ class _LoopState:
     final_text: str
 
 
+@dataclass
+class _StreamedRound:
+    prefix: bool = False
+    response: ToolCallingResponse | None = None
+    started: bool = False
+
+    async def events(
+        self,
+        llm: LlmService,
+        request: ToolCallingRequest,
+        conversation_id: UUID,
+    ) -> AsyncIterator[ChatSseEvent]:
+        async with aclosing(llm.stream_tools(request, conversation_id=conversation_id)) as stream:
+            async for chunk in stream:
+                if chunk.text:
+                    if self.prefix and not self.started:
+                        yield ChatSseEvent("delta", {"text": "\n\n"})
+                    self.started = True
+                    yield ChatSseEvent("delta", {"text": chunk.text})
+                if chunk.done:
+                    self.response = chunk.response
+
+    def require_response(self) -> ToolCallingResponse:
+        if self.response is None:
+            raise OrchestrationError("LLM stream ended without a response")
+        return self.response
+
+
 class OrchestrationService:
     """Runs the tool loop for one assistant turn."""
 
@@ -133,8 +165,16 @@ class OrchestrationService:
         """Yield SSE events for one tool-using assistant turn."""
         ctx = self._make_ctx(user_id, conversation_id, uuid4())
         budget = RunBudget.from_settings(self._settings)
-        history = await self._repo.list_messages(conversation_id, limit=_HISTORY_LIMIT)
-        messages = _to_llm_messages(history, ui_context=ui_context)
+        context = await ConversationContextService(
+            self._repo,
+            self._llm,
+            self._settings,
+        ).build(user_id, conversation_id)
+        messages = _to_llm_messages(
+            context.messages,
+            summary=context.summary,
+            ui_context=ui_context,
+        )
         async for event in self._safe_loop(ctx, messages, budget, Usage(0, 0), 0):
             yield event
 
@@ -191,10 +231,16 @@ class OrchestrationService:
             async for event in self._deny_pending(row, tool, call, messages):
                 yield event
         else:
-            async for event in self._execute_confirmed(
-                _ConfirmedExec(ctx, messages, tool, call, row, values, budget)
-            ):
+            pack = _ConfirmedExec(ctx, messages, tool, call, row, values, budget)
+            yield ChatSseEvent("step", {"label": f"Running {tool.name}…"})
+            result = await self._execute_confirmed(pack)
+            for event in _tool_outcome_events(tool.name, bool(result.get("ok")), result):
                 yield event
+            terminal_text = _confirmed_terminal_text(tool.name, result)
+            if terminal_text:
+                yield ChatSseEvent("delta", {"text": terminal_text})
+                yield await self._finish(ctx, terminal_text, usage, budget)
+                return
         async for event in self._loop(ctx, messages, budget, usage, hitl_rounds):
             yield event
 
@@ -216,11 +262,10 @@ class OrchestrationService:
         _append_tool_message(messages, call, result)
         yield ChatSseEvent("tool_result", {"name": tool.name, "ok": False, "summary": err})
 
-    async def _execute_confirmed(self, pack: _ConfirmedExec) -> AsyncIterator[ChatSseEvent]:
+    async def _execute_confirmed(self, pack: _ConfirmedExec) -> dict[str, object]:
         final_args = merge_confirmed_args(pack.tool, dict(pack.row.input), pack.values)
         if pack.tool.touches_external:
             pack.budget.add_external()
-        yield ChatSseEvent("step", {"label": f"Running {pack.tool.name}…"})
         result = await execute_tool_call(
             pack.tool,
             pack.call,
@@ -241,8 +286,7 @@ class OrchestrationService:
         )
         await self._session.commit()
         _append_tool_message(pack.messages, pack.call, result)
-        for event in _tool_outcome_events(pack.tool.name, ok, result):
-            yield event
+        return result
 
     async def _require_pending(
         self,
@@ -286,71 +330,47 @@ class OrchestrationService:
     ) -> AsyncIterator[ChatSseEvent]:
         state = _LoopState(ctx, messages, budget, usage, hitl_rounds, "")
         while True:
-            events, state, outcome = await self._loop_round(state)
-            for event in events:
+            state.budget.begin_iter()
+            yield ChatSseEvent("step", {"label": _thinking_step_label(state.messages)})
+            streamed = _StreamedRound(prefix=bool(state.final_text))
+            async for event in streamed.events(
+                self._llm,
+                self._tool_request(state.messages, state.ctx),
+                state.ctx.conversation_id,
+            ):
                 yield event
-            if outcome == "paused":
-                return
-            if outcome == "done":
+            resp = streamed.require_response()
+            next_usage = _accumulate(
+                state.budget,
+                state.usage,
+                resp,
+                enforce_limits=bool(resp.tool_calls),
+            )
+            combined_text = _merge_assistant_text(state.final_text, resp.text)
+            if not resp.tool_calls:
+                state = _next_state(state, next_usage, state.hitl_rounds, combined_text)
                 break
+            state.messages.append(_assistant_tool_message(resp))
+            paused, next_hitl = False, state.hitl_rounds
+            async for event in self._run_tools(resp, _tool_round(state, resp, next_usage)):
+                yield event
+                if event.event == "confirmation_request":
+                    paused, next_hitl = True, next_hitl + 1
+            if paused:
+                return
+            state = _next_state(state, next_usage, next_hitl, combined_text)
         yield await self._finish(state.ctx, state.final_text, state.usage, state.budget)
 
-    async def _loop_round(
-        self,
-        state: _LoopState,
-    ) -> tuple[list[ChatSseEvent], _LoopState, str]:
-        """One LLM round; outcome is continue | done | paused."""
-        state.budget.begin_iter()
-        out: list[ChatSseEvent] = [ChatSseEvent("step", {"label": "Thinking…"})]
-        resp = await self._call_llm(state.messages, state.ctx)
-        usage = _accumulate(state.budget, state.usage, resp)
-        text = state.final_text
-        if resp.text:
-            text = resp.text
-            out.append(ChatSseEvent("delta", {"text": resp.text}))
-        if not resp.tool_calls:
-            nxt = _LoopState(
-                state.ctx, state.messages, state.budget, usage, state.hitl_rounds, text
-            )
-            return out, nxt, "done"
-        state.messages.append(
-            Message(
-                role=Role.ASSISTANT,
-                content=resp.text or "",
-                tool_calls=tuple(resp.tool_calls),
-            )
-        )
-        base = _ToolRound(
-            state.ctx,
-            state.messages,
-            resp.tool_calls[0],
-            state.budget,
-            usage,
-            state.hitl_rounds,
-        )
-        hitl = state.hitl_rounds
-        paused = False
-        async for event in self._run_tools(resp, base):
-            out.append(event)
-            if event.event == "confirmation_request":
-                paused = True
-                hitl += 1
-        nxt = _LoopState(state.ctx, state.messages, state.budget, usage, hitl, text)
-        return out, nxt, "paused" if paused else "continue"
-
-    async def _call_llm(
+    def _tool_request(
         self,
         messages: list[Message],
         ctx: ToolContext,
-    ) -> ToolCallingResponse:
-        return await self._llm.call_tools(
-            ToolCallingRequest(
-                messages=messages,
-                tools=self._registry.list_specs(ctx.mode),
-                max_output_tokens=self._settings.llm_max_output_tokens,
-                task="chat_tools",
-            ),
-            conversation_id=ctx.conversation_id,
+    ) -> ToolCallingRequest:
+        return ToolCallingRequest(
+            messages=messages,
+            tools=self._registry.list_specs(ctx.mode),
+            max_output_tokens=self._settings.llm_max_output_tokens,
+            task="chat_tools",
         )
 
     async def _run_tools(
@@ -400,7 +420,7 @@ class OrchestrationService:
             return
         if tool.touches_external:
             round_.budget.add_external()
-        yield ChatSseEvent("step", {"label": f"Running {tool.name}…"})
+        yield ChatSseEvent("step", {"label": _tool_step_label(tool.name)})
         result = await execute_tool_call(tool, round_.call, round_.ctx, self._repo)
         _append_tool_message(round_.messages, round_.call, result)
         for event in _tool_outcome_events(tool.name, bool(result.get("ok")), result):
@@ -420,9 +440,7 @@ class OrchestrationService:
                 yield event
             return
         proposed = inp.model_dump(mode="json")
-        summary = (
-            f"Scrape from {proposed['url']}" if "url" in proposed else f"Confirm {pack.tool.name}"
-        )
+        summary = _confirmation_summary(pack.tool.name, proposed)
         row = await freeze_pending(
             FreezeRequest(
                 repo=self._repo,
@@ -435,6 +453,7 @@ class OrchestrationService:
                 hitl_rounds=pack.hitl_rounds + 1,
                 ttl_seconds=self._settings.llm_hitl_ttl_seconds,
                 proposed=proposed,
+                provided_fields=set(pack.call.arguments),
                 summary=summary,
             )
         )
@@ -493,6 +512,85 @@ class OrchestrationService:
         )
 
 
+def _assistant_tool_message(resp: ToolCallingResponse) -> Message:
+    return Message(
+        role=Role.ASSISTANT,
+        content=resp.text or "",
+        tool_calls=tuple(resp.tool_calls),
+    )
+
+
+def _confirmation_summary(tool_name: str, proposed: dict[str, Any]) -> str:
+    if "url" in proposed:
+        return f"Scrape from {proposed['url']}"
+    if tool_name == "create_audio_download":
+        return (
+            f"Create audio for chapters {proposed.get('chapter_from')}-"
+            f"{proposed.get('chapter_to')}"
+        )
+    return f"Confirm {tool_name}"
+
+
+def _tool_round(
+    state: _LoopState,
+    resp: ToolCallingResponse,
+    usage: Usage,
+) -> _ToolRound:
+    return _ToolRound(
+        state.ctx,
+        state.messages,
+        resp.tool_calls[0],
+        state.budget,
+        usage,
+        state.hitl_rounds,
+    )
+
+
+def _next_state(
+    state: _LoopState,
+    usage: Usage,
+    hitl_rounds: int,
+    final_text: str,
+) -> _LoopState:
+    return _LoopState(
+        state.ctx,
+        state.messages,
+        state.budget,
+        usage,
+        hitl_rounds,
+        final_text,
+    )
+
+
+def _merge_assistant_text(existing: str, current: str | None) -> str:
+    if not current:
+        return existing
+    if not existing:
+        return current
+    return f"{existing}\n\n{current}"
+
+
+def _tool_step_label(name: str) -> str:
+    if name == "summarize_book":
+        return "Reading chapters and generating a summary…"
+    if name == "get_book_summary":
+        return "Checking the saved summary…"
+    labels = {
+        "search_user_books": "Searching your library…",
+        "search_library_content": "Searching book content…",
+        "list_available_chapters": "Finding the relevant chapters…",
+        "get_chapter_content": "Reading the chapter…",
+        "search_discovered_books": "Searching supported book sites…",
+    }
+    return labels.get(name, f"Running {name.replace('_', ' ')}…")
+
+
+def _thinking_step_label(messages: list[Message]) -> str:
+    if messages and messages[-1].role == Role.TOOL:
+        return "Reviewing the results and writing your answer…"
+    return "Understanding your request…"
+
+
 def _parse_mode(raw: str) -> Mode:
     try:
         return Mode(raw)
@@ -503,9 +601,12 @@ def _parse_mode(raw: str) -> Mode:
 def _to_llm_messages(
     history: list[ConversationMessage],
     *,
+    summary: str | None = None,
     ui_context: dict[str, Any] | None = None,
 ) -> list[Message]:
     messages = [Message(role=Role.SYSTEM, content=SYSTEM_PROMPT)]
+    if summary:
+        messages.append(Message(role=Role.SYSTEM, content=summary_context_block(summary)))
     block = format_ui_context_block(ui_context)
     if block:
         messages.append(Message(role=Role.SYSTEM, content=block))
@@ -542,9 +643,15 @@ def _tool_result_event(name: str, ok: bool, result: dict[str, object]) -> ChatSs
     return ChatSseEvent("tool_result", payload)
 
 
-def _accumulate(budget: RunBudget, usage_total: Usage, resp: ToolCallingResponse) -> Usage:
+def _accumulate(
+    budget: RunBudget,
+    usage_total: Usage,
+    resp: ToolCallingResponse,
+    *,
+    enforce_limits: bool,
+) -> Usage:
     cost = resp.usage.cost_usd if resp.usage.cost_usd is not None else 0.0
-    budget.add_usage(resp.usage, cost_usd=cost)
+    budget.add_usage(resp.usage, cost_usd=cost, enforce_limits=enforce_limits)
     return Usage(
         usage_total.tokens_in + resp.usage.tokens_in,
         usage_total.tokens_out + resp.usage.tokens_out,
@@ -586,6 +693,14 @@ def _summarize_result(result: dict[str, object]) -> str:
     if not isinstance(data, dict):
         return "ok"
     return _summarize_ok_data(data)
+
+
+def _confirmed_terminal_text(tool_name: str, result: dict[str, object]) -> str | None:
+    """Use deterministic post-confirm copy for async jobs the UI will track."""
+    if tool_name != "create_audio_download" or not result.get("ok"):
+        return None
+    summary = _summarize_result(result)
+    return f"{summary} Progress will appear here, and the MP3 will download when ready."
 
 
 def _summarize_ok_data(data: dict[str, object]) -> str:

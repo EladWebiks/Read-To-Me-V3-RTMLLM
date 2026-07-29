@@ -18,8 +18,8 @@ describe('isVisibleToolMessage', () => {
     expect(isVisibleToolMessage(tool({}))).toBe(false)
   })
 
-  it('shows failures', () => {
-    expect(isVisibleToolMessage(tool({ toolOk: false }))).toBe(true)
+  it('hides internal failures so the assistant can explain them', () => {
+    expect(isVisibleToolMessage(tool({ toolOk: false }))).toBe(false)
   })
 
   it('shows navigate affordances', () => {

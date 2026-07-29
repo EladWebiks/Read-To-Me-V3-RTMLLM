@@ -44,6 +44,10 @@ When the user must supply or edit parameters before execute. Canonical example:
 > - Amount of chapters to scrape *(empty = entire book)*  
 > [OK] [Cancel]
 
+The shipped audio-range form also exposes chapter range, provider, live voice choices,
+and playback rate. SAPI defaults to Microsoft Zira Desktop at 1.35× in both the normal
+download modal and assistant HITL.
+
 Rules:
 
 - The tool declares a **`confirmation_schema`** (pydantic) — fields the user may edit —
@@ -131,7 +135,8 @@ opens a **new** SSE stream — avoids holding a socket open; survives reconnects
 }
 ```
 
-Optional later: `choice_request` for clarify chips (B4+).
+`choice_request` clarify chips are shipped; selecting one sends a normal user turn and
+does not bypass any later confirmation gate.
 
 ## 6. Persistence
 
@@ -151,7 +156,11 @@ Reuse `tool_call`:
   markdown (current chat UX).
 - Form card: labels, defaults, validation errors inline, **OK** / **Cancel**.
 - Composer disabled (or clearly secondary) while a HITL card is open for that turn.
-- After resolve: collapse to “Approved — scrape chapters 1–∞ of *X*” / “Declined”.
+- After approval: remove the form; do not render a redundant “Approved” bubble.
+- Render the authoritative tool outcome instead. Audio jobs show live progress,
+  auto-download on completion, and keep a manual download button.
+- After decline: a compact declined state is allowed while the resumed turn explains
+  that no action ran.
 - Clarify choices: chips preferred; sending a chip is just another user message.
 
 ## 8. Security notes

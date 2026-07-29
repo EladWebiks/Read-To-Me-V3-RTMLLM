@@ -9,6 +9,7 @@ from app.modules.tools.base import Mode
 from app.modules.tools.catalog import build_default_registry
 from app.modules.tools.definitions.get_book_details import GetBookDetailsInput
 from app.modules.tools.definitions.search_user_books import SearchUserBooksInput
+from app.modules.tools.definitions.update_ui_settings import UpdateUiSettingsInput
 from app.modules.tools.exceptions import ToolNotFoundError
 from pydantic import ValidationError
 
@@ -21,6 +22,7 @@ def test_default_registry_exposes_read_only_specs() -> None:
     assert names == {
         "search_user_books",
         "get_book_details",
+        "get_book_summary",
         "search_library_content",
         "get_reading_progress",
         "get_recently_read_chapters",
@@ -30,7 +32,10 @@ def test_default_registry_exposes_read_only_specs() -> None:
         "play_chapter",
         "resume_book",
         "create_chapter_download",
+        "create_audio_download",
+        "summarize_book",
         "propose_choices",
+        "update_ui_settings",
     }
     assert "scrape_book_range" not in names
 
@@ -67,3 +72,12 @@ def test_get_book_details_requires_uuid() -> None:
     with pytest.raises(ValidationError):
         GetBookDetailsInput.model_validate({"book_id": "not-a-uuid"})
     GetBookDetailsInput.model_validate({"book_id": str(uuid4())})
+
+
+@pytest.mark.unit
+def test_ui_settings_require_a_valid_change() -> None:
+    with pytest.raises(ValidationError):
+        UpdateUiSettingsInput()
+    with pytest.raises(ValidationError):
+        UpdateUiSettingsInput(font_size=3)
+    assert UpdateUiSettingsInput(theme="dark").theme == "dark"

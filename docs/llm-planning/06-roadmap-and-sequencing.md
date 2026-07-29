@@ -7,7 +7,7 @@
 ## 1. Big picture
 
 ```
-B1 (done) ─► B2 (done) ─► B2.5 UX (done) ─► B3 tools+loop+form HITL ─► B4 tool UX ─► C north-star
+B1 (done) ─► B2 (done) ─► B2.5 (done) ─► B3 (done) ─► B4 (done) ─► C (in progress)
 ```
 
 - **B** = tool-using assistant with budgets + **form HITL** spine.
@@ -16,11 +16,11 @@ B1 (done) ─► B2 (done) ─► B2.5 UX (done) ─► B3 tools+loop+form HITL 
 Hand-rolled loop stays (ADR-3). We are not waiting on LangGraph to grow toward the
 canonical session.
 
-## 2. B3 — tools + orchestrator (next)
+## 2. B3 — tools + orchestrator — **done**
 
 Delivered as small vertical slices so the loop is exercised end-to-end early.
 
-### B3.0 — engine skeleton
+### B3.0 — engine skeleton — **done**
 - New modules `orchestration/` and `tools/` (router → service → registry → tool).
 - `ToolContext`, execution contract, `tool_call` audit, budgets/caps from
   [03](./03-orchestration.md).
@@ -33,16 +33,17 @@ Delivered as small vertical slices so the loop is exercised end-to-end early.
   streams a `tool_result` + answer, writes `tool_call` + `llm_execution`; all caps
   enforced; offline tests green.
 
-### B3.1 — full read-only tool set (Batch 1)
+### B3.1 — full read-only tool set (Batch 1) — **done**
 - `get_reading_progress`, `get_recently_read_chapters`, `list_available_chapters`,
   `get_chapter_content`, `search_library_content`, `get_download_status`.
 - **Accept:** authz matrix test per tool (own vs other user), schema-rejection test,
   injection test (tool text is inert).
 
 ### B3.2 — low-risk actions (Batch 2) — **done**
-- `play_chapter`, `resume_book`, `create_chapter_download` (single, idempotent).
-- `play_chapter` / `resume_book` update reading progress and return a client action
-  payload (B4 wires the TTS player).
+- `play_chapter`, `resume_book`, `create_chapter_download` (single, idempotent), and
+  allowlisted reversible `update_ui_settings`.
+- `play_chapter` / `resume_book` update reading progress and return a play client action;
+  B4 now starts TTS after navigation, including same-route requests and autoplay fallback.
 - **Accept:** state changes are owned + reversible; idempotency prevents duplicate jobs;
   audited.
 
@@ -57,22 +58,53 @@ Delivered as small vertical slices so the loop is exercised end-to-end early.
 - **Accept:** gated tool never runs without recorded confirmation; form merge +
   re-validation; reject/expire paths clean; args immutable except via submitted values.
 
+### B3.4 — true provider token streaming — **done**
+- Added a provider-agnostic tool-stream contract alongside `call_tools`: immediate text
+  deltas, complete normalized tool calls, and terminal usage/cost.
+- Implemented Gemini streaming tool calls; partial vendor function arguments assemble
+  inside the adapter before validation.
+- Real provider text deltas flow through SSE; completed-text slicing, artificial delays,
+  and fake typing were removed from the backend.
+- Ordered tool rounds, budgets, telemetry, HITL pause/resume, and cancellation are preserved.
+- **Accept:** first text delta arrives before the provider finishes; fragmented tool
+  calls execute exactly once only after complete validation; abort closes the provider
+  stream and prevents later tool execution/final completion; provider/orchestrator
+  contract tests cover text-only, tool-only, mixed, malformed, error, and cancel paths.
+- Detailed design and acceptance matrix: [03](./03-orchestration.md) §4a.
+
+### B3.5 — bounded conversation context — **done**
+- Persist an owned summary of older conversation prefixes while preserving every original
+  message for history/audit.
+- Keep the latest 8–12 messages verbatim; refresh after an estimated token threshold.
+- Chunk large refreshes, validate terminal message markers/source counts, and reconstruct
+  from originals when stale.
+- Inject summaries as clearly delimited untrusted historical data.
+
 ### B3 exit criteria
 - Loop is bounded, cancellable, traced (`run_id`).
 - Read-only + low-risk tools live; one **form** HITL tool proven end-to-end (backend).
-- Langfuse compose profile available in dev (off by default) — see [05](./05-observability.md).
+- Tool-using turns emit real provider text deltas; no sleep-based response simulation.
+- Postgres telemetry is authoritative; Langfuse remains optional and deferred.
 
-## 3. B4 — frontend chat for tools — **partial**
+## 3. B4 — frontend chat for tools — **done**
 - Render `step` / `tool_result` as compact cards; assistant prose stays bubble-less.
 - **Form HITL card** (fields + OK/Cancel) wired to `confirmation_request` +
   `POST /api/chat/{id}/confirm` (composer blocked while pending).
 - Scrape success already invalidates Scraper/library queries (client side-effect —
   **not** the LLM's job to "refresh" the page).
 - **UI route context** + navigate chips (ADR-14): scrape → Open Scraper; play/resume
-  auto-navigates to the chapter when off-reader (chip remains).
+  auto-navigates and starts TTS, including on the current chapter (chip remains).
+- `create_audio_download` adds confirmed chapter ranges with provider, live voice selection,
+  and rate. SAPI/Zira defaults to 1.35×. After approval, the form disappears and an
+  authoritative job card polls progress, auto-downloads on completion, and keeps a
+  retry button. Download filenames include title + chapter range + short unique suffix.
+- `update_ui_settings` applies theme/font/playback/voice/highlighting through a second,
+  strict frontend allowlist.
 - **Choice chips:** `propose_choices` tool → `choice_request` SSE → tap sends a
   normal user message (not a HITL gate).
-- Still open: cost meter visibility **[Q4]**.
+- Cancellation leaves a compact note; streaming/status animation and post-render
+  auto-scroll are wired; dark-mode controls use theme tokens.
+- Cost meter visibility remains optional **[Q4]**, not a B4 blocker.
 - **Accept (HITL path):** scrape confirm card renders, OK/Cancel resumes SSE; lint/tsc/build/tests green.
 - **Accept (context path):** chat request includes route context; scrape success can
   offer navigate-to-Scraper without asking the model to refresh React Query; reader
@@ -80,53 +112,50 @@ Delivered as small vertical slices so the loop is exercised end-to-end early.
 
 ## 4. Milestone C — north-star assistant
 
-Ordered by dependency and value (discovery is core, not optional fluff — **[Q5]** how
-early relative to late B3):
+Current status and remaining order:
 
-1. **Discovery search** — theme *and* **title/alias** search across supported sites;
-   exclude owned titles; return candidates with source URLs (no user-pasted URL required).
-   See north star [00](./00-north-star.md) §2b.
-2. **Clarify / multi-match** — “did you mean A/B/C?” when title is ambiguous.
-3. **Smart source pick** — when the same work has multiple `book_source`s, rank (prefer
-   **more chapters** / fresher listing); expose choice if close or user asks.
-4. **Resolve book page + start chapter** from discovery metadata / adapters (first
-   chapter or user-requested start) → feed scrape HITL without a pasted URL.
-5. **Summarize candidate** before import (spoiler-light; no full scrape required).
-6. **Persisted book summaries (required)** — see §4a below.
-7. **Import + scrape with form HITL** (B3.3 gate; prefer `import_discovered_book` →
-   scrape) + queue awareness when another job is running.
-8. **More gated tools:** full-book download, delete/overwrite, retry large jobs.
-9. **Discuss owned books:** grounded answers over last-read chapters, library Q&A
+1. **Title/alias discovery — done:** all four supported sources are searched and
+   candidates retain ranked source metadata.
+2. **Clarify / multi-match — done:** `propose_choices` drives normal follow-up turns.
+3. **Ranked source → import/scrape HITL — done:** no pasted URL required.
+4. **Persisted owned-book summaries — done:** content hash invalidation + cached tools.
+5. **EPUB import — done:** preview plus bounded chunked import with UI progress.
+6. **Theme/trope discovery — next:** support recommendation-style requests rather than
+   repeatedly retrying title search; prevent raw external-budget failures.
+7. **Summarize candidate before import:** spoiler-light metadata/source overview.
+8. **Discuss owned books:** richer grounded multi-step answers over last-read chapters
+   and library Q&A
    (prefer cached summary, then chapter FTS / `get_chapter_content`).
-10. **RAG / embeddings** if still needed for quality (`EMBEDDING`, pgvector).
-11. **Eval harness** ([05](./05-observability.md) §6).
+9. **More gated tools:** full-book download, delete/overwrite, retry large jobs.
+10. **Eval harness** ([05](./05-observability.md) §6).
+11. **RAG / embeddings only if measured quality still needs it** (`EMBEDDING`, pgvector).
 
 **C accept (title→scrape path):** user can say a book title (optional start chapter),
 confirm a suggested match, and get a scrape job without pasting a site URL; if two
 sites list the book, the system picks or proposes the richer source.
 
-### 4a. Persisted book summaries **[R][D → ADR-13]** — must do
+### 4a. Persisted book summaries **[R][D → ADR-13]** — **done**
 
 **Problem:** Re-summarizing from chapters on every “what’s this about?” is slow and
 burns free-tier quota. Title-only search is too weak; chapter FTS is right for needles
 but heavy for repeated overview questions.
 
-**Work item (required in C, not optional polish):**
+**Implemented:**
 
-1. Add a `book_summaries` (or equivalent) table, e.g.:
+1. Added the `book_summaries` table with:
    - `book_id`, ownership/`user_id` as needed
    - `kind` (`no_spoiler` / `blurb` / `chapter_range` / `full`)
    - `content` + optional structured JSON (themes, setting, tropes)
    - `source` (`llm` / `metadata` / `import`)
    - `model`, `prompt_version`, `content_hash` (invalidate when chapters change)
    - timestamps
-2. Tools: `get_book_summary` (read cache) and `summarize_book` / `ensure_book_summary`
-   (generate via `LONG_CONTEXT_SUMMARIZATION` + instructor if missing/stale).
-3. Search path: **summary/metadata first → chapter FTS fallback**
+2. Added `get_book_summary` (read cache) and `summarize_book`
+   (provider-agnostic structured generation when missing/stale).
+3. Search uses **summary/metadata first → chapter FTS fallback**
    (`search_library_content`).
-4. Generate **on demand** (or when a scrape job completes) — do not bulk-summarize the
+4. Generates **on demand** — does not bulk-summarize the
    whole library on free tier by default.
-5. Treat summary text as **untrusted data** in prompts (same as book/tool text).
+5. Treats summary text as **untrusted data** in prompts (same as book/tool text).
 
 **Accept:** second “summarize this book” call returns the cached row without a new
 provider call when `content_hash` is unchanged; after chapter upsert/scrape, hash
@@ -146,6 +175,8 @@ mismatch forces refresh.
 | B3.0 | B2 chat/SSE, B1 provider (`TOOL_CALLING`) |
 | B3.1–B3.2 | B3.0 engine + domain services |
 | B3.3 | central fetcher/SSRF, form HITL transport |
+| B3.4 | B1 provider abstraction + B3 loop/SSE + Gemini streaming tool API |
+| B3.5 | B1 structured output + owned conversation/message persistence |
 | B4 | B3 SSE event types (`confirmation_request.form`, optional `choice_request`) |
 | C (discovery) | `discovery` module, external-source review [Q12], B3.3 form HITL |
 | C (summaries) | `book_summaries` table + summarize tools; chapter FTS already available |

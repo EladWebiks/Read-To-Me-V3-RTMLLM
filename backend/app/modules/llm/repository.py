@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.llm.models import (
     Conversation,
     ConversationMessage,
+    ConversationSummary,
     CostRecord,
     LlmExecution,
     ModelConfiguration,
@@ -67,6 +68,17 @@ class ToolCallUpdate:
     confirmed_by_user: bool | None = None
     error: str | None = None
     duration_ms: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationSummaryWrite:
+    """Fields for a compact conversation-prefix summary."""
+
+    conversation_id: uuid.UUID
+    user_id: uuid.UUID
+    summary: str
+    through_message_id: uuid.UUID
+    source_message_count: int
 
 
 class LlmRepository:
@@ -211,6 +223,56 @@ class LlmRepository:
         rows = list(result.scalars().all())
         rows.reverse()
         return rows
+
+    async def list_all_messages(self, conversation_id: uuid.UUID) -> list[ConversationMessage]:
+        """Return complete oldest-first history for context reconstruction."""
+        result = await self._session.execute(
+            select(ConversationMessage)
+            .where(ConversationMessage.conversation_id == conversation_id)
+            .order_by(ConversationMessage.created_at, ConversationMessage.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_conversation_summary(
+        self,
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> ConversationSummary | None:
+        """Return a summary only when it belongs to the authenticated owner."""
+        result = await self._session.execute(
+            select(ConversationSummary).where(
+                ConversationSummary.conversation_id == conversation_id,
+                ConversationSummary.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_conversation_summary(
+        self,
+        data: ConversationSummaryWrite,
+    ) -> ConversationSummary:
+        """Insert or replace the compact prefix for one conversation."""
+        row = await self.get_conversation_summary(data.conversation_id, data.user_id)
+        if row is None:
+            row = ConversationSummary(
+                conversation_id=data.conversation_id,
+                user_id=data.user_id,
+                summary=data.summary,
+                through_message_id=data.through_message_id,
+                source_message_count=data.source_message_count,
+            )
+            self._session.add(row)
+        else:
+            row.summary = data.summary
+            row.through_message_id = data.through_message_id
+            row.source_message_count = data.source_message_count
+        await self._session.flush()
+        return row
+
+    async def delete_conversation_summary(self, row: ConversationSummary) -> None:
+        """Invalidate a stale summary row."""
+        await self._session.delete(row)
+        await self._session.flush()
 
     async def set_conversation_title(
         self,

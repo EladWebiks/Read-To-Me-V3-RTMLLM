@@ -43,14 +43,13 @@ export async function streamUserText(args: ChatActionArgs, text: string): Promis
       setMessages: args.setMessages,
       setError: args.setError,
       setLiveStatus: args.setLiveStatus,
+      setSending: args.setSending,
       abortRef: args.abortRef,
       uiContext: args.uiContext,
       onClientAction: args.onClientAction,
     },
     (payload) => args.setPendingConfirm(payload),
   )
-  args.setLiveStatus(null)
-  args.setSending(false)
 }
 
 /** Resume after HITL OK/Cancel. */
@@ -77,9 +76,8 @@ export async function streamConfirmResolve(
     setMessages: args.setMessages,
     setError: args.setError,
     setLiveStatus: args.setLiveStatus,
+    setSending: args.setSending,
     abortRef: args.abortRef,
     onClientAction: args.onClientAction,
   })
-  args.setLiveStatus(null)
-  args.setSending(false)
 }

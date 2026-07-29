@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { BookFormDialog } from './BookFormDialog'
 import { ChaptersModal } from './ChaptersModal'
+import { DeleteBookModal } from './DeleteBookModal'
 import { LibraryGrid } from './LibraryGrid'
 import { LibraryPagination } from './LibraryPagination'
 import { SearchSortBar } from './SearchSortBar'
@@ -54,6 +55,13 @@ export function LibraryPage() {
         open={state.formOpen}
         book={state.formBook}
         onClose={state.closeForm}
+      />
+      <DeleteBookModal
+        book={state.pendingDelete}
+        open={Boolean(state.pendingDelete)}
+        busy={state.isDeleting}
+        onClose={state.closeDelete}
+        onConfirm={state.confirmDelete}
       />
       <ChaptersModal book={state.selected} onClose={state.onCloseChapters} />
     </section>

@@ -15,6 +15,8 @@ from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.llm.stream_fakes import stream_from_call
+
 
 @pytest.mark.unit
 def test_chat_sse_event_encode() -> None:
@@ -85,7 +87,7 @@ async def test_stream_chat_persists_with_fake_llm(
             provider="gemini",
         )
 
-    monkeypatch.setattr(service._llm, "call_tools", _fake_call_tools)
+    monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_fake_call_tools))
 
     events: list[ChatSseEvent] = []
     async for event in service.stream_chat(user.id, "Say hi", None):

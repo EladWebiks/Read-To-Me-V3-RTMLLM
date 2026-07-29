@@ -32,9 +32,7 @@ export function ReadyJobActions({ bookId, job, canListen, onListen }: Props) {
           onClick={() => {
             setDownloading(true)
             void getDownloadUrl(job.id)
-              .then((data) =>
-                downloadFileFromUrl(data.url, `rtm-${job.id.slice(0, 8)}.mp3`),
-              )
+              .then((data) => downloadFileFromUrl(data.url, data.filename))
               .finally(() => setDownloading(false))
           }}
         >

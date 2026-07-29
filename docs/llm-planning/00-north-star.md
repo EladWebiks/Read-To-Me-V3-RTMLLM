@@ -22,6 +22,11 @@ It never acts by itself on expensive/destructive/external work — it **asks** w
 intent is unclear, when there are multiple choices, or when confirmation + params
 are required.
 
+**Current delivery:** title discovery across four sources, ranked import/scrape HITL,
+owned-book summary caching, play/resume, configurable range downloads, and reversible
+settings are shipped. Theme/trope discovery, candidate-before-import summaries, and
+richer grounded discussion remain.
+
 ## 2. Canonical session (target UX)
 
 Illustrative happy paths. Exact tool names may differ; the *shape* is what we build toward.
@@ -66,6 +71,10 @@ before scrape. URL-based scrape (B3.3) is a spine/bootstrap path only.
 Other first-class actions in the same product: remove a book/chapter, download
 chapters, play from where I left off, “what happened in the last few chapters of my
 last-read book,” etc.
+
+Confirmed audio downloads use the same pattern: editable range/provider/voice/rate,
+then an authoritative progress card and automatic named MP3 download. Approval itself
+is not rendered as a durable outcome.
 
 ## 3. Capability map (example → building blocks)
 

@@ -58,7 +58,9 @@ function AudioModalOpen(props: Props) {
       showListen={Boolean(props.onListenStarted)}
       onClose={props.onClose}
       onChange={(next) =>
-        setForm((prev) => applyAudioFormPatch(prev, next, settings.serverVoice))
+        setForm((prev) =>
+          applyAudioFormPatch(prev, next, settings.serverVoice, settings.rate),
+        )
       }
       onResumeListen={(resumeJob) => {
         props.onListenStarted?.(resumeJob, formFromJob(resumeJob))

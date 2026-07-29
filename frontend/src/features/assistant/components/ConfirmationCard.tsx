@@ -1,12 +1,8 @@
 import { useState } from 'react'
-import type { ConfirmationFormField, ConfirmationPayload } from '../api/chatApi'
-import {
-  coerce,
-  defaultsFrom,
-  formValues,
-  stringValue,
-  validateFields,
-} from './confirmFormUtils'
+import { useTtsSettings } from '@/features/reader/hooks/ttsSettingsStore'
+import type { ConfirmationPayload } from '../api/chatApi'
+import { ConfirmFields } from './ConfirmationFields'
+import { defaultsFrom, formValues, validateFields } from './confirmFormUtils'
 
 type Props = {
   payload: ConfirmationPayload
@@ -16,7 +12,14 @@ type Props = {
 
 /** Form / binary HITL card for confirmation_required tools. */
 export function ConfirmationCard({ payload, busy, onResolve }: Props) {
-  const [values, setValues] = useState(() => defaultsFrom(payload))
+  const tts = useTtsSettings()
+  const [values, setValues] = useState(() =>
+    defaultsFrom(payload, {
+      provider: tts.provider,
+      serverVoice: tts.serverVoice,
+      rate: tts.rate,
+    }),
+  )
   const [error, setError] = useState<string | null>(null)
   if (payload.status !== 'pending') return <ResolvedConfirm payload={payload} />
 
@@ -38,6 +41,7 @@ export function ConfirmationCard({ payload, busy, onResolve }: Props) {
         Confirm <span className="font-mono">{payload.tool}</span> before it runs.
       </p>
       <ConfirmFields
+        tool={payload.tool}
         fields={fields}
         values={values}
         busy={busy}
@@ -74,36 +78,6 @@ function ResolvedConfirm({ payload }: { payload: ConfirmationPayload }) {
   return (
     <div className="rounded-2xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm text-muted-foreground">
       {label} — {payload.summary}
-    </div>
-  )
-}
-
-type FieldsProps = {
-  fields: ConfirmationFormField[]
-  values: Record<string, unknown>
-  busy: boolean
-  onChange: (name: string, value: unknown) => void
-}
-
-function ConfirmFields({ fields, values, busy, onChange }: FieldsProps) {
-  if (fields.length === 0) return null
-  return (
-    <div className="mt-3 space-y-2">
-      {fields.map((field) => (
-        <label key={field.name} className="block space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
-          <input
-            type={field.type === 'integer' || field.type === 'number' ? 'number' : 'text'}
-            min={field.min}
-            max={field.max}
-            step={field.type === 'integer' ? 1 : undefined}
-            disabled={busy}
-            value={stringValue(values[field.name])}
-            onChange={(e) => onChange(field.name, coerce(field, e.target.value))}
-            className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-          />
-        </label>
-      ))}
     </div>
   )
 }

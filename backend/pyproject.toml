@@ -22,7 +22,8 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "python-multipart>=0.0.32",
     "google-genai>=1.0.0",
-    "instructor>=1.7.0",
+    "instructor[google-genai]>=1.7.0",
+    "pillow>=12.3.0",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +65,7 @@ ignore = ["E501", "RET504", "B008"]
 "app/core/config.py" = ["S105"]  # local defaults are not production secrets
 "app/modules/scraping/adapters/**" = ["PLR2004"]
 "app/modules/scraping/worker.py" = ["PLR0911", "S101"]
+"app/modules/imports/epub.py" = ["PLR0911", "PLR0912", "PLR0915", "C901", "PLR2004", "S314"]
 "app/modules/llm/providers/gemini_provider.py" = ["PLR0911"]
 "app/modules/llm/service.py" = ["PLR0911"]
 "app/core/exceptions.py" = ["PLR0915"]

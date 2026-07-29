@@ -9,6 +9,7 @@ import pytest
 from app.modules.tools.base import Mode, ToolContext
 from app.modules.tools.definitions.propose_choices import (
     ProposeChoicesInput,
+    ProposeChoicesOutput,
     ProposeChoicesTool,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,5 +30,6 @@ async def test_propose_choices_returns_options() -> None:
         ProposeChoicesInput(prompt="Which one?", options=["Alpha", "Beta"]),
         ctx,
     )
+    assert isinstance(out, ProposeChoicesOutput)
     assert out.prompt == "Which one?"
     assert out.options == ["Alpha", "Beta"]

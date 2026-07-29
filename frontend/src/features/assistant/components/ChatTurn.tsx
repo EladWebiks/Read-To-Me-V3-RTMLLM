@@ -1,7 +1,7 @@
 import type { ChatMessage } from '../api/chatApi'
 import { ChoiceChips } from './ChoiceChips'
 import { ConfirmationCard } from './ConfirmationCard'
-import { AssistantProse, UserBubble } from './chatTurnParts'
+import { AssistantProse, CancelledNote, UserBubble } from './chatTurnParts'
 import { ToolResultCard } from './ToolResultCard'
 
 type Props = {
@@ -23,6 +23,7 @@ export function ChatTurn({
   onPickChoice,
 }: Props) {
   if (message.role === 'user') return <UserBubble content={message.content} />
+  if (message.role === 'cancelled') return <CancelledNote content={message.content} />
   if (message.role === 'confirmation' && message.confirmation) {
     return (
       <ConfirmationCard

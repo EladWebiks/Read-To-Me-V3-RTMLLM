@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
+from inspect import isawaitable
 from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel
@@ -28,6 +29,7 @@ from app.modules.llm.types import (
     ToolCall,
     ToolCallingRequest,
     ToolCallingResponse,
+    ToolCallingStreamChunk,
     ToolSpec,
     Usage,
 )
@@ -121,6 +123,27 @@ class GeminiProvider:
             provider=self.name,
         )
 
+    async def stream_tools(
+        self,
+        req: ToolCallingRequest,
+    ) -> AsyncGenerator[ToolCallingStreamChunk, None]:
+        if not self._config.supports_tools:
+            raise CapabilityNotSupportedError("tools")
+        if not self._config.supports_streaming:
+            raise CapabilityNotSupportedError("streaming")
+        stream = await self._open_tool_stream(req)
+        state = _GeminiToolStreamState(self._config.model_name, self.name)
+        try:
+            async for raw in stream:
+                event = state.consume(raw)
+                if event is not None:
+                    yield event
+        except Exception as exc:
+            raise _map_provider_error(exc) from exc
+        finally:
+            await _close_stream(stream)
+        yield ToolCallingStreamChunk(done=True, response=state.finish())
+
     async def create_embeddings(self, req: EmbeddingRequest) -> EmbeddingResponse:
         raise CapabilityNotSupportedError("embeddings")
 
@@ -161,11 +184,33 @@ class GeminiProvider:
         except Exception as exc:
             raise _map_provider_error(exc) from exc
 
+    async def _open_tool_stream(self, req: ToolCallingRequest) -> Any:
+        from google.genai import types
+
+        client = self._get_client()
+        config = types.GenerateContentConfig(
+            max_output_tokens=req.max_output_tokens or self._config.max_output_tokens,
+            temperature=req.temperature,
+            tools=[_tool_to_genai(tool) for tool in req.tools],
+            http_options=types.HttpOptions(timeout=self._config.timeout_seconds * 1000),
+        )
+        try:
+            return await client.aio.models.generate_content_stream(
+                model=self._config.model_name,
+                contents=_to_contents(req.messages),
+                config=config,
+            )
+        except Exception as exc:
+            raise _map_provider_error(exc) from exc
+
     async def _structured(self, req: StructuredOutputRequest[T]) -> T:
         import instructor
         from google import genai
 
-        client = instructor.from_genai(genai.Client(api_key=self._config.api_key))
+        client = instructor.from_genai(
+            genai.Client(api_key=self._config.api_key),
+            use_async=True,
+        )
         try:
             # instructor stubs for from_genai disagree with the async create API.
             create = cast(Any, client.chat.completions.create)
@@ -187,6 +232,15 @@ def _to_contents(messages: Sequence[Message]) -> list[Any]:
     for msg in messages:
         contents.append(_message_to_content(msg, types))
     return contents
+
+
+async def _close_stream(stream: Any) -> None:
+    close = getattr(stream, "aclose", None)
+    if not callable(close):
+        return
+    result = close()
+    if isawaitable(result):
+        await result
 
 
 def _message_to_content(msg: Message, types: Any) -> Any:
@@ -272,6 +326,104 @@ def _usage_from(raw: Any) -> Usage:
         tokens_in=int(getattr(meta, "prompt_token_count", 0) or 0),
         tokens_out=int(getattr(meta, "candidates_token_count", 0) or 0),
     )
+
+
+class _GeminiToolStreamState:
+    def __init__(self, model: str, provider: str) -> None:
+        self._model = model
+        self._provider = provider
+        self._text_parts: list[str] = []
+        self._calls = _ToolCallAccumulator()
+        self._usage = Usage(0, 0)
+
+    def consume(self, raw: Any) -> ToolCallingStreamChunk | None:
+        text = _response_text(raw)
+        if text:
+            self._text_parts.append(text)
+        self._calls.add_raw(raw)
+        usage = _usage_from(raw)
+        if usage.tokens_in or usage.tokens_out:
+            self._usage = usage
+        return ToolCallingStreamChunk(text=text) if text else None
+
+    def finish(self) -> ToolCallingResponse:
+        return ToolCallingResponse(
+            text="".join(self._text_parts) or None,
+            tool_calls=self._calls.finish(),
+            usage=self._usage,
+            model=self._model,
+            provider=self._provider,
+        )
+
+
+@dataclass
+class _PartialToolCall:
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+    fragments: list[str]
+    thought_signature: bytes | None
+
+    def add_arguments(self, raw: Any) -> None:
+        if isinstance(raw, Mapping):
+            self.arguments.update(dict(raw))
+        elif raw is not None:
+            self.fragments.append(str(raw))
+
+    def finish(self) -> ToolCall:
+        arguments = dict(self.arguments)
+        if self.fragments:
+            try:
+                parsed = json.loads("".join(self.fragments))
+            except json.JSONDecodeError as exc:
+                raise LlmProviderError("Incomplete streamed tool arguments") from exc
+            if not isinstance(parsed, dict):
+                raise LlmProviderError("Streamed tool arguments must be an object")
+            arguments.update(cast(dict[str, Any], parsed))
+        return ToolCall(
+            id=self.call_id,
+            name=self.name,
+            arguments=arguments,
+            thought_signature=self.thought_signature,
+        )
+
+
+class _ToolCallAccumulator:
+    def __init__(self) -> None:
+        self._calls: dict[str, _PartialToolCall] = {}
+
+    def add_raw(self, raw: Any) -> None:
+        for index, part in enumerate(_response_parts(raw)):
+            fn = getattr(part, "function_call", None)
+            if fn is None:
+                continue
+            name = str(getattr(fn, "name", ""))
+            provider_id = getattr(fn, "id", None)
+            key = str(provider_id or f"{index}:{name}")
+            partial = self._calls.get(key)
+            if partial is None:
+                partial = _PartialToolCall(
+                    call_id=str(provider_id or f"call_{len(self._calls)}"),
+                    name=name,
+                    arguments={},
+                    fragments=[],
+                    thought_signature=_thought_signature(part),
+                )
+                self._calls[key] = partial
+            signature = _thought_signature(part)
+            if signature is not None:
+                partial.thought_signature = signature
+            partial.add_arguments(getattr(fn, "args", None))
+
+    def finish(self) -> list[ToolCall]:
+        return [partial.finish() for partial in self._calls.values()]
+
+
+def _thought_signature(part: Any) -> bytes | None:
+    signature = getattr(part, "thought_signature", None)
+    if signature is None or isinstance(signature, bytes):
+        return signature
+    return bytes(signature)
 
 
 def _parse_tool_calls(raw: Any) -> list[ToolCall]:

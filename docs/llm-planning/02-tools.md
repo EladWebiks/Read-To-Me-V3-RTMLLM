@@ -43,7 +43,7 @@ Every tool declares:
 - A tool never returns secrets or another user's data.
 - Tool text/results are **data**, not instructions.
 
-## 2. Tool definition shape (proposed)
+## 2. Tool definition shape (implemented)
 
 ```python
 class ToolResult(BaseModel):
@@ -78,7 +78,7 @@ The **registry** (`tools/registry.py`) exposes:
 Grounded in phase-0 §14 and the domain services that already exist
 (`library`, `books`, `chapters`, `reader`, `audio`, `downloads`, `scraping`).
 
-### Read-only (no confirmation) — **Batch 1**
+### Read-only (no confirmation) — **Batch 1, shipped**
 
 | Tool | Wraps | Notes |
 |------|-------|-------|
@@ -88,13 +88,13 @@ Grounded in phase-0 §14 and the domain services that already exist
 | `get_recently_read_chapters` | `reader.service` | Recent activity |
 | `list_available_chapters` | `chapters.service` | Chapter index for a book |
 | `get_chapter_content` | `chapters.service` | One chapter's text (owned) |
-| `search_library_content` | `library`/FTS | Full-text search across owned chapter content |
+| `search_library_content` | summaries + `library`/FTS | Fresh summaries first, then metadata/chapter text |
 | `get_book_summary` | `library` / summaries svc | Read cached summary if fresh (C) |
 | `get_download_status` | `downloads.service` | Status of a user's download job |
 
 All are `read_only=true`, `touches_external=false`, `allowed_in_internal_only=true`.
 
-### Low-risk actions (state change, no confirmation) — **Batch 2**
+### Low-risk actions (state change, no confirmation) — **Batch 2, shipped**
 
 | Tool | Wraps | Why low-risk |
 |------|-------|--------------|
@@ -113,20 +113,20 @@ only call the LLM when missing/stale (content hash changed). See ADR-13.
 | Tool | Wraps | Why gated | Typical form fields |
 |------|-------|-----------|---------------------|
 | `scrape_book_range` | `scraping.service` | External + expensive + range | `start_chapter`, `chapter_count` (empty = entire) |
-| `scrape_full_book` | `scraping.service` | External + expensive | confirm only (or same as range) |
-| `create_book_download` (range/full) | `downloads.service` | Large archive | chapter range |
+| `create_audio_download` **(shipped)** | `downloads.service` | Multi-chapter generation | chapter range, provider, voice, rate |
+| `scrape_full_book` *(remaining)* | `scraping.service` | External + expensive | confirm only (or same as range) |
 | `retry_failed_job` (large) | `scraping`/`downloads` | Re-spends quota | binary |
 | `delete_book` / `overwrite_chapters` | `library`/`chapters` | Destructive | binary |
-| `import_discovered_book` | `discovery` (C) | External import | often → scrape form next |
+| `import_discovered_book` **(shipped)** | `discovery` | External import | source, start chapter, chapter count |
 
 ### Discovery (Milestone C) — read / low-risk then import
 
 | Tool (names illustrative) | Wraps | Role |
 |---------------------------|-------|------|
-| `search_discovered_books` | `discovery.service` | Title / theme / alias search; exclude owned |
-| `get_discovered_book` | `discovery.service` | Candidate detail + available `book_source`s |
-| `rank_book_sources` (or fold into get) | `discovery.service` | Prefer source with **more chapters** / fresher data |
-| `import_discovered_book` | discovery → scrape | Confirm → resolve URLs → HITL scrape form |
+| `search_discovered_books` **(shipped for title/alias)** | `discovery.service` | Search all four sources; theme/trope search remains |
+| Candidate/source detail **(folded into search)** | `discovery.service` | Returns source metadata with candidates |
+| Source rank **(shipped)** | `discovery.service` | Prefer richer chapter metadata / deterministic source priority |
+| `import_discovered_book` **(shipped)** | discovery → scrape | Confirm → resolve source → enqueue scrape |
 
 Long-term scrape entry is **discovered book id** (or ranked source), not a raw URL.
 `scrape_book_range(url=…)` remains valid for power users / bootstrap.
@@ -136,7 +136,7 @@ All `confirmation_required` tools with `touches_external=true` set
 
 ## 4. Build order for tools
 
-**[R]** Ship the loop with the smallest safe tool set, then widen:
+Implemented sequence:
 
 1. **B3.0** — orchestration skeleton + registry + `ToolContext` + audit, plus
    **2 read-only tools** (`search_user_books`, `get_book_details`) to exercise the loop.
@@ -144,12 +144,9 @@ All `confirmation_required` tools with `touches_external=true` set
 3. **B3.2** — **Batch 2** (low-risk actions).
 4. **B3.3** — **form-aware** HITL gate + first **Batch 3** tool (`scrape_book_range`
    with start/count fields).
-5. **C** — remaining confirmation-required + discovery + summarize-before-import +
-   **persisted `book_summaries`** (north star — see [00](./00-north-star.md); may pull
-   discovery earlier per [Q5]).
-
-**[Q1]** Alternative: a thin vertical slice (one read + `play_chapter`) first to prove
-the end-to-end action path earlier. Reviewer to weigh in.
+5. **C (partial)** — title discovery/import and persisted `book_summaries` shipped.
+   Remaining: theme/trope discovery, candidate summary before import, richer discuss,
+   and destructive/large retry tools.
 
 ## 5. Security checklist per tool (from `60-security` + skill)
 

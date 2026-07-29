@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
+import { useTheme } from 'next-themes'
 import { useLocation, useNavigate } from 'react-router'
-import type { ChatMessage, ConfirmationPayload } from '../api/chatApi'
+import type { ChatMessage, ClientAction, ConfirmationPayload } from '../api/chatApi'
 import { useAssistantStore } from '../assistantStore'
 import { useHydrateConversation, useNewChatReset } from './chatLifecycle'
-import { shouldAutoNavigate } from './navigatePolicy'
+import { applyClientAction } from './clientActions'
 import { useChatActions } from './useChatActions'
 import { uiContextPayload, useUiContext } from './useUiContext'
 
@@ -13,8 +14,8 @@ export function useAssistantChat() {
   const setConversationId = useAssistantStore((s) => s.setConversationId)
   const newChatNonce = useAssistantStore((s) => s.newChatNonce)
   const uiContext = useUiContext()
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { setTheme } = useTheme()
+  const [navigate, pathname] = useAssistantNavigation()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -35,11 +36,11 @@ export function useAssistantChat() {
   }, [])
   useNewChatReset(newChatNonce, abortRef, clearLocal)
 
+  const cancel = useCancelAssistant(abortRef, setMessages, setSending, setLiveStatus)
+
   const onClientAction = useCallback(
-    (action: { type: string; path: string; label: string }) => {
-      if (shouldAutoNavigate(action, pathname)) void navigate(action.path)
-    },
-    [navigate, pathname],
+    (action: ClientAction) => applyClientAction(action, pathname, navigate, setTheme),
+    [navigate, pathname, setTheme],
   )
 
   const { send, sendText, resolveConfirm } = useChatActions({
@@ -70,5 +71,35 @@ export function useAssistantChat() {
     send,
     sendText,
     resolveConfirm,
+    cancel,
   }
+}
+
+function useAssistantNavigation() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  return [navigate, pathname] as const
+}
+
+function useCancelAssistant(
+  abortRef: { current: AbortController | null },
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+  setSending: (value: boolean) => void,
+  setLiveStatus: (value: string | null) => void,
+) {
+  return useCallback(() => {
+    if (!abortRef.current) return
+    abortRef.current.abort()
+    abortRef.current = null
+    setSending(false)
+    setLiveStatus(null)
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `cancelled-${crypto.randomUUID()}`,
+        role: 'cancelled',
+        content: 'Response canceled.',
+      },
+    ])
+  }, [abortRef, setLiveStatus, setMessages, setSending])
 }

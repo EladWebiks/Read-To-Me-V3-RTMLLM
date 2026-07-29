@@ -23,7 +23,7 @@ export function LoginPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
       <h1 className="mb-2 text-2xl font-semibold tracking-tight">Sign in to RTM</h1>
-      <p className="mb-6 text-sm text-stone-600">Use the local admin account.</p>
+      <p className="mb-6 text-sm text-muted-foreground">Use the local admin account.</p>
       <LoginForm
         username={username}
         password={password}
@@ -59,9 +59,9 @@ function LoginForm({
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       <label className="block text-sm">
-        <span className="mb-1 block text-stone-700">Username</span>
+        <span className="mb-1 block text-muted-foreground">Username</span>
         <input
-          className="w-full rounded border border-stone-300 px-3 py-2"
+          className="w-full rounded border border-border bg-background px-3 py-2 text-foreground"
           value={username}
           onChange={(event) => onUsernameChange(event.target.value)}
           autoComplete="username"
@@ -69,21 +69,21 @@ function LoginForm({
         />
       </label>
       <label className="block text-sm">
-        <span className="mb-1 block text-stone-700">Password</span>
+        <span className="mb-1 block text-muted-foreground">Password</span>
         <input
           type="password"
-          className="w-full rounded border border-stone-300 px-3 py-2"
+          className="w-full rounded border border-border bg-background px-3 py-2 text-foreground"
           value={password}
           onChange={(event) => onPasswordChange(event.target.value)}
           autoComplete="current-password"
           required
         />
       </label>
-      {errorMessage ? <p className="text-sm text-red-700">{errorMessage}</p> : null}
+      {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+        className="w-full rounded bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
       >
         {isPending ? 'Signing in…' : 'Sign in'}
       </button>

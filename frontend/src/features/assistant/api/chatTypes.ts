@@ -1,7 +1,22 @@
 /** Shared chat / SSE types for the assistant. */
 
+import type { ClientAction } from './clientActionTypes'
+
+export type {
+  ClientAction,
+  DownloadClientAction,
+  UiSettingsPatch,
+} from './clientActionTypes'
+
 export type ChatRole =
-  'user' | 'assistant' | 'system' | 'step' | 'tool' | 'confirmation' | 'choice'
+  | 'user'
+  | 'assistant'
+  | 'system'
+  | 'step'
+  | 'tool'
+  | 'confirmation'
+  | 'choice'
+  | 'cancelled'
 
 export type ConfirmationFormField = {
   name: string
@@ -9,8 +24,10 @@ export type ConfirmationFormField = {
   type: string
   required: boolean
   default: unknown
+  provided?: boolean
   min?: number
   max?: number
+  options?: Array<{ value: string; label: string }>
 }
 
 export type ConfirmationPayload = {
@@ -21,12 +38,6 @@ export type ConfirmationPayload = {
   args: Record<string, unknown>
   form: { fields: ConfirmationFormField[] } | null
   status: 'pending' | 'approved' | 'rejected'
-}
-
-export type ClientAction = {
-  type: string
-  path: string
-  label: string
 }
 
 export type ChoiceOption = {

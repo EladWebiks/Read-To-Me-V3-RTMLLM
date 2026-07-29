@@ -7,11 +7,11 @@ export type { PlayerControlsProps } from '@/features/reader/logic/playerControlT
 
 export function PlayerControls(props: PlayerControlsProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 text-sm text-stone-600">
+    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
       <label className="flex items-center gap-1">
         Engine
         <select
-          className="border border-stone-300 bg-white px-2 py-1"
+          className="rounded-md border border-border bg-background px-2 py-1 text-foreground"
           value={props.engine}
           onChange={(event) => props.onEngine(event.target.value as PlaybackEngine)}
         >

@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { Button } from '@/shared/ui'
 import type { ClientAction } from '../api/chatApi'
+import { DownloadToolResultCard } from './DownloadToolResultCard'
 
 type Props = {
   name: string
@@ -11,6 +12,9 @@ type Props = {
 
 /** Compact durable tool outcome (e.g. scrape queued). */
 export function ToolResultCard({ name, ok, summary, clientAction }: Props) {
+  if (ok && clientAction?.type === 'download') {
+    return <DownloadToolResultCard action={clientAction} summary={summary} />
+  }
   return (
     <div
       className={
@@ -23,10 +27,22 @@ export function ToolResultCard({ name, ok, summary, clientAction }: Props) {
         {ok ? 'Done' : 'Failed'} · <span className="font-mono">{name}</span>
       </p>
       <p className="mt-1 text-foreground">{summary}</p>
-      {ok && clientAction?.type === 'navigate' ? (
+      {ok &&
+      clientAction &&
+      clientAction.type !== 'settings' &&
+      clientAction.type !== 'download' ? (
         <div className="mt-2">
           <Button asChild variant="outline" size="sm">
-            <Link to={clientAction.path}>{clientAction.label}</Link>
+            <Link
+              to={clientAction.path}
+              state={
+                clientAction.type === 'play'
+                  ? { autoPlay: true, playbackRequestId: clientAction.path }
+                  : undefined
+              }
+            >
+              {clientAction.label}
+            </Link>
           </Button>
         </div>
       ) : null}

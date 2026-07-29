@@ -21,6 +21,7 @@ export type StreamArgs = {
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>
   setError: (detail: string | null) => void
   setLiveStatus: (label: string | null) => void
+  setSending?: (sending: boolean) => void
   abortRef: MutableRefObject<AbortController | null>
   onClientAction?: (action: ClientAction) => void
 }
@@ -36,6 +37,7 @@ export function buildStreamHandlers(
     setMessages,
     setError,
     setLiveStatus,
+    setSending,
     onClientAction,
   } = args
   return {
@@ -47,7 +49,7 @@ export function buildStreamHandlers(
     onStep: (label) => setLiveStatus(label),
     onToolResult: ({ name, ok, summary, clientAction }) => {
       applyToolSideEffects(name, ok)
-      setLiveStatus(null)
+      setLiveStatus(ok ? 'Writing your answer…' : 'Trying another approach…')
       setMessages((prev) =>
         appendToolResult(prev, assistantId, name, ok, summary, clientAction),
       )
@@ -55,11 +57,13 @@ export function buildStreamHandlers(
     },
     onConfirmation: (payload) => {
       setLiveStatus(null)
+      setSending?.(false)
       setMessages((prev) => appendConfirmation(prev, assistantId, payload))
       onAwaitingConfirm?.(payload)
     },
     onChoiceRequest: (payload: ChoicePayload) => {
       setLiveStatus(null)
+      setSending?.(false)
       setMessages((prev) => appendChoice(prev, payload))
     },
     onDone: ({ messageId, status }) => {

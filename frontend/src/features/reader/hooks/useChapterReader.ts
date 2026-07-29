@@ -8,6 +8,7 @@ import {
 } from '@/features/reader/logic/readerActions'
 import { useSkipParagraph } from '@/features/reader/logic/useSkipParagraph'
 import { useSaveProgress } from '@/features/reader/hooks'
+import { useAutoPlay } from './useAutoPlay'
 import { usePlaybackEngine } from './usePlaybackEngine'
 import { useTtsSettings } from './ttsSettingsStore'
 import type { ReaderCursor } from '@/features/reader/types'
@@ -18,7 +19,7 @@ export type ChapterReaderArgs = {
   chapterNumber: number
   content: string
   initialCursor: ReaderCursor
-  autoPlay: boolean
+  autoPlayKey: string | null
   onChapterEnd: () => void
 }
 
@@ -54,7 +55,7 @@ export function useChapterReader(args: ChapterReaderArgs) {
     },
     onChapterEnd: () => endRef.current(),
   })
-  useAutoPlay(args.autoPlay, args.chapterId, paragraphs.length, playback.speech.play)
+  useAutoPlay(args.autoPlayKey, paragraphs.length, start, playback.speech.play)
 
   return {
     paragraphs,
@@ -84,18 +85,4 @@ export function useChapterReader(args: ChapterReaderArgs) {
     error: playback.error,
     settings,
   }
-}
-
-function useAutoPlay(
-  autoPlay: boolean,
-  chapterId: string,
-  paragraphCount: number,
-  play: (from: ReaderCursor) => void,
-) {
-  useEffect(() => {
-    if (!autoPlay || paragraphCount === 0) {
-      return
-    }
-    play({ paragraphIndex: 0, wordIndex: 0 })
-  }, [autoPlay, chapterId, paragraphCount, play])
 }

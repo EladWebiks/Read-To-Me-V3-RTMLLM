@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.reader.models import ReadingProgress
@@ -64,6 +64,14 @@ class ProgressRepository:
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def delete_for_user_book(self, user_id: UUID, book_id: UUID) -> None:
+        """Remove progress for a user/book pair (e.g. after book delete)."""
+        stmt = delete(ReadingProgress).where(
+            ReadingProgress.user_id == user_id,
+            ReadingProgress.book_id == book_id,
+        )
+        await self._session.execute(stmt)
 
     async def flush(self) -> None:
         """Flush pending updates."""

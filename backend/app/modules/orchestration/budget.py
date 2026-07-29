@@ -50,11 +50,19 @@ class RunBudget:
         if time.monotonic() > self.deadline_mono:
             raise BudgetExceededError("run deadline exceeded")
 
-    def add_usage(self, usage: Usage, *, cost_usd: float = 0.0) -> None:
-        """Accumulate tokens/cost after an LLM call."""
+    def add_usage(
+        self,
+        usage: Usage,
+        *,
+        cost_usd: float = 0.0,
+        enforce_limits: bool = True,
+    ) -> None:
+        """Accumulate usage; final answers may record overage without being discarded."""
         self.tokens_in += usage.tokens_in
         self.tokens_out += usage.tokens_out
         self.cost_usd += cost_usd
+        if not enforce_limits:
+            return
         if self.tokens_in > self.max_tokens_in or self.tokens_out > self.max_tokens_out:
             raise BudgetExceededError(
                 "token budget exceeded "

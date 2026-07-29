@@ -20,6 +20,15 @@ describe('shouldAutoNavigate', () => {
     ).toBe(false)
   })
 
+  it('handles play actions even when already on the chapter', () => {
+    expect(
+      shouldAutoNavigate(
+        { type: 'play', path: '/read/b/c', label: 'Play chapter' },
+        '/read/b/c',
+      ),
+    ).toBe(true)
+  })
+
   it('does not auto-open scraper', () => {
     expect(
       shouldAutoNavigate(

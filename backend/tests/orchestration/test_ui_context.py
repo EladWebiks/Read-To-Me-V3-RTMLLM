@@ -32,6 +32,11 @@ def test_client_action_scrape() -> None:
     assert action == {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
 
 
+def test_client_action_import_discovered() -> None:
+    action = client_action_for_tool("import_discovered_book", True, {})
+    assert action == {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
+
+
 def test_client_action_play() -> None:
     book = uuid4()
     chapter = uuid4()
@@ -41,11 +46,26 @@ def test_client_action_play() -> None:
         {"book_id": book, "chapter_id": chapter},
     )
     assert action is not None
+    assert action["type"] == "play"
     assert action["path"] == f"/read/{book}/{chapter}"
+    assert action["label"] == "Play chapter"
 
 
 def test_client_action_failed_none() -> None:
     assert client_action_for_tool("scrape_book_range", False, {}) is None
+
+
+def test_client_action_settings_is_allowlisted() -> None:
+    action = client_action_for_tool(
+        "update_ui_settings",
+        True,
+        {"theme": "dark", "font_size": 1.4, "message": "done", "unexpected": "ignored"},
+    )
+    assert action == {
+        "type": "settings",
+        "label": "Settings updated",
+        "settings": {"theme": "dark", "font_size": 1.4},
+    }
 
 
 def test_choice_request_propose() -> None:
@@ -63,4 +83,3 @@ def test_choice_request_propose() -> None:
 
 def test_choice_request_rejects_short() -> None:
     assert choice_request_for_tool("propose_choices", True, {"options": ["only"]}) is None
-

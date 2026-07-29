@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, get_args, get_origin
 
 from pydantic import ValidationError
 from pydantic_core import PydanticUndefined
@@ -36,6 +36,7 @@ def merge_confirmed_args(
 def build_form_payload(
     tool: BaseTool,
     proposed: dict[str, Any],
+    provided_fields: set[str] | None = None,
 ) -> dict[str, Any] | None:
     """JSON-serializable form descriptor for confirmation_request, or None."""
     schema = tool.confirmation_schema
@@ -53,7 +54,9 @@ def build_form_payload(
                 "type": _field_type(field.annotation),
                 "required": field.is_required(),
                 "default": default,
+                "provided": name in provided_fields if provided_fields is not None else True,
                 **_numeric_bounds(field),
+                **_field_options(field.annotation),
             }
         )
     return {"fields": fields}
@@ -94,3 +97,10 @@ def _numeric_bounds(field: object) -> dict[str, int | float]:
         elif lt is not None:
             out["max"] = lt - 1 if isinstance(lt, int) else lt
     return out
+
+
+def _field_options(annotation: object) -> dict[str, list[dict[str, str]]]:
+    if get_origin(annotation) is not Literal:
+        return {}
+    values = [str(value) for value in get_args(annotation)]
+    return {"options": [{"value": value, "label": value} for value in values]}

@@ -1,11 +1,51 @@
 import type { ConfirmationFormField, ConfirmationPayload } from '../api/chatApi'
+import {
+  defaultDownloadRate,
+  defaultVoice,
+} from '@/features/downloads/logic/audioModalUtils'
+import type { TtsProviderName } from '@/features/reader/hooks/ttsSettingsStore'
 
-export function defaultsFrom(payload: ConfirmationPayload): Record<string, unknown> {
+export type AudioConfirmationDefaults = {
+  provider: TtsProviderName
+  serverVoice: string | null
+  rate: number
+}
+
+export function defaultsFrom(
+  payload: ConfirmationPayload,
+  audio?: AudioConfirmationDefaults,
+): Record<string, unknown> {
   const out: Record<string, unknown> = { ...payload.args }
   for (const field of payload.form?.fields ?? []) {
-    if (out[field.name] === undefined) out[field.name] = field.default
+    const audioDefault = audioFieldDefault(payload.tool, field, out, audio)
+    if (audioDefault !== undefined) {
+      out[field.name] = audioDefault
+    } else if (out[field.name] === undefined) {
+      out[field.name] = field.default
+    }
   }
   return out
+}
+
+function audioFieldDefault(
+  tool: string,
+  field: ConfirmationFormField,
+  values: Record<string, unknown>,
+  settings?: AudioConfirmationDefaults,
+): unknown {
+  if (tool !== 'create_audio_download' || field.provided !== false || !settings) {
+    return undefined
+  }
+  if (field.name === 'provider') return settings.provider
+  if (field.name === 'rate') {
+    const provider = values.provider === 'sapi' ? 'sapi' : 'edge'
+    return defaultDownloadRate(provider, settings.rate)
+  }
+  if (field.name === 'voice') {
+    const provider = values.provider === 'sapi' ? 'sapi' : 'edge'
+    return defaultVoice(provider, settings.serverVoice)
+  }
+  return undefined
 }
 
 export function stringValue(value: unknown): string {

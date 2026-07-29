@@ -22,3 +22,12 @@ def test_budget_tokens_exceeded() -> None:
     budget = RunBudget.from_settings(Settings(llm_max_turn_tokens_in=5, llm_max_turn_tokens_out=5))
     with pytest.raises(BudgetExceededError, match="token"):
         budget.add_usage(Usage(10, 1))
+
+
+@pytest.mark.unit
+def test_final_usage_overage_is_recorded_without_raising() -> None:
+    budget = RunBudget.from_settings(Settings(llm_max_turn_tokens_in=5))
+
+    budget.add_usage(Usage(10, 1), enforce_limits=False)
+
+    assert budget.tokens_in == 10

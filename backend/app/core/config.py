@@ -49,8 +49,8 @@ class Settings(BaseSettings):
 
     sapi_proxy_enabled: bool = True
     signed_url_expires_seconds: int = 3600
-    # How long generated MP3 jobs (and their objects) are kept before expiry.
-    download_job_ttl_hours: int = 72
+    # Retention for generated MP3 jobs and MinIO objects (hours).
+    download_job_ttl_hours: int = 24
 
     # LLM (Milestone B). Off by default so Milestone A stays LLM-free.
     llm_enabled: bool = False
@@ -65,10 +65,13 @@ class Settings(BaseSettings):
     # Caps are cumulative across all LLM rounds in one user turn (tool loop).
     llm_max_tool_iters: int = 6
     llm_max_external_calls: int = 3
-    llm_max_turn_tokens_in: int = 32_000
+    llm_max_turn_tokens_in: int = 64_000
     llm_max_turn_tokens_out: int = 8_192
     llm_max_turn_cost_usd: float = 0.05
     llm_run_deadline_seconds: int = 60
+    llm_context_recent_messages: int = 10
+    llm_summary_trigger_tokens: int = 12_000
+    llm_summary_max_output_tokens: int = 1_200
     llm_assistant_mode: str = "internal_only"
     # HITL: how long a pending confirmation stays valid; max pauses per turn.
     llm_hitl_ttl_seconds: int = 900

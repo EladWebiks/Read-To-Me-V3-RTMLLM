@@ -8,11 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chapters.exceptions import ChapterNotFoundError
 from app.modules.chapters.service import ChapterService
+from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.library.service import LibraryService
 from app.modules.reader.exceptions import ProgressNotFoundError
 from app.modules.reader.models import ReadingProgress
 from app.modules.reader.repository import ProgressRepository
 from app.modules.reader.schemas import ProgressRead, ProgressUpsert
+
+_CONTINUE_SCAN = 20
 
 
 class ReaderService:
@@ -32,11 +35,25 @@ class ReaderService:
         return ProgressRead.model_validate(progress)
 
     async def continue_reading(self, user_id: UUID) -> ProgressRead | None:
-        """Most recent progress, or None if the user has never read."""
-        progress = await self._repo.get_latest_for_user(user_id)
-        if progress is None:
-            return None
-        return ProgressRead.model_validate(progress)
+        """Most recent progress for a book/chapter the user can still open."""
+        rows = await self._repo.list_recent_for_user(user_id, limit=_CONTINUE_SCAN)
+        for progress in rows:
+            if await self._progress_is_readable(user_id, progress):
+                return ProgressRead.model_validate(progress)
+            await self._repo.delete_for_user_book(user_id, progress.book_id)
+        return None
+
+    async def _progress_is_readable(
+        self,
+        user_id: UUID,
+        progress: ReadingProgress,
+    ) -> bool:
+        try:
+            await self._library.assert_access(user_id, progress.book_id)
+            await self._chapters.get(progress.chapter_id)
+        except (BookAccessDeniedError, ChapterNotFoundError):
+            return False
+        return True
 
     async def list_recent(self, user_id: UUID, *, limit: int = 10) -> list[ProgressRead]:
         """Recently updated reading positions for this user."""

@@ -11,7 +11,7 @@ Every provider call already writes (B1):
   status, fallback_used, trace_id`.
 - `cost_records` — FK → `llm_execution`, for cost dashboards.
 
-B3 adds:
+B3 added:
 
 - `tool_calls` — per tool: `input, output, status, duration_ms, risk_level,
   confirmed_by_user, error` (see [02](./02-tools.md) / [04](./04-hitl.md)).
@@ -33,12 +33,12 @@ non-negotiable and does not depend on Langfuse being present.
 
 ## 3. Langfuse: optional tracing **[D → ADR-4]**
 
-- Behind `LANGFUSE_ENABLED` (default **false**) with a **no-op tracer** by default —
-  already scaffolded in `modules/llm/telemetry.py`.
+- `LANGFUSE_ENABLED` defaults to **false** and the application remains fully functional
+  with Postgres telemetry only.
 - When enabled: a run's `run_id` (from [03](./03-orchestration.md)) becomes a **trace**;
   each LLM call and tool execution becomes a **span** with token/cost/latency.
-- Compose runs it behind a **profile** so `internal_only` / offline never requires it
-  (phase-0 §16 / §17).
+- A local Compose profile is still optional follow-up work; it is not required by the
+  shipped assistant.
 
 ### What Langfuse adds that Postgres queries don't
 
@@ -60,9 +60,8 @@ Two reasonable positions for the reviewer:
 - **Defer** — stay Postgres-only until a concrete debugging pain appears; keep dev
   footprint minimal.
 
-**Recommendation [R]:** enable the Langfuse **compose profile in dev only** at B3, keep
-it **off** in `internal_only`/prod-offline. Low cost, high debugging value exactly when
-the loop gets complex.
+**Current decision:** defer the Compose profile until multi-step debugging needs justify
+the extra services. Keep Postgres as the source of truth and Langfuse off by default.
 
 ## 5. Data minimization & privacy (phase-0 §17, `60-security`)
 

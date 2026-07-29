@@ -7,7 +7,9 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.normalize import normalize_title
+from app.modules.discovery.exceptions import DiscoveredBookNotFoundError
 from app.modules.discovery.models import BookSource, DiscoveredBook
+from app.modules.discovery.ranking import rank_sources
 from app.modules.discovery.repository import DiscoveryRepository
 from app.modules.discovery.schemas import (
     BookSourceRead,
@@ -51,6 +53,32 @@ class DiscoveryService:
             results=await self._to_reads(books, owned),
         )
 
+    async def get_book(self, user_id: UUID, book_id: UUID) -> DiscoveredBookRead:
+        """Load one discovered book with ranked sources."""
+        book = await self._repo.get_book(book_id)
+        if book is None:
+            raise DiscoveredBookNotFoundError(str(book_id))
+        owned = await self._owned_titles(user_id)
+        rows = await self._to_reads([book], owned)
+        return rows[0]
+
+    async def pick_source(
+        self,
+        user_id: UUID,
+        book_id: UUID,
+        source_id: UUID | None = None,
+    ) -> tuple[DiscoveredBookRead, BookSourceRead]:
+        """Resolve a source for import — explicit id or richest estimate."""
+        book = await self.get_book(user_id, book_id)
+        if not book.sources:
+            raise DiscoveredBookNotFoundError(f"{book_id}:no-sources")
+        if source_id is None:
+            return book, book.sources[0]
+        for src in book.sources:
+            if src.id == source_id:
+                return book, src
+        raise DiscoveredBookNotFoundError(f"{book_id}:source:{source_id}")
+
     async def _ingest_external(self, query: str) -> None:
         for hit in await search_all_sources(query):
             await self._upsert_hit(hit)
@@ -91,11 +119,9 @@ class DiscoveryService:
         owned: set[str],
     ) -> list[DiscoveredBookRead]:
         sources = await self._repo.list_sources([book.id for book in books])
-        by_book: dict[UUID, list[BookSourceRead]] = {book.id: [] for book in books}
+        by_book: dict[UUID, list[BookSource]] = {book.id: [] for book in books}
         for src in sources:
-            by_book.setdefault(src.discovered_book_id, []).append(
-                BookSourceRead.model_validate(src)
-            )
+            by_book.setdefault(src.discovered_book_id, []).append(src)
         return [
             DiscoveredBookRead(
                 id=book.id,
@@ -104,9 +130,17 @@ class DiscoveryService:
                 description=book.description,
                 language=book.language,
                 already_owned=book.normalized_title in owned,
-                sources=by_book.get(book.id, []),
+                sources=_ranked_source_reads(by_book.get(book.id, [])),
                 created_at=book.created_at,
                 updated_at=book.updated_at,
             )
             for book in books
         ]
+
+
+def _ranked_source_reads(sources: list[BookSource]) -> list[BookSourceRead]:
+    ranked = rank_sources(sources)
+    return [
+        BookSourceRead.model_validate(src).model_copy(update={"recommended": index == 0})
+        for index, src in enumerate(ranked)
+    ]

@@ -3,6 +3,7 @@ import type {
   ChoicePayload,
   ClientAction,
   ConfirmationPayload,
+  UiSettingsPatch,
 } from './chatTypes'
 
 export function parseClientAction(raw: unknown): ClientAction | undefined {
@@ -11,9 +12,30 @@ export function parseClientAction(raw: unknown): ClientAction | undefined {
   const path = obj.path
   const label = obj.label
   const type = obj.type
-  if (typeof path !== 'string' || typeof label !== 'string' || typeof type !== 'string') {
+  if (typeof label !== 'string' || typeof type !== 'string') {
     return undefined
   }
+  if (type === 'settings' && obj.settings && typeof obj.settings === 'object') {
+    return { type, label, settings: obj.settings as UiSettingsPatch }
+  }
+  if (
+    type === 'download' &&
+    typeof obj.job_id === 'string' &&
+    typeof obj.book_id === 'string' &&
+    typeof obj.chapter_from === 'number' &&
+    typeof obj.chapter_to === 'number'
+  ) {
+    return {
+      type,
+      label,
+      jobId: obj.job_id,
+      bookId: obj.book_id,
+      chapterFrom: obj.chapter_from,
+      chapterTo: obj.chapter_to,
+    }
+  }
+  if (type !== 'navigate' && type !== 'play') return undefined
+  if (typeof path !== 'string') return undefined
   if (!path.startsWith('/')) return undefined
   return { type, path, label }
 }

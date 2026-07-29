@@ -39,10 +39,19 @@ class ChapterService:
         """Count chapters for many books."""
         return await self._repo.counts_for_books(book_ids)
 
+    async def content_digest(self, book_id: UUID) -> str:
+        """Return a stable database-side digest of active chapter content."""
+        return await self._repo.content_digest(book_id)
+
     async def list_summaries(self, book_id: UUID) -> list[ChapterSummary]:
         """List chapter summaries for a book."""
         chapters = await self._repo.list_for_book(book_id)
         return [ChapterSummary.model_validate(chapter) for chapter in chapters]
+
+    async def list_content_for_summary(self, book_id: UUID) -> list[ChapterRead]:
+        """List full chapter data for a derived summary."""
+        chapters = await self._repo.list_for_book(book_id)
+        return [ChapterRead.model_validate(chapter) for chapter in chapters]
 
     async def get(self, chapter_id: UUID) -> ChapterRead:
         """Get full chapter content."""

@@ -6,11 +6,14 @@ export function markConfirmStatus(
   callId: string,
   status: 'approved' | 'rejected',
 ): void {
-  setMessages((prev) =>
-    prev.map((m) =>
+  setMessages((prev) => {
+    if (status === 'approved') {
+      return prev.filter((message) => message.confirmation?.callId !== callId)
+    }
+    return prev.map((m) =>
       m.confirmation?.callId === callId && m.confirmation
         ? { ...m, confirmation: { ...m.confirmation, status } }
         : m,
-    ),
-  )
+    )
+  })
 }

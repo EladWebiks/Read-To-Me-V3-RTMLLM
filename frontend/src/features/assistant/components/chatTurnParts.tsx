@@ -12,6 +12,10 @@ export function UserBubble({ content }: { content: string }) {
   )
 }
 
+export function CancelledNote({ content }: { content: string }) {
+  return <p className="px-1 text-xs text-muted-foreground/70">{content}</p>
+}
+
 export function AssistantProse({
   content,
   streaming,

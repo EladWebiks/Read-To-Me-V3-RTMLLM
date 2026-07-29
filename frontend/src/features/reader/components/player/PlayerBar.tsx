@@ -14,6 +14,7 @@ type PlayerBarProps = {
   status: SpeechStatus
   hasText: boolean
   error?: string | null
+  autoPlayRequested: boolean
   onSkipPrev: () => void
   onPlayPause: () => void
   onStop: () => void
@@ -68,7 +69,16 @@ export function PlayerBar(props: PlayerBarProps) {
           </Button>
         </div>
       </div>
-      {props.error ? <p className="text-sm text-destructive">{props.error}</p> : null}
+      {props.error ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-destructive">{props.error}</p>
+          {props.autoPlayRequested && props.status !== 'playing' ? (
+            <Button type="button" variant="outline" size="sm" onClick={props.onPlayPause}>
+              Tap to play
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {moreOpen ? <PlayerControls {...props} /> : null}
     </div>
   )

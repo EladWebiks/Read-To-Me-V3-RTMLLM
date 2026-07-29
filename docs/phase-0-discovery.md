@@ -1,8 +1,14 @@
 # RTM v3 — Phase 0: Discovery & Architecture
 
-> **Status:** Draft for review · **Author:** Architecture/tech-lead pass · **Date:** 2026-07-23
+> **Status:** Historical architecture baseline; implementation underway · **Updated:** 2026-07-29
 >
-> This document is the Phase 0 deliverable. It is a **plan**, not an implementation. No production code is written yet.
+> This document records the original Phase 0 decisions. For current shipped assistant
+> status and remaining work, see `docs/llm-planning/README.md`.
+
+**Implementation checkpoint:** Milestone A and assistant B1–B4 are implemented. Current
+Milestone C includes four-source title discovery, ranked import/scrape HITL, EPUB import,
+and persisted content-hash-invalidated summaries. Theme/trope discovery and richer
+grounded discussion remain.
 
 ## Legend — every claim below is labelled
 
@@ -184,7 +190,7 @@ LLM project is a **modular monolith** (FastAPI + LangGraph) with strong patterns
 | Q4 | Are the 4 v2 sites the full supported set, or add more? Is Cloudflare bypass (v2 used `cloudscraper`) still required? | Scraping stack | **[Q]** |
 | Q5 | Copyright posture: is this personal/self-hosted use, or a service? Which sources are legally enabled? | Legal, source config | **[Q]** |
 | Q6 | Which LLM providers do you actually have keys for on day 1 (for Phase 2)? | Provider adapters | **[Q]** |
-| Q7 | Is EPUB import still required in v3? | Import module | **[Q]** |
+| Q7 | Is EPUB import still required in v3? | Import module | **Yes** — Scraper → Upload EPUB (v2 parity) |
 | Q8 | Data migration: import existing v2 Mongo library into v3 Postgres, or start fresh? | Migration | **[Q]** |
 | Q9 | Budget/latency ceilings for LLM calls (affects model routing & summarization strategy)? | Model routing | **[Q]** |
 | Q10 | Do we need an admin UI in v1, or env/config-file driven model & source config? | Admin module | **[Q]** |
@@ -226,7 +232,7 @@ LLM project is a **modular monolith** (FastAPI + LangGraph) with strong patterns
 
 **Phase 2 — Assistant**
 - FR7 Chat endpoint streams (SSE) assistant turns; the LLM may only act via registered tools. **[U]**
-- FR8 Each tool has input/output Zod schemas, authz, validation, error handling, audit log, rate limit, idempotency where relevant, timeout. **[U]**
+- FR8 Each tool has input/output pydantic schemas, authz, validation, error handling, audit log, rate limit, idempotency where relevant, timeout. **[U]**
 - FR9 Tools are classified read-only / low-risk / confirmation-required; confirmation-required tools pause for user approval (HITL). **[U]**
 
 **Phase 3 — Conversational scraping**
@@ -309,7 +315,7 @@ Proposed FastAPI modules (each = Python package with `router.py` / `service.py` 
 | `downloads` | MP3 generation jobs, signed URLs | 1 |
 | `search` | Postgres FTS over books/chapters | 1 |
 | `storage` | S3/MinIO wrapper, signed URLs | 1 |
-| `jobs` | BullMQ setup, queues, workers, progress events | 1 |
+| `jobs` | arq setup, queues, workers, progress events | 1 |
 | `scraping` | Source registry, adapters, fetch service, cleaning | 3 (adapter skeleton usable in 1 for import) |
 | `discovery` | DiscoveredBook/sources/aliases/entities/facts, hybrid search | 4 |
 | `chat` | Conversations, messages, SSE streaming | 2 |
@@ -578,7 +584,7 @@ rtm-v3/
       core/                     # config (pydantic-settings), logging, security, db session, deps
       modules/                  # one package per bounded context
         auth/ users/ library/ books/ chapters/ reader/ audio/
-        downloads/ search/ storage/ jobs/ scraping/ discovery/
+        downloads/ search/ storage/ jobs/ scraping/ discovery/ summaries/
         chat/ llm/ orchestration/ tools/ observability/ admin/ notifications/
       #  each module: router.py, service.py, repository.py, schemas.py, models.py, tests/
       db/                       # SQLAlchemy base, session

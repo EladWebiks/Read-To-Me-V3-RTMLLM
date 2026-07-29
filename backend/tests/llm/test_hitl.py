@@ -24,6 +24,8 @@ from app.modules.users.service import UserService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.llm.stream_fakes import stream_from_call
+
 _URL = "https://novelfull.net/book/foo.html"
 
 
@@ -134,7 +136,11 @@ async def test_hitl_pause_and_approve(
     monkeypatch.setattr(ScrapingService, "create_job", AsyncMock(return_value=_mock_job()))
     user = await _user(session)
     service = ChatService(session, _settings())
-    monkeypatch.setattr(service._llm, "call_tools", _fake_scrape_then_reply())
+    monkeypatch.setattr(
+        service._llm,
+        "stream_tools",
+        stream_from_call(_fake_scrape_then_reply()),
+    )
 
     events = [e async for e in service.stream_chat(user.id, "scrape this", None)]
     assert "confirmation_request" in [e.event for e in events]
@@ -169,7 +175,11 @@ async def test_hitl_reject(
 ) -> None:
     user = await _user(session)
     service = ChatService(session, _settings())
-    monkeypatch.setattr(service._llm, "call_tools", _fake_scrape_then_reply())
+    monkeypatch.setattr(
+        service._llm,
+        "stream_tools",
+        stream_from_call(_fake_scrape_then_reply()),
+    )
     events = [e async for e in service.stream_chat(user.id, "scrape url", None)]
     call_id = UUID(str(events[-1].data["call_id"]))
     conv_id = UUID(str(events[0].data["conversation_id"]))

@@ -25,16 +25,16 @@ existing documents and does not replace them:
 | **[D]** | Decision (ADR) — see [07-decision-log.md](./07-decision-log.md) |
 | **[Q]** | Open question for review |
 
-## Current status (2026-07-28)
+## Current status (2026-07-29)
 
 | Slice | Scope | Status |
 |-------|-------|--------|
 | **B1 — Foundation** | `modules/llm`, Gemini adapter, capability router, telemetry tables, `GET /api/llm/models` | Done |
 | **B2 — Chat + SSE** | `POST /api/chat` streaming, conversation persistence, assistant panel wired to real (tool-less) replies | Done |
 | **B2.5 — Chat UX polish** | Markdown rendering (streamdown), no-bubble assistant turns, auto-scroll, themed scrollbar, smooth expand/shrink, "New chat" | Done |
-| **B3 — Tools + orchestrator** | Tool registry, hand-rolled loop, budgets, read-only + low-risk tools, form HITL | **In progress (B3.3 form HITL done; B3 exit = Langfuse profile optional)** |
-| **B4 — Frontend chat (tools)** | Tool-step affordances, form confirmation cards, clarify choices, **UI route context + navigate chips**, cost/status UI | **In progress (HITL, navigate, choice chips; cost meter open)** |
-| **C — Full assistant** | Discovery search, **persisted book summaries**, gated scrape/import, richer Q&A / discuss | **Started** (title search on all 4 scrape sources + `search_discovered_books`) |
+| **B3 — Tools + orchestrator** | Tool registry, bounded hand-rolled loop, true streaming, tools, form HITL, rolling context | Done |
+| **B4 — Frontend chat (tools)** | Tool progress, HITL forms, choices, route context, playback/download/settings client actions | Done (cost meter intentionally optional) |
+| **C — Full assistant** | Discovery/import, persisted summaries, richer grounded discuss/Q&A | **In progress** (title discovery/import + summaries done; theme discovery/discuss next) |
 
 ## How to read these docs
 
@@ -72,6 +72,21 @@ Read in this order:
 
 - **Hand-rolled loop for B3** (not LangGraph) — spine grows toward the north star;
   revisit triggers unchanged ([03](./03-orchestration.md), ADR-3).
+- **True provider streaming for tool turns shipped in B3.4**: the provider contract
+  streams Gemini text deltas directly, assembles partial tool calls in the adapter,
+  preserves usage/cancellation, and has no artificial backend pacing
+  ([03](./03-orchestration.md) §4a, [06](./06-roadmap-and-sequencing.md) §2).
+- **Bounded conversation context shipped**: full messages remain stored for history/audit;
+  older prefixes are summarized in owned rows once the threshold is crossed, while the
+  latest 8–12 messages remain verbatim and summaries are injected as delimited untrusted data.
+- **Useful client actions shipped**: play/resume starts TTS after navigation, confirmed audio
+  range downloads expose provider/voice/rate, and reversible settings use a strict client
+  allowlist.
+- **Audio download completion shipped**: SAPI/Zira defaults to 1.35×; approved forms
+  disappear; deterministic job cards poll progress, auto-download completed MP3s, and keep
+  a retry button. Filenames include sanitized title + chapter range + short job suffix.
+- **EPUB import shipped**: upload/preview/import uses bounded chunks and reports progress in
+  the Scraper UI.
 - **HITL = forms + clarify/choices**, not only Approve/Decline ([04](./04-hitl.md),
   ADR-8/12).
 - **Persist LLM book summaries** in a dedicated table (cache + search surface; invalidate
@@ -87,12 +102,9 @@ Read in this order:
 
 ## Open questions for the reviewer
 
-- **[Q1]** Tool batching order in [06](./06-roadmap-and-sequencing.md): ship all
-  read-only tools before any action tool, or vertically slice (one read + one action
-  end-to-end) to exercise the loop sooner?
 - **[Q2]** Enable Langfuse at B3 start (better multi-step debugging) or defer until a
   concrete need — see [05](./05-observability.md)?
 - **[Q4]** Do we want per-conversation budgets to be user-visible (cost meter) in B4,
   or internal-only until C?
-- **[Q5]** How early to schedule discovery search relative to B3 library tools — see
-  [00](./00-north-star.md) §5 and [06](./06-roadmap-and-sequencing.md)?
+- **[Q6]** After theme discovery and richer grounded discussion, does measured quality
+  justify adding embeddings/RAG?

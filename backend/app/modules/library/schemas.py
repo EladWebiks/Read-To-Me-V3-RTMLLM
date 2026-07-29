@@ -13,7 +13,7 @@ class LibraryContentHit(BaseModel):
 
     book_id: UUID
     book_title: str
-    match_source: Literal["book_metadata", "chapter"]
+    match_source: Literal["summary", "book_metadata", "chapter"]
     snippet: str
     chapter_id: UUID | None = None
     chapter_number: int | None = None

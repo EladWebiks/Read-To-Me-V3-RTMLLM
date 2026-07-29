@@ -1,6 +1,8 @@
 import type { ChapterSummary } from '@/features/library/types'
 import type { DownloadProvider } from '@/features/downloads/types'
 
+export const ZIRA_DEFAULT_RATE = 1.35
+
 export type AudioFormState = {
   from: number
   to: number
@@ -21,6 +23,13 @@ export function defaultVoice(
     return 'Microsoft Zira Desktop'
   }
   return serverVoice ?? 'en-US-JennyNeural'
+}
+
+export function defaultDownloadRate(
+  provider: DownloadProvider,
+  savedRate: number,
+): number {
+  return provider === 'sapi' ? ZIRA_DEFAULT_RATE : savedRate
 }
 
 export function chapterCount(from: number, to: number): number {

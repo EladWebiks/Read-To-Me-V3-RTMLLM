@@ -29,7 +29,7 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
             sending={chat.sending}
             liveStatus={chat.liveStatus}
             confirmBusy={chat.sending}
-            choicesDisabled={chat.sending || Boolean(chat.pendingConfirm)}
+            choicesDisabled={Boolean(chat.pendingConfirm)}
             onResolveConfirm={(approved, values) =>
               void chat.resolveConfirm(approved, values)
             }
@@ -39,8 +39,10 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
             draft={chat.draft}
             setDraft={chat.setDraft}
             sending={chat.sending}
+            status={chat.liveStatus}
             blocked={blocked}
             onSend={() => void chat.send()}
+            onCancel={chat.cancel}
           />
         </div>
       </div>

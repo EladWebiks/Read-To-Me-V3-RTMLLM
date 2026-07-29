@@ -123,6 +123,15 @@ class ToolCallingResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolCallingStreamChunk:
+    """One tool-capable stream event; terminal chunk carries the normalized response."""
+
+    text: str = ""
+    done: bool = False
+    response: ToolCallingResponse | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class EmbeddingRequest:
     """Embed one or more texts."""
 

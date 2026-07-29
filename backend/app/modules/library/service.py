@@ -31,7 +31,7 @@ class LibraryService:
         """Raise if the user does not own the book."""
         membership = await self._repo.get_membership(user_id, book_id)
         if membership is None:
-            raise BookAccessDeniedError(str(book_id))
+            raise BookAccessDeniedError("Book not found in your library")
 
     async def list_books(self, user_id: UUID) -> list[BookRead]:
         """List books in the user's library."""
@@ -124,14 +124,18 @@ class LibraryService:
 
     async def remove_book(self, user_id: UUID, book_id: UUID) -> None:
         """Remove membership and soft-delete the book + chapters."""
+        from app.modules.reader.repository import ProgressRepository
         from app.modules.scraping.service import ScrapingService
+        from app.modules.summaries.service import SummaryService
 
         membership = await self._repo.get_membership(user_id, book_id)
         if membership is None:
-            raise BookAccessDeniedError(str(book_id))
+            raise BookAccessDeniedError("Book not found in your library")
         await ScrapingService(self._session).delete_jobs_for_book(book_id)
         await self._chapters.soft_delete_for_book(book_id)
+        await SummaryService(self._session).soft_delete_for_book(user_id, book_id)
         await self._books.soft_delete(book_id)
+        await ProgressRepository(self._session).delete_for_user_book(user_id, book_id)
         await self._repo.soft_delete(membership)
 
     async def upload_cover(

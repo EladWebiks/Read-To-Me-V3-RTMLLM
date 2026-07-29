@@ -32,9 +32,7 @@ export function ListenOfflineControls(props: ListenControlsProps) {
           onClick={() => {
             setDownloading(true)
             void getDownloadUrl(props.jobId)
-              .then((data) =>
-                downloadFileFromUrl(data.url, `rtm-${props.jobId.slice(0, 8)}.mp3`),
-              )
+              .then((data) => downloadFileFromUrl(data.url, data.filename))
               .catch((err: unknown) => console.error(err))
               .finally(() => setDownloading(false))
           }}

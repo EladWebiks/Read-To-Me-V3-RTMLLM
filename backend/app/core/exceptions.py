@@ -23,6 +23,7 @@ from app.modules.downloads.exceptions import (
     DownloadNotReadyError,
     InvalidChapterRangeError,
 )
+from app.modules.imports.exceptions import ImportJobNotFoundError, InvalidEpubUploadError
 from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.llm.exceptions import (
     CapabilityNotSupportedError,
@@ -52,6 +53,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_audio_handlers(app)
     _register_download_handlers(app)
     _register_scraping_handlers(app)
+    _register_import_handlers(app)
     _register_discovery_handlers(app)
     _register_llm_handlers(app)
 
@@ -187,6 +189,22 @@ def _register_scraping_handlers(app: FastAPI) -> None:
         _exc: PreviewError,
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(_exc)})
+
+
+def _register_import_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ImportJobNotFoundError)
+    async def _import_job_missing(
+        _request: Request,
+        _exc: ImportJobNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Import job not found"})
+
+    @app.exception_handler(InvalidEpubUploadError)
+    async def _invalid_epub(
+        _request: Request,
+        _exc: InvalidEpubUploadError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(_exc)})
 
 
 def _register_discovery_handlers(app: FastAPI) -> None:

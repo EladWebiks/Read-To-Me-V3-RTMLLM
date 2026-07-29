@@ -14,6 +14,7 @@ class BookSourceRead(BaseModel):
     book_url: str
     first_chapter_url: str
     chapter_count_estimate: int | None
+    recommended: bool = False
     created_at: datetime
     updated_at: datetime
 

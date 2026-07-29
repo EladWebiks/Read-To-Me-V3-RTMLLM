@@ -22,6 +22,10 @@ class DiscoveryRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_source(self, source_id: UUID) -> BookSource | None:
+        result = await self._session.execute(select(BookSource).where(BookSource.id == source_id))
+        return result.scalar_one_or_none()
+
     async def find_by_normalized_title(self, normalized: str) -> DiscoveredBook | None:
         result = await self._session.execute(
             select(DiscoveredBook).where(DiscoveredBook.normalized_title == normalized)

@@ -40,22 +40,59 @@ def client_action_for_tool(
     tool_name: str,
     ok: bool,
     data: dict[str, object] | None,
-) -> dict[str, str] | None:
+) -> dict[str, object] | None:
     """Optional FE navigate/play affordance from a successful tool result."""
     if not ok:
         return None
-    if tool_name == "scrape_book_range":
+    if tool_name in {"scrape_book_range", "import_discovered_book"}:
         return {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
     if tool_name in {"play_chapter", "resume_book"} and data:
         book_id = data.get("book_id")
         chapter_id = data.get("chapter_id")
         if book_id and chapter_id:
             return {
-                "type": "navigate",
+                "type": "play",
                 "path": f"/read/{book_id}/{chapter_id}",
-                "label": "Open chapter",
+                "label": "Play chapter",
             }
+    return _other_action(tool_name, data)
+
+
+def _other_action(
+    tool_name: str,
+    data: dict[str, object] | None,
+) -> dict[str, object] | None:
+    if tool_name == "create_audio_download" and data:
+        return {
+            "type": "download",
+            "label": "Audio download",
+            "job_id": data.get("job_id", ""),
+            "book_id": data.get("book_id", ""),
+            "chapter_from": data.get("chapter_from", 0),
+            "chapter_to": data.get("chapter_to", 0),
+        }
+    if tool_name == "update_ui_settings" and data:
+        return _settings_action(data)
     return None
+
+
+def _settings_action(data: dict[str, object]) -> dict[str, object]:
+    allowed = {
+        "theme",
+        "font_size",
+        "max_playback_rate",
+        "playback_rate",
+        "playback_engine",
+        "tts_provider",
+        "voice",
+        "highlighting",
+    }
+    settings = {key: value for key, value in data.items() if key in allowed and value is not None}
+    return {
+        "type": "settings",
+        "label": "Settings updated",
+        "settings": settings,
+    }
 
 
 def choice_request_for_tool(

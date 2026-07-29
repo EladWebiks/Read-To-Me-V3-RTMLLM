@@ -74,6 +74,21 @@ class DownloadRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_all_expired(self, *, limit: int = 200) -> list[DownloadJob]:
+        """Expired jobs across all users (for background purge)."""
+        now = datetime.now(UTC)
+        stmt = (
+            select(DownloadJob)
+            .where(
+                DownloadJob.expires_at.is_not(None),
+                DownloadJob.expires_at <= now,
+            )
+            .order_by(DownloadJob.expires_at.asc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def delete(self, job: DownloadJob) -> None:
         await self._session.delete(job)
 

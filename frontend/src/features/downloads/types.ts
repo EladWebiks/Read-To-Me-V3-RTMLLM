@@ -29,6 +29,7 @@ export type DownloadCreateInput = {
 
 export type DownloadUrl = {
   url: string
+  filename: string
   expires_at: string
 }
 

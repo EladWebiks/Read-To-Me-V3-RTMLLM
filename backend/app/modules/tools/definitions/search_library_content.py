@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.modules.library.schemas import LibraryContentHit, LibraryContentSearchResult
 from app.modules.library.service import LibraryService
+from app.modules.summaries.service import SummaryService
 from app.modules.tools.base import BaseTool, RiskLevel, ToolContext
 
 
@@ -16,8 +17,8 @@ class SearchLibraryContentInput(BaseModel):
         min_length=1,
         max_length=200,
         description=(
-            "Keywords or topic to find in owned books — searches chapter text "
-            "and book title/author/description (not only the title)."
+            "Keywords or topic to find in owned books — searches fresh summaries, "
+            "chapter text, and book title/author/description."
         ),
     )
 
@@ -27,9 +28,9 @@ class SearchLibraryContentTool(BaseTool):
 
     name = "search_library_content"
     description = (
-        "Search the user's owned books by topic or keywords in chapter text and "
-        "metadata. Use this when the user asks what a book is about, themes, "
-        "plot elements, or anything that may not appear in the title. "
+        "Search the user's owned books by topic or keywords. Fresh cached summaries "
+        "are preferred, then metadata and chapter text. Use this for themes, "
+        "plot elements, or anything that may not appear in a title. "
         "Returns short snippets only — not full chapters."
     )
     input_model = SearchLibraryContentInput
@@ -45,11 +46,29 @@ class SearchLibraryContentTool(BaseTool):
 
     async def execute(self, inp: BaseModel, ctx: ToolContext) -> BaseModel:
         data = SearchLibraryContentInput.model_validate(inp.model_dump())
-        return await LibraryService(ctx.session).search_content(
+        summary_rows = await SummaryService(ctx.session).search(
             ctx.user_id,
             data.query,
             limit=8,
         )
+        summary_hits = [
+            LibraryContentHit(
+                book_id=row.book_id,
+                book_title=row.book_title,
+                match_source="summary",
+                snippet=row.snippet,
+            )
+            for row in summary_rows
+        ]
+        fallback = await LibraryService(ctx.session).search_content(
+            ctx.user_id,
+            data.query,
+            limit=8,
+        )
+        summarized = {hit.book_id for hit in summary_hits}
+        other_hits = [hit for hit in fallback.hits if hit.book_id not in summarized]
+        hits = (summary_hits + other_hits)[:8]
+        return LibraryContentSearchResult(hits=hits, total=len(hits))
 
 
 # Re-export hit type for tests / typing convenience.

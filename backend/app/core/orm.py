@@ -14,6 +14,7 @@ def import_all_models() -> None:
     from app.modules.llm import models as llm_models
     from app.modules.reader import models as reader_models
     from app.modules.scraping import models as scraping_models
+    from app.modules.summaries import models as summaries_models
     from app.modules.users import models as users_models
 
     _ = (
@@ -25,5 +26,6 @@ def import_all_models() -> None:
         llm_models,
         reader_models,
         scraping_models,
+        summaries_models,
         users_models,
     )

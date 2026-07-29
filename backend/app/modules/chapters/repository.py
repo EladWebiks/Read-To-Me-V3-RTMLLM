@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, literal, select, update
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chapters.models import Chapter
@@ -79,6 +80,26 @@ class ChapterRepository:
         )
         result = await self._session.execute(stmt)
         return {book_id: int(count) for book_id, count in result.all()}
+
+    async def content_digest(self, book_id: UUID) -> str:
+        """Database-side digest of active ordered chapter content."""
+        chapter_value = func.concat(
+            Chapter.chapter_number,
+            "\x1f",
+            Chapter.title,
+            "\x1f",
+            Chapter.content,
+        )
+        joined = func.string_agg(
+            chapter_value,
+            aggregate_order_by(literal(""), Chapter.chapter_number.asc()),
+        )
+        stmt = select(func.md5(joined)).where(
+            Chapter.book_id == book_id,
+            Chapter.deleted_at.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return str(result.scalar_one_or_none() or "")
 
     async def add(self, chapter: Chapter) -> Chapter:
         """Persist a chapter."""

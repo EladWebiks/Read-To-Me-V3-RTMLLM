@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID, uuid4
@@ -12,11 +13,19 @@ from app.modules.books.schemas import BookCreate
 from app.modules.library.service import LibraryService
 from app.modules.llm.chat_service import ChatService
 from app.modules.llm.models import ToolCallRecord
-from app.modules.llm.types import ToolCall, ToolCallingRequest, ToolCallingResponse, Usage
+from app.modules.llm.types import (
+    ToolCall,
+    ToolCallingRequest,
+    ToolCallingResponse,
+    ToolCallingStreamChunk,
+    Usage,
+)
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from tests.llm.stream_fakes import stream_from_call
 
 
 @pytest.fixture
@@ -89,7 +98,7 @@ async def test_orchestration_runs_search_user_books(
     )
     user = await _seed_user_with_book(orch_session)
     service = ChatService(orch_session, settings)
-    monkeypatch.setattr(service._llm, "call_tools", _fake_tools_llm())
+    monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_fake_tools_llm()))
 
     events = [e async for e in service.stream_chat(user.id, "what books?", None)]
     kinds = [e.event for e in events]
@@ -111,3 +120,102 @@ async def test_orchestration_runs_search_user_books(
     conv_id = UUID(str(events[0].data["conversation_id"]))
     payload = await service.get_conversation(user.id, conv_id)
     assert "Cultivation Modern" in payload["messages"][-1]["content"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_thinking_step_is_sent_before_llm_finishes(
+    orch_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        llm_enabled=True,
+        gemini_api_key="test-key",
+        llm_provider="gemini",
+        llm_model="gemini-3.5-flash-lite",
+    )
+    user = await _seed_user_with_book(orch_session)
+    service = ChatService(orch_session, settings)
+    calls = {"count": 0}
+
+    async def _call(
+        _req: ToolCallingRequest,
+        **_kwargs: Any,
+    ) -> ToolCallingResponse:
+        calls["count"] += 1
+        return ToolCallingResponse(text="Done.", usage=Usage(1, 1))
+
+    monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_call))
+    stream = service.stream_chat(user.id, "hello", None)
+    assert (await anext(stream)).event == "meta"
+    step = await anext(stream)
+    assert step.event == "step"
+    assert step.data["label"] == "Understanding your request…"
+    assert calls["count"] == 0
+    _remaining = [event async for event in stream]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_final_answer_is_not_discarded_when_usage_crosses_soft_limit(
+    orch_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        llm_enabled=True,
+        gemini_api_key="test-key",
+        llm_max_turn_tokens_in=5,
+    )
+    user = await _seed_user_with_book(orch_session)
+    service = ChatService(orch_session, settings)
+
+    async def _call(
+        _req: ToolCallingRequest,
+        **_kwargs: Any,
+    ) -> ToolCallingResponse:
+        return ToolCallingResponse(text="Useful final answer.", usage=Usage(10, 1))
+
+    monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_call))
+    events = [event async for event in service.stream_chat(user.id, "question", None)]
+
+    assert not any(event.event == "error" for event in events)
+    assert (
+        "".join(str(event.data["text"]) for event in events if event.event == "delta")
+        == "Useful final answer."
+    )
+    assert events[-1].event == "done"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_text_delta_arrives_before_tool_stream_finishes(
+    orch_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(llm_enabled=True, gemini_api_key="test-key")
+    user = await _seed_user_with_book(orch_session)
+    service = ChatService(orch_session, settings)
+    release = asyncio.Event()
+
+    async def _stream(
+        _req: ToolCallingRequest,
+        **_kwargs: Any,
+    ) -> AsyncIterator[ToolCallingStreamChunk]:
+        yield ToolCallingStreamChunk(text="Early")
+        await release.wait()
+        response = ToolCallingResponse(text="Early", usage=Usage(2, 1))
+        yield ToolCallingStreamChunk(done=True, response=response)
+
+    monkeypatch.setattr(service._llm, "stream_tools", _stream)
+    events = service.stream_chat(user.id, "question", None)
+    assert (await anext(events)).event == "meta"
+    assert (await anext(events)).event == "step"
+
+    delta = await anext(events)
+
+    assert delta.event == "delta"
+    assert delta.data["text"] == "Early"
+    assert not release.is_set()
+    release.set()
+    remaining = [event async for event in events]
+    assert remaining[-1].event == "done"

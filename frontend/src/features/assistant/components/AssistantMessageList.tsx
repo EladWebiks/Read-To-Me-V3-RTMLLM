@@ -53,7 +53,7 @@ export function AssistantMessageList({
           onPickChoice={onPickChoice}
         />
       ))}
-      {liveStatus ? <LiveStatusLine label={liveStatus} /> : null}
+      {liveStatus ? <LiveStatusLine key={liveStatus} label={liveStatus} /> : null}
       {error ? (
         <div
           role="alert"

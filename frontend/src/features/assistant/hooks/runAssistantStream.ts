@@ -9,8 +9,7 @@ export async function runAssistantStream(
   },
   onAwaitingConfirm?: (payload: ConfirmationPayload) => void,
 ): Promise<void> {
-  const controller = new AbortController()
-  args.abortRef.current = controller
+  const controller = beginStream(args)
   try {
     await streamChat(
       args.text,
@@ -24,7 +23,7 @@ export async function runAssistantStream(
       args.setError(err instanceof Error ? err.message : 'Chat failed')
     }
   } finally {
-    args.abortRef.current = null
+    endStream(args, controller)
   }
 }
 
@@ -37,8 +36,7 @@ export async function runConfirmStream(
     values?: Record<string, unknown>
   },
 ): Promise<void> {
-  const controller = new AbortController()
-  args.abortRef.current = controller
+  const controller = beginStream(args)
   try {
     await streamConfirm(
       args.conversationId,
@@ -51,6 +49,22 @@ export async function runConfirmStream(
       args.setError(err instanceof Error ? err.message : 'Confirm failed')
     }
   } finally {
-    args.abortRef.current = null
+    endStream(args, controller)
+  }
+}
+
+function beginStream(args: StreamArgs): AbortController {
+  args.abortRef.current?.abort()
+  const controller = new AbortController()
+  args.abortRef.current = controller
+  return controller
+}
+
+function endStream(args: StreamArgs, controller: AbortController): void {
+  if (args.abortRef.current !== controller) return
+  args.abortRef.current = null
+  if (!controller.signal.aborted) {
+    args.setLiveStatus(null)
+    args.setSending?.(false)
   }
 }

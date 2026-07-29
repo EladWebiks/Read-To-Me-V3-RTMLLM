@@ -1,8 +1,10 @@
 # RTM v3 — Read To Me
 
-Local-first web platform to manage, read, listen to, scrape, and (later) discuss books.
+Local-first web platform to manage, read, listen to, download, import, scrape, search,
+summarize, and discuss books through a React GUI and a controlled LLM assistant.
 
-See `docs/phase-0-discovery.md` for architecture and milestones.
+See `docs/assistant-capabilities.md` for current assistant behavior and
+`docs/llm-planning/README.md` for architecture and remaining work.
 
 ## Stack
 
@@ -24,7 +26,35 @@ docker compose up --build
 
 Default login (from `.env`): **admin** / **changeme123**
 
-After login you can manage books/chapters at `/library`.
+After login:
+
+- `/library` manages books and chapters.
+- `/read/...` provides browser/server TTS with progress and highlighting.
+- `/scraper` runs site scrapes and EPUB imports.
+- The app-wide assistant can search and discuss owned books, play/resume chapters,
+  create monitored audio downloads, update reversible UI settings, and discover/import
+  titles through validated tools.
+
+## Assistant setup
+
+The assistant is disabled by default. Add a Gemini key and enable it in `.env`:
+
+```dotenv
+LLM_ENABLED=true
+GEMINI_API_KEY=...
+LLM_ASSISTANT_MODE=internal_only
+```
+
+Use `external_allowed` only when discovery/scraping tools should be available. External
+and expensive actions still require a structured confirmation form.
+
+Important defaults:
+
+- True provider-token streaming over SSE.
+- 64K cumulative input-token budget per turn.
+- Rolling summaries keep older conversation context while preserving full messages.
+- SAPI/Zira audio downloads default to Microsoft Zira Desktop at 1.35×.
+- Generated MP3 names include the book title, chapter range, and a short unique suffix.
 
 ## Local development
 
@@ -73,8 +103,8 @@ npm run test
 | Milestone | Goal |
 |-----------|------|
 | **A** | v2 parity (library, reader, TTS, scraping) + chat UI placeholder + UI redesign (shadcn, dark mode) |
-| **B** | Basic LLM assistant (tools over library/reader) |
-| **C** | Full conversational scrape/play/discuss (+ discovery) |
+| **B** | Tool-using assistant, true streaming, form HITL, playback/download/settings actions — complete |
+| **C** | Discovery/import and persisted summaries shipped; theme discovery and richer grounded discussion remain |
 
 ## Repo layout
 
