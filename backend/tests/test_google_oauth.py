@@ -184,6 +184,28 @@ async def test_unknown_kid_forced_refetch_is_rate_limited() -> None:
 
 @pytest.mark.unit
 @respx.mock
+async def test_unknown_kid_forced_refetch_failure_still_consumes_rate_limit() -> None:
+    """A failed forced refetch must still consume the rate-limit window.
+
+    Otherwise an upstream JWKS outage would let every subsequent unknown-kid
+    token re-trigger a live forced fetch with no rate limiting at all.
+    """
+    route = respx.get(GOOGLE_JWKS_URL).mock(
+        side_effect=[Response(200, json=_jwks()), Response(500)]
+    )
+    client = GoogleOAuthClient(_settings())
+    with pytest.raises(GoogleAuthError) as excinfo:
+        await client.verify_id_token(_forged_id_token())
+    assert excinfo.value.reason == "jwks_fetch_failed"
+    assert route.call_count == 2
+    with pytest.raises(GoogleAuthError) as excinfo2:
+        await client.verify_id_token(_forged_id_token())
+    assert excinfo2.value.reason == "unknown_signing_key"
+    assert route.call_count == 2  # the failed forced attempt still consumed the window
+
+
+@pytest.mark.unit
+@respx.mock
 async def test_verify_id_token_rejects_forged_signature_with_known_kid() -> None:
     """A token claiming a real kid but signed with an unrelated key must still fail."""
     respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))

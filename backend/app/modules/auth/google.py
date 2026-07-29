@@ -130,9 +130,14 @@ class GoogleOAuthClient:
         if key is not None:
             return key
         # Unrecognized kid: the cached JWKS may be stale (key rotation). Force
-        # exactly one re-fetch, rate-limited, before giving up.
+        # exactly one re-fetch, rate-limited, before giving up. Stamp the
+        # rate-limit window synchronously (no `await` between the check and
+        # the stamp, so this is atomic under asyncio's cooperative scheduling)
+        # and *before* the network call, so a failed refetch still consumes
+        # the window instead of leaving the gate open.
         if not _forced_refresh_allowed():
             raise GoogleAuthError("unknown_signing_key")
+        _jwks_cache["forced_at"] = time.time()
         jwks = await _fetch_jwks(force=True)
         key = _find_key(jwks, kid)
         if key is None:
@@ -171,6 +176,4 @@ async def _fetch_jwks(*, force: bool = False) -> dict[str, Any]:
         raise GoogleAuthError("jwks_fetch_failed") from exc
     _jwks_cache["jwks"] = jwks
     _jwks_cache["fetched_at"] = now
-    if force:
-        _jwks_cache["forced_at"] = now
     return jwks
