@@ -89,7 +89,7 @@ Grounded in phase-0 §14 and the domain services that already exist
 | `list_available_chapters` | `chapters.service` | Chapter index for a book |
 | `get_chapter_content` | `chapters.service` | One chapter's text (owned) |
 | `search_library_content` | summaries + `library`/FTS | Fresh summaries first, then metadata/chapter text |
-| `get_book_summary` | `library` / summaries svc | Read cached summary if fresh (C) |
+| `get_book_summary` **(shipped)** | `library` / summaries svc | Read cached summary if fresh |
 | `get_download_status` | `downloads.service` | Status of a user's download job |
 
 All are `read_only=true`, `touches_external=false`, `allowed_in_internal_only=true`.
@@ -101,14 +101,14 @@ All are `read_only=true`, `touches_external=false`, `allowed_in_internal_only=tr
 | `play_chapter` | `reader.service` + client action | Sets progress + `play_chapter` payload for B4 player |
 | `resume_book` | `reader.service` | Updates "current" pointer; reversible |
 | `create_chapter_download` | `downloads.service` | **Single** chapter job; reuses active job |
-| `summarize_book` / `ensure_book_summary` | summaries svc + `llm` | Writes/refreshes cached summary; bounded cost |
+| `summarize_book` **(shipped)** | `summaries.service` + `llm` | Writes/refreshes cached summary when missing/stale |
 
 `create_chapter_download` for a **single** chapter is low-risk; a **range/full book**
 download is `confirmation_required` (see below).
 
 `summarize_book` is low-risk but **budget-sensitive** — prefer return-cached-if-fresh;
 only call the LLM when missing/stale (content hash changed). See ADR-13.
-### Confirmation-required (HITL form / binary) — **Batch 3 / Milestone C**
+### Confirmation-required (HITL form / binary) — **Batch 3 (partial shipped)**
 
 | Tool | Wraps | Why gated | Typical form fields |
 |------|-------|-----------|---------------------|

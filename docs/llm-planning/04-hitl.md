@@ -138,6 +138,71 @@ opens a **new** SSE stream — avoids holding a socket open; survives reconnects
 `choice_request` clarify chips are shipped; selecting one sends a normal user turn and
 does not bypass any later confirmation gate.
 
+Second form example — range audio download:
+
+```json
+{
+  "type": "confirmation_request",
+  "call_id": "…",
+  "tool": "create_audio_download",
+  "risk": "confirmation_required",
+  "summary": "Generate MP3 for «Martial Peak» chapters 5–12",
+  "args": {
+    "book_id": "…",
+    "chapter_from": 5,
+    "chapter_to": 12,
+    "provider": null,
+    "voice": null,
+    "rate": null
+  },
+  "form": {
+    "fields": [
+      {
+        "name": "chapter_from",
+        "label": "From chapter",
+        "type": "integer",
+        "required": true,
+        "default": 5
+      },
+      {
+        "name": "chapter_to",
+        "label": "To chapter",
+        "type": "integer",
+        "required": true,
+        "default": 12
+      },
+      {
+        "name": "provider",
+        "label": "TTS provider",
+        "type": "string",
+        "required": false,
+        "default": null,
+        "provided": false
+      },
+      {
+        "name": "voice",
+        "label": "Voice",
+        "type": "string",
+        "required": false,
+        "default": null,
+        "provided": false
+      },
+      {
+        "name": "rate",
+        "label": "Playback rate",
+        "type": "number",
+        "required": false,
+        "default": null,
+        "provided": false
+      }
+    ]
+  }
+}
+```
+
+Omitted provider/voice/rate (`provided: false`) inherit current reader settings; SAPI
+defaults to Microsoft Zira Desktop at 1.35×.
+
 ## 6. Persistence
 
 Reuse `tool_call`:

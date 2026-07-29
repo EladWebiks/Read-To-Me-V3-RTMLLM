@@ -1,7 +1,8 @@
 # 01 — Target architecture & request flow
 
-> Current assistant architecture. B1–B4 are implemented; Milestone C extends the same
-> boundaries with discovery, summaries, and richer grounded discussion.
+> Current assistant architecture. B1–B3 and most of B4 are shipped; the optional B4
+> cost meter remains open. Milestone C extends the same boundaries with discovery,
+> summaries, and richer grounded discussion.
 > Product intent: [00-north-star.md](./00-north-star.md).
 
 ## 1. Module map
@@ -66,7 +67,7 @@ sequenceDiagram
             ORCH->>DB: audit tool_call
             ORCH-->>FE: SSE tool_result (redacted)
         else final answer
-            ORCH-->>FE: SSE token stream → done
+            ORCH-->>FE: SSE delta stream → done
         end
     end
     ORCH->>DB: persist assistant message + llm_execution + cost_record

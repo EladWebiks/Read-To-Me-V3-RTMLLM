@@ -50,11 +50,16 @@ and expensive actions still require a structured confirmation form.
 
 Important defaults:
 
-- True provider-token streaming over SSE.
-- 64K cumulative input-token budget per turn.
+- True provider-token streaming over SSE, with Stop to cancel a turn.
+- Live status while tools run; the chat sticks to the bottom unless you scroll up.
+- 64K cumulative input-token budget per turn. Tool rounds enforce the cap; a completed
+  final answer may record soft-limit overage instead of being discarded.
 - Rolling summaries keep older conversation context while preserving full messages.
 - SAPI/Zira audio downloads default to Microsoft Zira Desktop at 1.35×.
+- Confirmed range downloads show in-chat progress and auto-download when ready.
 - Generated MP3 names include the book title, chapter range, and a short unique suffix.
+- Download jobs/objects expire after `DOWNLOAD_JOB_TTL_HOURS` (default 24); arq purges
+  expired rows twice an hour.
 
 ## Local development
 

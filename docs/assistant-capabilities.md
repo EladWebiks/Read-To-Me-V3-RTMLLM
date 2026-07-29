@@ -9,6 +9,7 @@
 - **ייבוא/סקייפ מאתר** דורש מצב `LLM_ASSISTANT_MODE=external_allowed` וטופס אישור (HITL) לפני שהעבודה רצה.
 - אתרים נתמכים לסקייפ: `novelfull.net`, `novelbin.com`, `freewebnovel.com`, `novellunar.com`.
 - טקסט מספרים/אתרים נחשב **מידע**, לא הוראות לעוזר.
+- בזמן תשובה: שורת סטטוס חיה, כפתור **Stop** לביטול, והצ'אט נשאר בתחתית אלא אם גללת למעלה.
 
 ## מה אפשר לבקש
 
@@ -143,6 +144,7 @@ Download chapters 5 through 12 of Martial Peak using Edge, Aria voice, at 1.2x
 
 הכלי `update_ui_settings` משנה רק הגדרות הפיכות ומורשות: theme, גודל גופן,
 מהירות ניגון, browser/server engine, provider/voice ומצב highlighting.
+שינויי theme/font/highlighting חלים מיד גם ב-reader ובספרייה.
 
 ```text
 Switch to dark mode, set the reader font to 1.4rem, and use paragraph highlighting
@@ -209,6 +211,7 @@ Scrape https://novelbin.com/b/some-slug starting at chapter 10, only 20 chapters
 ## מה עדיין לא (בכוונה / בהמשך)
 
 - חיפוש discovery לפי נושא/trope והמלצות סמנטיות (כרגע החיפוש הוא בעיקר לפי כותרת/alias)
+- סיכום מועמד discovery לפני ייבוא (סיכומי ספרים שכבר בספרייה כן נתמכים)
 - הערכת מספר פרקים מלאה בכל מקור (הדירוג משתמש במטא־דאטה הזמין)
 - דיון עשיר ורב־שלבי יותר על ספרים
 - כלים הרסניים/יקרים נוספים: מחיקת ספר, overwrite, retry גדול והורדת ספר מלאה

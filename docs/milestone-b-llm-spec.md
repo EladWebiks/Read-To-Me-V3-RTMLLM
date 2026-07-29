@@ -164,7 +164,9 @@ B1 enforces:
 
 On HTTP 429 / quota errors: classify as `RateLimitError`, do **not** burn the circuit
 breaker as a hard failure until retries are exhausted; surface a clear domain error.
-Conversation/token budgets land in B2/B3 with the orchestrator.
+Conversation/token budgets are shipped in the orchestrator: default
+`LLM_MAX_TURN_TOKENS_IN=64000`. Tool rounds enforce the cap; a completed final answer
+may record soft-limit overage instead of being discarded.
 
 `LLM_ENABLED=false` (default) → Milestone A behaviour unchanged; no provider calls.
 

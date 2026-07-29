@@ -80,7 +80,7 @@ Delivered as small vertical slices so the loop is exercised end-to-end early.
   from originals when stale.
 - Inject summaries as clearly delimited untrusted historical data.
 
-### B3 exit criteria
+### B3 exit criteria — **met (2026-07-29)**
 - Loop is bounded, cancellable, traced (`run_id`).
 - Read-only + low-risk tools live; one **form** HITL tool proven end-to-end (backend).
 - Tool-using turns emit real provider text deltas; no sleep-based response simulation.

@@ -160,8 +160,8 @@ types. Mixed text + tool-call responses remain valid: text is assistant prose, w
 tool executes only after its complete call has been assembled and validated.
 
 Cancellation must close the provider stream, cancel active tool work, and record a
-cancelled/partial execution without fabricating usage. Remove artificial chunking and
-sleep-based pacing once the provider stream is wired.
+cancelled/partial execution without fabricating usage. Artificial chunking and
+sleep-based pacing are removed; the provider stream is wired (B3.4).
 
 **Acceptance criteria:**
 

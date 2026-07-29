@@ -143,7 +143,7 @@ React 19 SPA (Vite)  ──cookie JWT──►  Express 5 API (:3001)  ──►
 - **Auth:** single admin from `ADMIN_USERNAME/PASSWORD`, JWT in httpOnly cookie `rtm_token`, 7-day. **Plaintext** password compare (bcrypt imported but unused). No users collection, no roles, no registration.
 - **Books/Chapters:** Mongoose models; `(book, chapterNumber)` unique; `chapterCount` is a virtual; reading progress on the book doc.
 - **Reader/TTS:** two engines — browser Web Speech API, and server TTS (Edge neural voices via `msedge-tts`, or SAPI via `texttospeechfree.io`). Word/paragraph highlight, Media Session API, wake lock, auto-next, prefetch.
-- **Downloads:** chapter-range MP3 via ffmpeg merge; background "listen jobs" (in-memory, concurrency 3, temp dir, 3h TTL).
+- **Downloads:** chapter-range MP3 via ffmpeg merge; background "listen jobs" (in-memory, concurrency 3, temp dir, 3h TTL). *(v3: arq + MinIO, `DOWNLOAD_JOB_TTL_HOURS` default 24, cron purge twice hourly.)*
 - **Scraper:** 4 adapters (`novelbin`, `novelfull`, `freewebnovel`, `novellunar`), `cloudscraper`+`BeautifulSoup`, per-chapter `next_url` walking, 1.5s delay, content cleaning rules (`cleaning_rules` collection, API-only, no UI). EPUB import. Jobs **in-memory**, direct Mongo writes.
 - **Search:** client-side only over the loaded library. No server search.
 - **No LLM/AI anywhere.**
@@ -408,11 +408,11 @@ A **router** maps `(task, capability, constraints)` → ordered candidate models
 **Execution contract [U]:** LLM proposes a tool + args → orchestrator validates args (Zod) → checks authz + ownership (`ctx.userId`) → checks risk/confirmation & mode (`internal_only`) → rate-limit/idempotency → execute with timeout → validate output → **audit log (`tool_call`)** → return structured result to the model. The **backend is authoritative**; the model never executes anything itself.
 
 **Risk levels [U]:**
-- **Read-only:** `search_user_books`, `get_book_details`, `get_reading_progress`, `get_recently_read_chapters`, `get_chapter_content`, `list_available_chapters`, `get_download_status`, `search_library_content`, `search_internal_discovery`.
-- **Low-risk actions:** `play_chapter`, `pause/resume playback`, `open_book_page`, `create_chapter_download` (small).
-- **Confirmation-required (HITL):** scrape full book / large range, overwrite/delete chapters or books, large archive, **access external websites**, import externally discovered book, retry a large failed job.
+- **Read-only:** `search_user_books`, `get_book_details`, `get_reading_progress`, `get_recently_read_chapters`, `get_chapter_content`, `list_available_chapters`, `get_download_status`, `search_library_content`, `get_book_summary`, `search_discovered_books`.
+- **Low-risk actions:** `play_chapter`, `resume_book`, `open_book`, `create_chapter_download`, `summarize_book`, `update_ui_settings`, `propose_choices`.
+- **Confirmation-required (HITL):** `scrape_book_range`, `create_audio_download`, `import_discovered_book`; plus future overwrite/delete/large archive / retry large failed job.
 
-Phase-2 tool set (from brief): `search_user_books`, `get_book_details`, `get_reading_progress`, `get_recently_read_chapters`, `get_chapter_content`, `play_chapter`, `resume_book`, `list_available_chapters`, `create_chapter_download`, `get_download_status`, `search_library_content`. **[U]**
+Phase-2 tool set (from brief): `search_user_books`, `get_book_details`, `get_reading_progress`, `get_recently_read_chapters`, `get_chapter_content`, `play_chapter`, `resume_book`, `list_available_chapters`, `create_chapter_download`, `get_download_status`, `search_library_content`. **[U]** Extended in B/C with summaries, discovery/import, range audio, and UI settings — see `modules/tools/catalog.py`.
 
 **Orchestration loop [U]** (adapt LLM project's controlled pipeline + HITL): conversation state, tool registry, tool-execution loop with **max iterations / max external requests / max token budget / max wall-clock**, cancellation, retries, fallback, confirmation gates, user-visible progress (SSE), trace IDs, audit, cost accounting. **No uncontrolled agent loops.**
 
@@ -512,9 +512,9 @@ Stakeholder-aligned milestones. Architecture still supports discovery later; del
 | Milestone | Scope | Key deliverables |
 |-----------|-------|------------------|
 | **0** | Discovery & architecture | This plan + rules/skills + ADRs list |
-| **A — v2 parity, better** | Reading + library + scraping (+ TTS/downloads), no real LLM | Auth/users, library, books/chapters, reader + progress, TTS, downloads (arq+MinIO), scraping (4 adapters, durable jobs), FTS search, Docker Compose. **Chat UI placeholder on the reader page** (layout/UX only — no backend, no tools). |
-| **B — basic LLM** | Wire the chat shell to a real assistant | `LLMProvider` + Gemini adapter, chat API + SSE, orchestrator + budgets, read-only / low-risk tools (`search_user_books`, `play_chapter`, `resume_book`, …) |
-| **C — full assistant** | End-to-end conversational product | Confirmation-gated scrape/download tools, summaries, richer library Q&A; discovery (internal/external) if still desired |
+| **A — v2 parity, better** | Reading + library + scraping (+ TTS/downloads), no real LLM | Auth/users, library, books/chapters, reader + progress, TTS, downloads (arq+MinIO), scraping (4 adapters, durable jobs), FTS search, Docker Compose. Chat UI placeholder originally; wired to real assistant in B when `LLM_ENABLED=true`. |
+| **B — basic LLM** | Wire the chat shell to a real assistant | `LLMProvider` + Gemini adapter, chat API + SSE, orchestrator + budgets, tools + form HITL, true streaming, UI settings / play/resume client actions |
+| **C — full assistant** | End-to-end conversational product | **Partial:** title discovery/import, persisted book summaries, range audio downloads. **Open:** theme/trope discovery, candidate summarize-before-import, richer discuss, destructive/large tools, eval harness |
 
 **[R]** Milestone A ships with **zero LLM dependency**. The reader chat panel is UI-only until B.
 
@@ -584,7 +584,7 @@ rtm-v3/
       core/                     # config (pydantic-settings), logging, security, db session, deps
       modules/                  # one package per bounded context
         auth/ users/ library/ books/ chapters/ reader/ audio/
-        downloads/ search/ storage/ jobs/ scraping/ discovery/ summaries/
+        downloads/ search/ storage/ jobs/ scraping/ discovery/ summaries/ imports/
         chat/ llm/ orchestration/ tools/ observability/ admin/ notifications/
       #  each module: router.py, service.py, repository.py, schemas.py, models.py, tests/
       db/                       # SQLAlchemy base, session
@@ -611,7 +611,7 @@ Phase 0 is **done** when:
 - [x] Milestones A/B/C locked (v2 parity first, chat UI placeholder in A, LLM in B+).
 - [x] **Repo skeleton + Docker Compose** up (health checks green).
 - [x] Milestone A feature build substantially complete (auth, library, reader, TTS/downloads, scraping, chat placeholder, UI redesign pass).
-- [ ] Remaining open questions answered (esp. **Q2 languages/TTS**, **Q4 which sites + Cloudflare**, **Q5 copyright posture**, **Q7 EPUB**, **Q12 external discovery sources**).
+- [x] Remaining open questions answered for shipping scope (**Q7 EPUB** shipped via Scraper → Upload EPUB / `modules/imports`; **Q12** title discovery sources shipped). Still open: **Q2 languages/TTS**, **Q4 Cloudflare posture**, **Q5 copyright posture**, theme/trope discovery.
 - [x] Target **domain model (§12)** used as baseline for migrations (books, chapters, downloads, scraping, progress).
 
 ---
@@ -619,8 +619,9 @@ Phase 0 is **done** when:
 ## Immediate next actions
 
 1. Manual smoke-test Milestone A in Docker (scrape → read → TTS → download) and close residual UX bugs.
-2. Decide EPUB (**Q7**) and Cloudflare posture (**Q4**) before calling A fully done.
-3. Then Milestone B (real LLM) and C (full conversational tools).
+2. EPUB (**Q7**) is shipped; remaining A gap is Cloudflare posture (**Q4**) plus smoke-test pass.
+3. Milestone B is done; Milestone C continues (theme discovery, candidate summaries, richer discuss).
 
 > Milestone A feature build + UI redesign gates are green locally (ruff/mypy/pytest, eslint/tsc/vitest).
-> Milestone A has **zero LLM dependency**. Reader chat is UI-only until B.
+> EPUB import lives under `modules/imports` (GUI on `/scraper`, not an assistant tool).
+> With `LLM_ENABLED=true`, reader chat is the real assistant (B+); otherwise it stays inert.

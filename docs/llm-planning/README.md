@@ -106,5 +106,7 @@ Read in this order:
   concrete need — see [05](./05-observability.md)?
 - **[Q4]** Do we want per-conversation budgets to be user-visible (cost meter) in B4,
   or internal-only until C?
+- **[Q5]** Discovery timing — partially resolved: title discovery/import pulled into B/C
+  (Jul 2026); theme/trope search still open.
 - **[Q6]** After theme discovery and richer grounded discussion, does measured quality
   justify adding embeddings/RAG?
