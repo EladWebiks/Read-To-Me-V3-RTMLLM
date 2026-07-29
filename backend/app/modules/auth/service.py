@@ -28,7 +28,11 @@ class AuthService:
     async def login(self, username: str, password: str) -> tuple[UserRead, str]:
         """Validate credentials and return (user, jwt)."""
         user = await self._users.get_entity_by_username(username)
-        if user is None or not verify_password(user.password_hash, password):
+        if (
+            user is None
+            or user.password_hash is None
+            or not verify_password(user.password_hash, password)
+        ):
             raise InvalidCredentialsError
         token = create_access_token(
             user_id=user.id,
