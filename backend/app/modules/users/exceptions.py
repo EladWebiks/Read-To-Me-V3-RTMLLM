@@ -20,3 +20,11 @@ class GoogleIdentityConflictError(UserError):
     `UserService`; `users` must never import from `auth`. `AuthService`
     translates it back into the wire-level `google_identity_conflict` reason.
     """
+
+
+class AdminSelfActionError(UserError):
+    """An admin tried to demote or soft-delete their own account."""
+
+
+class LastAdminError(UserError):
+    """The operation would leave zero active (non-deleted) admins."""

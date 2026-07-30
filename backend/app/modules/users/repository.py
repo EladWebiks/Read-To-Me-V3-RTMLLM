@@ -73,3 +73,25 @@ class UserRepository:
         await self._session.flush()
         await self._session.refresh(user)
         return user
+
+    async def list_all(self, *, limit: int, offset: int) -> tuple[list[User], int]:
+        """Backoffice page over ALL users, newest first, soft-deleted included."""
+        total_stmt = select(func.count()).select_from(User)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = select(User).order_by(User.created_at.desc(), User.id).limit(limit).offset(offset)
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total
+
+    async def get_by_id_any(self, user_id: UUID) -> User | None:
+        """Backoffice lookup that also returns soft-deleted users."""
+        result = await self._session.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+    async def count_active_admins(self) -> int:
+        """Non-deleted users with the admin flag."""
+        stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.is_admin.is_(True), User.deleted_at.is_(None))
+        )
+        return int((await self._session.execute(stmt)).scalar_one())

@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.modules.users.exceptions import (
+    AdminSelfActionError,
     GoogleIdentityConflictError,
+    LastAdminError,
     UserAlreadyExistsError,
     UserNotFoundError,
 )
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
-from app.modules.users.schemas import UserCreate, UserRead
+from app.modules.users.schemas import UserAdminPatch, UserAdminRead, UserCreate, UserRead
 
 
 class UserService:
@@ -166,3 +169,57 @@ class UserService:
             suffix += 1
             candidate = f"{cleaned}{suffix}"
         return candidate
+
+    async def list_users_admin(
+        self, *, limit: int, offset: int
+    ) -> tuple[list[UserAdminRead], int]:
+        """Backoffice page over all users, soft-deleted included."""
+        users, total = await self._repo.list_all(limit=limit, offset=offset)
+        return [UserAdminRead.from_user(user) for user in users], total
+
+    async def update_user_admin(
+        self, *, actor_id: UUID, user_id: UUID, patch: UserAdminPatch
+    ) -> UserAdminRead:
+        """Apply is_admin/membership changes with backoffice safety rails."""
+        user = await self._require_any(user_id)
+        if patch.is_admin is not None and patch.is_admin != user.is_admin:
+            await self._guard_demotion(actor_id, user, demote=not patch.is_admin)
+            user.is_admin = patch.is_admin
+        if patch.membership is not None:
+            user.membership = patch.membership
+        return UserAdminRead.from_user(await self._repo.save(user))
+
+    async def soft_delete_user_admin(self, *, actor_id: UUID, user_id: UUID) -> UserAdminRead:
+        """Soft-delete a user; blocked for self and for the last active admin."""
+        user = await self._require_any(user_id)
+        if user.id == actor_id:
+            raise AdminSelfActionError("self-delete")
+        if user.is_admin and user.deleted_at is None:
+            await self._guard_last_admin()
+        if user.deleted_at is None:
+            user.deleted_at = datetime.now(UTC)
+        return UserAdminRead.from_user(await self._repo.save(user))
+
+    async def restore_user_admin(self, user_id: UUID) -> UserAdminRead:
+        """Clear a user's soft-delete marker."""
+        user = await self._require_any(user_id)
+        user.deleted_at = None
+        return UserAdminRead.from_user(await self._repo.save(user))
+
+    async def _require_any(self, user_id: UUID) -> User:
+        user = await self._repo.get_by_id_any(user_id)
+        if user is None:
+            raise UserNotFoundError(str(user_id))
+        return user
+
+    async def _guard_demotion(self, actor_id: UUID, user: User, *, demote: bool) -> None:
+        if not demote:
+            return
+        if user.id == actor_id:
+            raise AdminSelfActionError("self-demote")
+        if user.deleted_at is None:
+            await self._guard_last_admin()
+
+    async def _guard_last_admin(self) -> None:
+        if await self._repo.count_active_admins() <= 1:
+            raise LastAdminError("at least one active admin must remain")

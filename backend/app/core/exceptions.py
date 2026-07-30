@@ -56,12 +56,18 @@ from app.modules.scraping.exceptions import (
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
-from app.modules.users.exceptions import UserAlreadyExistsError, UserNotFoundError
+from app.modules.users.exceptions import (
+    AdminSelfActionError,
+    LastAdminError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach domain-exception → HTTP status mappings."""
     _register_auth_handlers(app)
+    _register_admin_user_handlers(app)
     _register_library_handlers(app)
     _register_audio_handlers(app)
     _register_download_handlers(app)
@@ -110,6 +116,28 @@ def _register_auth_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=503,
             content={"detail": "Google sign-in is not configured"},
+        )
+
+
+def _register_admin_user_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AdminSelfActionError)
+    async def _admin_self_action(
+        _request: Request,
+        _exc: AdminSelfActionError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Admins cannot demote or delete their own account"},
+        )
+
+    @app.exception_handler(LastAdminError)
+    async def _last_admin(
+        _request: Request,
+        _exc: LastAdminError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "At least one active admin must remain"},
         )
 
 
