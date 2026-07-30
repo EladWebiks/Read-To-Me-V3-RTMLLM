@@ -102,5 +102,5 @@ async def test_soft_delete_then_restore(session: AsyncSession) -> None:
     victim = await service.create(_user("victim"))
     deleted = await service.soft_delete_user_admin(actor_id=admin.id, user_id=victim.id)
     assert deleted.deleted_at is not None
-    restored = await service.restore_user_admin(victim.id)
+    restored = await service.restore_user_admin(actor_id=admin.id, user_id=victim.id)
     assert restored.deleted_at is None

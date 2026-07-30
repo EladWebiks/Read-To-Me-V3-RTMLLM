@@ -87,6 +87,28 @@ class UserRepository:
         result = await self._session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
+    async def get_by_username_any(self, username: str) -> User | None:
+        """Identity-collision lookup: soft-deleted rows included.
+
+        `users.username` is UNIQUE over the whole table, not just over live
+        rows, so a soft-deleted row still owns its username. The
+        deleted-filtered `get_by_username` cannot see it and would let an
+        insert fail on the index instead of on a typed domain error.
+        """
+        result = await self._session.execute(select(User).where(User.username == username))
+        return result.scalar_one_or_none()
+
+    async def get_by_email_any(self, email: str) -> User | None:
+        """Identity-collision lookup by email (case-insensitive), deleted included."""
+        stmt = select(User).where(func.lower(User.email) == email.lower())
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_google_sub_any(self, google_sub: str) -> User | None:
+        """Identity-collision lookup by Google subject id, deleted included."""
+        result = await self._session.execute(select(User).where(User.google_sub == google_sub))
+        return result.scalar_one_or_none()
+
     async def count_active_admins(self) -> int:
         """Non-deleted users with the admin flag."""
         stmt = (

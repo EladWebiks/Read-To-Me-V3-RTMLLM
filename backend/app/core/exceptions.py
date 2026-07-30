@@ -59,6 +59,7 @@ from app.modules.scraping.exceptions import (
 from app.modules.users.exceptions import (
     AdminSelfActionError,
     LastAdminError,
+    UserAccountDisabledError,
     UserAlreadyExistsError,
     UserNotFoundError,
 )
@@ -107,6 +108,18 @@ def _register_auth_handlers(app: FastAPI) -> None:
         _exc: UserAlreadyExistsError,
     ) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "User already exists"})
+
+    @app.exception_handler(UserAccountDisabledError)
+    async def _user_disabled(
+        _request: Request,
+        _exc: UserAccountDisabledError,
+    ) -> JSONResponse:
+        # 403, not 401: the caller's identity is established (a verified Google
+        # identity, or a valid session) — it is the account that is not allowed
+        # to be used, which is the same shape as NotAuthorizedError above. A 401
+        # would invite the client to retry with credentials, and no credential
+        # can help until an admin restores the account.
+        return JSONResponse(status_code=403, content={"detail": "This account is disabled"})
 
     @app.exception_handler(GoogleNotConfiguredError)
     async def _google_not_configured(

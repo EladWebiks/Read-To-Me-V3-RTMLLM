@@ -56,8 +56,8 @@ async def soft_delete_user(
 @router.post("/{user_id}/restore")
 async def restore_user(
     user_id: UUID,
-    _admin: Annotated[UserRead, Depends(require_admin)],
+    admin: Annotated[UserRead, Depends(require_admin)],
     service: Annotated[UserService, Depends(_service)],
 ) -> UserAdminRead:
     """Clear a user's soft-delete marker."""
-    return await service.restore_user_admin(user_id)
+    return await service.restore_user_admin(actor_id=admin.id, user_id=user_id)

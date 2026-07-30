@@ -204,6 +204,26 @@ async def test_resolve_google_identity_raises_users_domain_conflict(
 
 
 @pytest.mark.integration
+async def test_soft_deleted_user_cannot_sign_in_again(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A backoffice soft-delete disables sign-in; only an admin restore undoes it.
+
+    Without the any-scoped lookups the deleted row is invisible, the flow falls
+    through to provisioning and dies on the `google_sub` unique index — a 500
+    dressed up as `internal_error` instead of a decided outcome.
+    """
+    users = UserService(session)
+    admin = await users.create(UserCreate(username="boss", password="password123", is_admin=True))
+    ghost = await users.create_from_google("sub-ghost", "ghost@example.com")
+    await users.soft_delete_user_admin(actor_id=admin.id, user_id=ghost.id)
+    _patch_google(monkeypatch, "sub-ghost", "ghost@example.com")
+    with pytest.raises(GoogleAuthError) as exc_info:
+        await _service(session).login_with_google("code")
+    assert exc_info.value.reason == "account_disabled"
+
+
+@pytest.mark.integration
 async def test_email_match_conflicting_google_sub_rejected(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

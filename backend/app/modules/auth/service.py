@@ -16,7 +16,11 @@ from app.core.config import Settings
 from app.core.security import create_access_token, decode_access_token
 from app.modules.auth.exceptions import GoogleAuthError, NotAuthenticatedError
 from app.modules.auth.google import GoogleOAuthClient
-from app.modules.users.exceptions import GoogleIdentityConflictError, UserNotFoundError
+from app.modules.users.exceptions import (
+    GoogleIdentityConflictError,
+    UserAccountDisabledError,
+    UserNotFoundError,
+)
 from app.modules.users.schemas import UserRead
 from app.modules.users.service import UserService
 
@@ -45,6 +49,14 @@ class AuthService:
             # Re-raised as the auth-domain error so the wire reason (and the
             # frontend's `reason` string) is unchanged by where the rule lives.
             raise GoogleAuthError("google_identity_conflict") from exc
+        except UserAccountDisabledError as exc:
+            # A soft-deleted account: a decided, terminal outcome, so the popup
+            # must report it as one (HTTP 400 + reason) rather than fall into
+            # the catch-all below and claim `internal_error`. The login page has
+            # no message for this reason on purpose — it renders its generic
+            # fallback instead of confirming to an unauthenticated visitor that
+            # the account exists but was disabled.
+            raise GoogleAuthError("account_disabled") from exc
         except Exception:
             # Leave the request-scoped session usable before propagating. A DB
             # error here — e.g. two concurrent first-logins colliding on the

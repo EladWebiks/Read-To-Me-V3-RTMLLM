@@ -22,6 +22,16 @@ class GoogleIdentityConflictError(UserError):
     """
 
 
+class UserAccountDisabledError(UserError):
+    """A soft-deleted account tried to sign in again.
+
+    Soft-deleted identities stay *reserved*: the row keeps its username, email
+    and google_sub (the unique constraints are full, not partial), so sign-in
+    must be refused rather than silently re-provisioning a parallel account or
+    dying on a unique index. Only an explicit admin restore re-opens it.
+    """
+
+
 class AdminSelfActionError(UserError):
     """An admin tried to demote or soft-delete their own account."""
 
