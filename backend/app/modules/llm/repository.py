@@ -198,6 +198,39 @@ class LlmRepository:
             for model, provider in result.all()
         ]
 
+    async def list_providers(self) -> list[ModelProvider]:
+        """All provider rows ordered by name."""
+        result = await self._session.execute(select(ModelProvider).order_by(ModelProvider.name))
+        return list(result.scalars().all())
+
+    async def list_model_configs(self) -> list[ModelConfiguration]:
+        """All model rows ordered by name."""
+        result = await self._session.execute(
+            select(ModelConfiguration).order_by(ModelConfiguration.model_name)
+        )
+        return list(result.scalars().all())
+
+    async def get_provider_by_name(self, name: str) -> ModelProvider | None:
+        """Provider row by unique name."""
+        result = await self._session.execute(
+            select(ModelProvider).where(ModelProvider.name == name)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_model_config(
+        self,
+        provider_id: uuid.UUID,
+        model_name: str,
+    ) -> ModelConfiguration | None:
+        """Model row by (provider_id, model_name)."""
+        result = await self._session.execute(
+            select(ModelConfiguration).where(
+                ModelConfiguration.provider_id == provider_id,
+                ModelConfiguration.model_name == model_name,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def create_conversation(
         self,
         user_id: uuid.UUID,
