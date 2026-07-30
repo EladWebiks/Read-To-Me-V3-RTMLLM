@@ -21,6 +21,7 @@ from app.modules.llm.models import (
     ToolCallRecord,
 )
 from app.modules.llm.registry import ModelSpec
+from app.modules.llm.schemas import ToolCallAdminFilters
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +142,22 @@ class ConversationSummaryWrite:
     summary: str
     through_message_id: uuid.UUID
     source_message_count: int
+
+
+def _tool_call_conditions(filters: ToolCallAdminFilters) -> list[ColumnElement[bool]]:
+    """Translate the optional filter set into WHERE conditions."""
+    conditions: list[ColumnElement[bool]] = []
+    if filters.tool_name:
+        conditions.append(ToolCallRecord.tool_name == filters.tool_name)
+    if filters.status:
+        conditions.append(ToolCallRecord.status == filters.status)
+    if filters.risk_level:
+        conditions.append(ToolCallRecord.risk_level == filters.risk_level)
+    if filters.period_start:
+        conditions.append(ToolCallRecord.created_at >= filters.period_start)
+    if filters.period_end:
+        conditions.append(ToolCallRecord.created_at < filters.period_end)
+    return conditions
 
 
 class LlmRepository:
@@ -596,3 +613,34 @@ class LlmRepository:
             row.duration_ms = data.duration_ms
         await self._session.flush()
         return row
+
+    async def list_tool_calls_admin(
+        self, filters: ToolCallAdminFilters, *, limit: int, offset: int
+    ) -> tuple[list[tuple[ToolCallRecord, uuid.UUID | None]], int]:
+        """Cross-user audit rows, newest first, with owner via the conversation.
+
+        tool_calls has no user_id; attribution joins message → conversation
+        (both llm-module tables). message_id NULL rows attribute to None.
+        """
+        conditions = _tool_call_conditions(filters)
+        total_stmt = select(func.count()).select_from(ToolCallRecord).where(*conditions)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(ToolCallRecord, Conversation.user_id)
+            .join(
+                ConversationMessage,
+                ToolCallRecord.message_id == ConversationMessage.id,
+                isouter=True,
+            )
+            .join(
+                Conversation,
+                ConversationMessage.conversation_id == Conversation.id,
+                isouter=True,
+            )
+            .where(*conditions)
+            .order_by(ToolCallRecord.created_at.desc(), ToolCallRecord.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [(row[0], row[1]) for row in rows], total

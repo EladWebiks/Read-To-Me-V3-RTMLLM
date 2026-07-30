@@ -34,6 +34,8 @@ from app.modules.llm.schemas import (
     ModelRead,
     ModelUsageRead,
     TaskUsageRead,
+    ToolCallAdminFilters,
+    ToolCallAdminRead,
     UserUsageRead,
     UserUsageSummary,
 )
@@ -368,6 +370,29 @@ class LlmService:
             period_start=period_start, period_end=period_end, limit=limit, offset=offset
         )
         return [LlmExecutionRead.model_validate(row) for row in rows], total
+
+    async def list_tool_calls_admin(
+        self, filters: ToolCallAdminFilters, *, limit: int, offset: int
+    ) -> tuple[list[ToolCallAdminRead], int]:
+        """Backoffice tool-call audit page with per-row user attribution."""
+        rows, total = await self._repo.list_tool_calls_admin(filters, limit=limit, offset=offset)
+        items = [
+            ToolCallAdminRead(
+                id=record.id,
+                tool_name=record.tool_name,
+                status=record.status,
+                risk_level=record.risk_level,
+                confirmed_by_user=record.confirmed_by_user,
+                duration_ms=record.duration_ms,
+                input=record.input,
+                output=record.output,
+                error=record.error,
+                user_id=user_id,
+                created_at=record.created_at,
+            )
+            for record, user_id in rows
+        ]
+        return items, total
 
     async def _record(self, ctx: TelemetryContext, result: R, usage: Usage) -> R:
         async def _once() -> tuple[R, Usage]:

@@ -205,3 +205,29 @@ class LlmExecutionRead(BaseModel):
     fallback_used: bool
     error: str | None
     created_at: datetime
+
+
+class ToolCallAdminFilters(BaseModel):
+    """Optional filters for the backoffice tool-call audit list."""
+
+    tool_name: str | None = None
+    status: str | None = None
+    risk_level: str | None = None
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+
+
+class ToolCallAdminRead(BaseModel):
+    """One tool_call audit row; user_id resolved via its conversation."""
+
+    id: UUID
+    tool_name: str
+    status: str
+    risk_level: str
+    confirmed_by_user: bool
+    duration_ms: int | None
+    input: dict[str, Any]
+    output: dict[str, Any] | None
+    error: str | None
+    user_id: UUID | None
+    created_at: datetime
