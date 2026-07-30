@@ -49,7 +49,9 @@ docker compose up --build                        # everything (backend auto-runs
 docker compose up -d postgres redis minio minio-init   # infra only, for native dev
 ```
 
-Web app :3000, API/OpenAPI :8000/docs, MinIO console :9001. Config comes from root `.env` (copy `.env.example` — it's the canonical variable list). A variable only reaches a container if listed in that service's `environment` block in `docker-compose.yml`; keep backend and worker in sync. When adding a setting, update `Settings` (pydantic-settings in `app/core/config.py`), `.env.example`, compose, and README together.
+Web app :3000, API/OpenAPI :8000/docs, MinIO console :9001.
+
+Every setting has exactly one home — never mirror a value across two. Default in the matching group class in `app/core/config.py` (dev-correct, flat env name via `validation_alias`) for anything tunable; `.env` only for real secrets (`GOOGLE_*`, `GEMINI_API_KEY` — these have no default and must never appear in `docker-compose.yml`); the shared `x-app-env` block in `docker-compose.yml` only for values compose produces or provisions (`DATABASE_URL`, `REDIS_URL`, `MINIO_*`). `DATABASE_URL`/`REDIS_URL`/`MINIO_ENDPOINT` are required with no default; set them in `.env` for native dev only, never when running under compose. In tests, build settings with `tests/factories.py::make_settings(**flat_overrides)` — never construct `Settings()` directly.
 
 ### Git commits
 

@@ -262,10 +262,12 @@ cd Read-To-Me-V3-RTMLLM
 cp .env.example .env
 ```
 
-The development defaults work without an LLM key. Before exposing this stack outside
-your machine, change `JWT_SECRET` and all database/MinIO credentials. `ADMIN_PASSWORD`
-is a legacy seed-only value: it is hashed into a column that nothing verifies any more,
-because Google SSO is the only way to sign in. Never commit `.env`; it is ignored by Git.
+The development defaults work without an LLM key — `.env` only needs the Google OAuth
+values from step 2. Before exposing this stack outside your machine, override
+`JWT_SECRET` and all database/MinIO credentials with real environment variables; they
+ship as dev-only defaults in `backend/app/core/config.py`. `ADMIN_PASSWORD` is a legacy
+seed-only value: it is hashed into a column that nothing verifies any more, because
+Google SSO is the only way to sign in. Never commit `.env`; it is ignored by Git.
 
 ### 2. Create a Google OAuth client (required to sign in)
 
@@ -381,19 +383,19 @@ Edit the root `.env`:
 
 ```dotenv
 LLM_ENABLED=true
-LLM_PROVIDER=gemini
-LLM_MODEL=gemini-3.5-flash-lite
 GEMINI_API_KEY=replace-with-your-key
-LLM_ASSISTANT_MODE=internal_only
 ```
 
-`internal_only` is the safest starting mode: the assistant can work with owned data but
-external discovery/scraping tools are hidden. To let chat propose supported-site
-search/import operations, use:
+`LLM_PROVIDER` and `LLM_MODEL` already default to `gemini` / `gemini-3.5-flash-lite`;
+set them only to change those. `LLM_ENABLED=true` without a key now fails fast with a
+settings `ValidationError` at startup, in the worker as well as the API.
 
-```dotenv
-LLM_ASSISTANT_MODE=external_allowed
-```
+The assistant mode is `internal_only` — the safest setting: it can work with owned data
+but external discovery/scraping tools are hidden. It and the other orchestration knobs
+(iteration/token/cost budgets, HITL TTL and round limits) currently live as code-only
+defaults in `LlmRuntimeSettings` and are **not** settable via environment variables; to
+let chat propose supported-site search/import operations, change `assistant_mode` in
+`backend/app/core/config.py` until the runtime-config layer lands.
 
 External/import operations still require a confirmation form. Restart the backend and
 worker after editing `.env`:
@@ -489,34 +491,36 @@ docker compose build backend frontend
 
 ## Configuration
 
-Copy `.env.example`; it is the canonical list of supported environment variables.
-Important groups:
+Settings are grouped sub-models in `backend/app/core/config.py` — `app`, `database`,
+`redis`, `storage`, `auth`, `google`, `scrape`, `audio`, `llm`, `llm_runtime`. Those
+classes are the list of supported variables; each field's flat env name is its
+`validation_alias` (or its own name). This README does not re-enumerate them.
 
-- **Application:** `APP_ENV`, `DEBUG`
-- **PostgreSQL:** `DATABASE_URL`, `TEST_DATABASE_URL`, `DB_*`
-- **Redis:** `REDIS_URL`, `REDIS_PORT`
-- **MinIO:** `MINIO_ENDPOINT`, `MINIO_PUBLIC_ENDPOINT`, credentials, bucket, TLS flag
-- **HTTP/auth:** ports, CORS origins, `JWT_SECRET`, cookie flags, and `ADMIN_USERNAME` /
-  `ADMIN_PASSWORD`. `ADMIN_PASSWORD` is **legacy and seed-only**: startup hashes it into
-  a column that nothing verifies, since password login was removed. It authenticates
-  nothing. `ADMIN_USERNAME` still matters — it names the seeded row that the first
-  Google login claims.
-- **Google SSO:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — all
-  three must be set for Google sign-in to work; login endpoints return 503 while unset,
-  which means nobody can sign in at all. Setup steps are in
-  [Quick start step 2](#2-create-a-google-oauth-client-required-to-sign-in).
-  `VITE_API_URL` must stay same-origin with the web app: the popup reports its result
-  over a `BroadcastChannel` (plus an opener `postMessage` fallback), both scoped to the
-  popup's own origin, so a cross-origin API base breaks sign-in even though every
-  other call would still work.
-- **Downloads:** `DOWNLOAD_JOB_TTL_HOURS`, `SIGNED_URL_EXPIRES_SECONDS`
-- **LLM:** provider/model/key, timeout, retries, token/context limits, assistant mode,
-  HITL expiry/round limits, optional Langfuse flag
+`.env.example` documents only the two categories that belong in `.env`: the real
+secrets (`GOOGLE_*`, `GEMINI_API_KEY`, which have no code default and never appear in
+`docker-compose.yml`) and the three required infra URLs for **native dev only**
+(`DATABASE_URL`, `REDIS_URL`, `MINIO_ENDPOINT` — compose supplies its own). Everything
+else has a dev-correct default in code. The placement rule — every setting has exactly
+one home — lives in `CLAUDE.md`; follow it when adding a setting.
 
-Docker Compose uses the root `.env` for interpolation. A value reaches a container only
-when it is listed under that service's `environment` block in `docker-compose.yml`;
-backend and worker settings should normally be kept in sync. When adding a setting,
-update `Settings`, `.env.example`, Compose, and this README together.
+Two things worth knowing while reading those classes:
+
+- `auth.admin_password` (`ADMIN_PASSWORD`) is **legacy and seed-only**: startup hashes
+  it into a column that nothing verifies, since password login was removed. It
+  authenticates nothing. `auth.admin_username` still matters — it names the seeded row
+  that the first Google login claims.
+- All three `google` values must be set for Google sign-in to work; login endpoints
+  return 503 while any is unset, which means nobody can sign in at all. Setup steps are
+  in [Quick start step 2](#2-create-a-google-oauth-client-required-to-sign-in).
+  `VITE_API_URL` (a frontend build variable, not a `Settings` field) must stay
+  same-origin with the web app: the popup reports its result over a `BroadcastChannel`
+  (plus an opener `postMessage` fallback), both scoped to the popup's own origin, so a
+  cross-origin API base breaks sign-in even though every other call would still work.
+
+Docker Compose uses the root `.env` both for interpolation and — via `env_file` — to
+pass the secrets through to the backend and worker. Its `x-app-env` block carries only
+what compose itself produces or provisions, and is merged into both services, so they
+cannot drift.
 
 Security-sensitive production changes include:
 
@@ -601,7 +605,9 @@ When adding functionality:
 - Do not import another module's repository/models.
 - Add pydantic validation at HTTP, tool, config, and structured-LLM boundaries.
 - Add tests in the same slice.
-- Update `.env.example` and this README when adding configuration.
+- Give a new setting exactly one home (see [Configuration](#configuration)): a
+  dev-correct default on the matching group class in `backend/app/core/config.py` unless
+  it is a real secret or a value compose produces.
 
 ## Testing and quality gates
 
