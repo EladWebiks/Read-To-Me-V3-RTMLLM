@@ -1,9 +1,12 @@
 """End-to-end Google auth endpoint tests (needs Postgres; Google mocked via respx)."""
 
 import json
+import re
 import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any
+from urllib.parse import parse_qsl
+from uuid import uuid4
 
 import jwt
 import pytest
@@ -12,6 +15,7 @@ from app.core.config import get_settings
 from app.core.deps import get_db
 from app.main import app
 from app.modules.auth.google import GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL, reset_jwks_cache
+from app.modules.auth.service import AuthService
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient, Response
@@ -23,6 +27,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
+
+CLIENT_ID = "test-client-id"
+CLIENT_SECRET = "test-secret"
+REDIRECT_URI = "http://test/api/auth/google/callback"
 
 KID = "test-kid"
 _PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -91,13 +99,9 @@ async def _clear_users(engine: AsyncEngine) -> None:
 @pytest.fixture
 async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     settings = get_settings()
-    monkeypatch.setattr(settings, "google_client_id", "test-client-id")
-    monkeypatch.setattr(settings, "google_client_secret", "test-secret")
-    monkeypatch.setattr(
-        settings,
-        "google_redirect_uri",
-        "http://test/api/auth/google/callback",
-    )
+    monkeypatch.setattr(settings, "google_client_id", CLIENT_ID)
+    monkeypatch.setattr(settings, "google_client_secret", CLIENT_SECRET)
+    monkeypatch.setattr(settings, "google_redirect_uri", REDIRECT_URI)
     reset_jwks_cache()
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -109,6 +113,28 @@ async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
     await _clear_users(engine)
     await engine.dispose()
+
+
+_PAYLOAD_RE = re.compile(r"postMessage\((\{.*?\}), window\.location\.origin\)")
+
+
+def _popup_payload(response: Response) -> dict[str, Any]:
+    """Parse the postMessage payload out of the popup page.
+
+    Asserting on the parsed object (rather than on raw substrings like
+    '"ok": true') keeps these tests independent of json.dumps whitespace and
+    of the \\uXXXX escaping the router applies before embedding the JSON in an
+    inline <script>.
+    """
+    match = _PAYLOAD_RE.search(response.text)
+    assert match is not None, response.text
+    payload: dict[str, Any] = json.loads(match.group(1))
+    return payload
+
+
+def _assert_popup(response: Response, *, ok: bool, reason: str | None) -> None:
+    assert response.headers["cache-control"] == "no-store"
+    assert _popup_payload(response) == {"type": "rtm-google-auth", "ok": ok, "reason": reason}
 
 
 def _state_cookie_header(response: Response) -> str:
@@ -137,8 +163,8 @@ async def test_google_login_redirects_with_state(client: AsyncClient) -> None:
 @pytest.mark.integration
 @respx.mock
 async def test_google_callback_full_flow(client: AsyncClient) -> None:
-    respx.post(GOOGLE_TOKEN_URL).mock(
-        return_value=Response(200, json={"id_token": _id_token("test-client-id")})
+    token_route = respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
     )
     respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
 
@@ -148,8 +174,22 @@ async def test_google_callback_full_flow(client: AsyncClient) -> None:
         "/api/auth/google/callback", params={"code": "auth-code", "state": state}
     )
     assert callback.status_code == 200
-    assert '"ok": true' in callback.text
+    _assert_popup(callback, ok=True, reason=None)
     assert "rtm_token" in callback.cookies
+
+    # Assert the *outbound* exchange, not just our handling of the canned
+    # response: a wrong grant_type, a dropped client_secret or a redirect_uri
+    # that doesn't match the one registered with Google would otherwise pass
+    # the entire suite and fail only against the real provider.
+    request = token_route.calls.last.request
+    assert request.headers["content-type"] == "application/x-www-form-urlencoded"
+    assert dict(parse_qsl(request.content.decode())) == {
+        "code": "auth-code",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "redirect_uri": REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
 
     me = await client.get("/api/auth/me")
     assert me.status_code == 200
@@ -158,22 +198,139 @@ async def test_google_callback_full_flow(client: AsyncClient) -> None:
 
 @pytest.mark.integration
 @respx.mock
+async def test_google_callback_rejects_replayed_state(client: AsyncClient) -> None:
+    """The state cookie is single-use: replaying a spent state must be refused."""
+    token_route = respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
+    )
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+
+    start = await client.get("/api/auth/google/login")
+    state = start.cookies["rtm_oauth_state"]
+    first = await client.get(
+        "/api/auth/google/callback", params={"code": "auth-code", "state": state}
+    )
+    assert first.status_code == 200
+    assert token_route.call_count == 1
+
+    replay = await client.get(
+        "/api/auth/google/callback", params={"code": "auth-code", "state": state}
+    )
+    assert replay.status_code == 400
+    _assert_popup(replay, ok=False, reason="state_mismatch")
+    # The successful callback deleted the state cookie, so the replay can't
+    # even reach the code exchange.
+    assert token_route.call_count == 1
+
+
+@pytest.mark.integration
+@respx.mock
 async def test_google_callback_rejects_state_mismatch(client: AsyncClient) -> None:
     token_route = respx.post(GOOGLE_TOKEN_URL).mock(
-        return_value=Response(200, json={"id_token": _id_token("test-client-id")})
+        return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
     )
     await client.get("/api/auth/google/login")
     response = await client.get(
         "/api/auth/google/callback", params={"code": "auth-code", "state": "wrong"}
     )
     assert response.status_code == 400
-    assert '"ok": false' in response.text
-    assert "state_mismatch" in response.text
+    _assert_popup(response, ok=False, reason="state_mismatch")
     assert "rtm_token" not in response.cookies
     # The single most important property of this test: Google is never
     # contacted when the state doesn't match, since that would mean a code
     # exchange happened before the CSRF check.
     assert token_route.call_count == 0
+
+
+@pytest.mark.integration
+@respx.mock
+async def test_google_callback_rejects_non_ascii_state(client: AsyncClient) -> None:
+    """A non-ASCII state must yield the normal popup error, not an unhandled 500.
+
+    secrets.compare_digest raises TypeError on non-ASCII str operands; without
+    the ASCII guard this request escapes the popup contract entirely.
+    """
+    token_route = respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
+    )
+    await client.get("/api/auth/google/login")
+    response = await client.get(
+        "/api/auth/google/callback", params={"code": "auth-code", "state": "é"}
+    )
+    assert response.status_code == 400
+    _assert_popup(response, ok=False, reason="state_mismatch")
+    assert token_route.call_count == 0
+
+
+@pytest.mark.integration
+async def test_google_callback_unexpected_error_is_still_a_popup(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exception the endpoint doesn't map must still close the popup.
+
+    Without the catch-all, the central JSON error body renders *inside* the
+    popup, which then never posts a message and never closes.
+    """
+
+    async def _boom(self: AuthService, code: str) -> tuple[object, str]:
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(AuthService, "login_with_google", _boom)
+
+    start = await client.get("/api/auth/google/login")
+    state = start.cookies["rtm_oauth_state"]
+    response = await client.get(
+        "/api/auth/google/callback", params={"code": "auth-code", "state": state}
+    )
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    _assert_popup(response, ok=False, reason="internal_error")
+    assert "rtm_token" not in response.cookies
+
+
+async def _insert_google_sub_squatter(google_sub: str) -> None:
+    """Soft-delete a user holding `google_sub`, invisible to every repository read.
+
+    The unique index on google_sub is not partial, so provisioning still
+    collides — the same IntegrityError two concurrent first-logins would hit,
+    reachable deterministically through the real code path.
+    """
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO users (id, username, email, google_sub, role, deleted_at)"
+                " VALUES (:id, 'ghost', 'ghost@example.com', :sub, 'user', now())"
+            ),
+            {"id": str(uuid4()), "sub": google_sub},
+        )
+    await engine.dispose()
+
+
+@pytest.mark.integration
+@respx.mock
+async def test_google_callback_db_error_is_still_a_popup(client: AsyncClient) -> None:
+    """An IntegrityError must not resurface as a bare 500 during teardown.
+
+    A failed flush poisons the request transaction; the catch-all returns a
+    popup, and then the request-scoped session commits in dependency teardown.
+    Unless the aborted transaction is rolled back first, that commit raises
+    *after* the popup was produced and the client sees a plain 500 instead.
+    """
+    respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
+    )
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    await _insert_google_sub_squatter("google-sub-e2e")
+
+    start = await client.get("/api/auth/google/login")
+    state = start.cookies["rtm_oauth_state"]
+    response = await client.get(
+        "/api/auth/google/callback", params={"code": "auth-code", "state": state}
+    )
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    _assert_popup(response, ok=False, reason="internal_error")
 
 
 @pytest.mark.integration
@@ -190,8 +347,7 @@ async def test_google_callback_handles_google_auth_error(client: AsyncClient) ->
         "/api/auth/google/callback", params={"code": "auth-code", "state": state}
     )
     assert response.status_code == 400
-    assert '"ok": false' in response.text
-    assert "token_exchange_failed" in response.text
+    _assert_popup(response, ok=False, reason="token_exchange_failed")
     assert "rtm_token" not in response.cookies
 
 
@@ -199,7 +355,23 @@ async def test_google_callback_handles_google_auth_error(client: AsyncClient) ->
 async def test_google_callback_handles_denied(client: AsyncClient) -> None:
     response = await client.get("/api/auth/google/callback", params={"error": "access_denied"})
     assert response.status_code == 400
-    assert "google_denied" in response.text
+    _assert_popup(response, ok=False, reason="google_denied")
+
+
+@pytest.mark.integration
+async def test_popup_reason_cannot_break_out_of_the_script_block(client: AsyncClient) -> None:
+    """Every '<' in the embedded JSON is \\u003c-escaped.
+
+    Guards the inline <script> against a reason value that would otherwise push
+    the HTML tokenizer into the script-data-double-escaped state.
+    """
+    from app.modules.auth.router import _popup_response
+
+    body = _popup_response(ok=False, reason="<!--<script>", status_code=400).body
+    page = bytes(body).decode()
+    assert "<!--" not in page
+    assert page.count("<script>") == 1
+    assert _popup_payload(Response(400, text=page))["reason"] == "<!--<script>"
 
 
 @pytest.mark.integration
