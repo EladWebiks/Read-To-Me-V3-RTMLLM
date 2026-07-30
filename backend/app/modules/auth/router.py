@@ -61,6 +61,17 @@ def _popup_response(*, ok: bool, reason: str | None, status_code: int) -> HTMLRe
     return HTMLResponse(content=html, status_code=status_code)
 
 
+def _popup_error(reason: str, status_code: int) -> HTMLResponse:
+    """Failure variant of the popup response; also clears the spent state cookie.
+
+    The state cookie is single-use — clear it on every terminal failure path,
+    not just success, so a stale value can't be replayed for up to its full TTL.
+    """
+    response = _popup_response(ok=False, reason=reason, status_code=status_code)
+    response.delete_cookie(key=STATE_COOKIE_NAME, path=STATE_COOKIE_PATH)
+    return response
+
+
 @router.get("/google/login")
 async def google_login(
     settings: Annotated[Settings, Depends(get_settings)],
@@ -74,7 +85,12 @@ async def google_login(
         value=state,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
+        # Hardcoded, not settings.cookie_samesite: the callback is a cross-site
+        # top-level navigation from accounts.google.com, which "Strict" cookies
+        # are not sent on. If cookie_samesite were ever set to "strict", every
+        # Google login would break with an opaque state_mismatch. "Lax" is
+        # required here regardless of the session cookie's own SameSite policy.
+        samesite="lax",
         max_age=STATE_TTL_SECONDS,
         path=STATE_COOKIE_PATH,
     )
@@ -92,14 +108,14 @@ async def google_callback(
 ) -> HTMLResponse:
     """Finish the flow: validate state, exchange code, set session cookie."""
     if error or not code:
-        return _popup_response(ok=False, reason="google_denied", status_code=400)
+        return _popup_error("google_denied", 400)
     expected = request.cookies.get(STATE_COOKIE_NAME)
-    if not state or not expected or state != expected:
-        return _popup_response(ok=False, reason="state_mismatch", status_code=400)
+    if not state or not expected or not secrets.compare_digest(state, expected):
+        return _popup_error("state_mismatch", 400)
     try:
         _user, token = await service.login_with_google(code)
     except GoogleAuthError as exc:
-        return _popup_response(ok=False, reason=exc.reason, status_code=400)
+        return _popup_error(exc.reason, 400)
     response = _popup_response(ok=True, reason=None, status_code=200)
     _set_auth_cookie(response, token, settings)
     response.delete_cookie(key=STATE_COOKIE_NAME, path=STATE_COOKIE_PATH)
