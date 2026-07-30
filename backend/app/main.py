@@ -40,34 +40,34 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
-    configure_logging(debug=settings.debug)
+    configure_logging(debug=settings.app.debug)
 
     app = FastAPI(
-        title=settings.app_name,
+        title=settings.app.name,
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.app.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     register_exception_handlers(app)
-    app.include_router(health_router, prefix=settings.api_prefix)
-    app.include_router(auth_router, prefix=settings.api_prefix)
-    app.include_router(library_router, prefix=settings.api_prefix)
-    app.include_router(chapters_router, prefix=settings.api_prefix)
-    app.include_router(reader_router, prefix=settings.api_prefix)
-    app.include_router(audio_router, prefix=settings.api_prefix)
-    app.include_router(downloads_router, prefix=settings.api_prefix)
-    app.include_router(scraping_router, prefix=settings.api_prefix)
-    app.include_router(imports_router, prefix=settings.api_prefix)
-    app.include_router(discovery_router, prefix=settings.api_prefix)
-    app.include_router(llm_router, prefix=settings.api_prefix)
-    app.include_router(chat_router, prefix=settings.api_prefix)
+    app.include_router(health_router, prefix=settings.app.api_prefix)
+    app.include_router(auth_router, prefix=settings.app.api_prefix)
+    app.include_router(library_router, prefix=settings.app.api_prefix)
+    app.include_router(chapters_router, prefix=settings.app.api_prefix)
+    app.include_router(reader_router, prefix=settings.app.api_prefix)
+    app.include_router(audio_router, prefix=settings.app.api_prefix)
+    app.include_router(downloads_router, prefix=settings.app.api_prefix)
+    app.include_router(scraping_router, prefix=settings.app.api_prefix)
+    app.include_router(imports_router, prefix=settings.app.api_prefix)
+    app.include_router(discovery_router, prefix=settings.app.api_prefix)
+    app.include_router(llm_router, prefix=settings.app.api_prefix)
+    app.include_router(chat_router, prefix=settings.app.api_prefix)
     return app
 
 

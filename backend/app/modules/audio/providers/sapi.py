@@ -28,7 +28,7 @@ class SapiTtsProvider:
             voices = await self._local.list_voices()
             if voices:
                 return voices
-        if get_settings().sapi_proxy_enabled:
+        if get_settings().audio.sapi_proxy_enabled:
             return await self._proxy.list_voices()
         return [
             VoiceInfo(
@@ -44,8 +44,8 @@ class SapiTtsProvider:
             try:
                 return await self._local.synthesize(text, voice, rate)
             except Exception:
-                if not get_settings().sapi_proxy_enabled:
+                if not get_settings().audio.sapi_proxy_enabled:
                     raise
-        if not get_settings().sapi_proxy_enabled:
+        if not get_settings().audio.sapi_proxy_enabled:
             raise RuntimeError("SAPI unavailable (not Windows and proxy disabled)")
         return await self._proxy.synthesize(text, voice, rate)

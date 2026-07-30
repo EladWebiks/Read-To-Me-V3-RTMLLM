@@ -67,14 +67,14 @@ async def fetch_html(
     settings = get_settings()
     req_headers = {"User-Agent": _USER_AGENT, **(headers or {})}
     async with httpx.AsyncClient(
-        timeout=settings.scrape_timeout_seconds,
+        timeout=settings.scrape.timeout_seconds,
         follow_redirects=True,
         max_redirects=5,
         headers=req_headers,
     ) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        raw = resp.content[: settings.scrape_max_bytes]
+        raw = resp.content[: settings.scrape.max_bytes]
         return raw.decode(resp.encoding or "utf-8", errors="replace")
 
 
@@ -90,14 +90,14 @@ async def post_form_html(
     settings = get_settings()
     req_headers = {"User-Agent": _USER_AGENT, **(headers or {})}
     async with httpx.AsyncClient(
-        timeout=settings.scrape_timeout_seconds,
+        timeout=settings.scrape.timeout_seconds,
         follow_redirects=True,
         max_redirects=5,
         headers=req_headers,
     ) as client:
         resp = await client.post(url, data=form)
         resp.raise_for_status()
-        raw = resp.content[: settings.scrape_max_bytes]
+        raw = resp.content[: settings.scrape.max_bytes]
         return raw.decode(resp.encoding or "utf-8", errors="replace")
 
 
@@ -106,11 +106,11 @@ async def fetch_bytes(url: str, allowlist: set[str]) -> bytes:
     validate_url(url, allowlist)
     settings = get_settings()
     async with httpx.AsyncClient(
-        timeout=settings.scrape_timeout_seconds,
+        timeout=settings.scrape.timeout_seconds,
         follow_redirects=True,
         max_redirects=5,
         headers={"User-Agent": _USER_AGENT},
     ) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        return resp.content[: settings.scrape_max_bytes]
+        return resp.content[: settings.scrape.max_bytes]

@@ -12,4 +12,4 @@ router = APIRouter(tags=["health"])
 async def health() -> HealthResponse:
     """Return API liveness status."""
     settings = get_settings()
-    return HealthResponse(status="ok", service=settings.app_name)
+    return HealthResponse(status="ok", service=settings.app.name)

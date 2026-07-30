@@ -7,9 +7,11 @@ from app.core.config import (
     GoogleSsoSettings,
     LlmRuntimeSettings,
     RedisSettings,
+    Settings,
     StorageSettings,
 )
 from pydantic import ValidationError
+from pydantic_settings import BaseSettings
 
 from tests.factories import make_settings
 
@@ -110,3 +112,24 @@ def test_llm_runtime_ignores_legacy_env_names(monkeypatch: pytest.MonkeyPatch) -
     runtime = LlmRuntimeSettings(_env_file=None)
     assert runtime.max_tool_iters == 6
     assert runtime.assistant_mode == "internal_only"
+
+
+@pytest.mark.unit
+def test_app_scrape_audio_defaults() -> None:
+    settings = make_settings(app_name="RTM test", scrape_delay_seconds=0.5)
+    assert settings.app.name == "RTM test"
+    assert settings.app.api_prefix == "/api"
+    # The dockerized frontend origin must be covered without compose help.
+    assert "http://localhost" in settings.app.cors_origins
+    assert settings.scrape.timeout_seconds == 20
+    assert settings.scrape.max_bytes == 2_097_152
+    assert settings.scrape.delay_seconds == 0.5
+    assert settings.audio.sapi_proxy_enabled is True
+
+
+@pytest.mark.unit
+def test_root_is_groups_only() -> None:
+    for field in Settings.model_fields.values():
+        annotation = field.annotation
+        assert isinstance(annotation, type)
+        assert issubclass(annotation, BaseSettings)

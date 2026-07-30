@@ -10,6 +10,8 @@ from app.modules.audio.providers.edge import _edge_rate
 from app.modules.audio.providers.sapi import SapiTtsProvider
 from app.modules.audio.providers.sapi_local import LocalSapiProvider
 
+from tests.factories import make_settings
+
 
 @pytest.mark.unit
 def test_edge_rate_formatting() -> None:
@@ -30,7 +32,7 @@ async def test_sapi_prefers_local_when_available(
     proxy.synthesize = AsyncMock(return_value=b"proxy-mp3")
     monkeypatch.setattr(
         "app.modules.audio.providers.sapi.get_settings",
-        lambda: MagicMock(sapi_proxy_enabled=True),
+        lambda: make_settings(sapi_proxy_enabled=True),
     )
     provider = SapiTtsProvider(local=local, proxy=proxy)
     result = await provider.synthesize("hello", "Microsoft Zira Desktop", 1.0)
@@ -54,7 +56,7 @@ async def test_sapi_falls_back_to_proxy(
     )
     monkeypatch.setattr(
         "app.modules.audio.providers.sapi.get_settings",
-        lambda: MagicMock(sapi_proxy_enabled=True),
+        lambda: make_settings(sapi_proxy_enabled=True),
     )
     provider = SapiTtsProvider(local=local, proxy=proxy)
     result = await provider.synthesize("hello", "Microsoft Zira Desktop", 1.0)

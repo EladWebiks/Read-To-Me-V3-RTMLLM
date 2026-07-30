@@ -70,7 +70,7 @@ async def _walk(session: AsyncSession, repo: ScrapingRepository, job: ScrapingJo
     hosts = _build_hosts(source)
     await _maybe_cover(session, job, adapter, hosts)
     url: str | None = job.start_url
-    delay = source.rate_limit_seconds if source else get_settings().scrape_delay_seconds
+    delay = source.rate_limit_seconds if source else get_settings().scrape.delay_seconds
     while url:
         await session.refresh(job)
         if job.status == "cancelled":

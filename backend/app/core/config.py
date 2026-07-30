@@ -18,6 +18,21 @@ class _GroupSettings(BaseSettings):
     )
 
 
+class AppSettings(_GroupSettings):
+    """App identity and HTTP surface."""
+
+    name: str = Field(default="RTM v3", validation_alias="app_name")
+    env: str = Field(default="local", validation_alias="app_env")
+    debug: bool = False
+    api_prefix: str = "/api"
+    # Native dev (:5173), dockerized frontend (:3000), and port-80 host.
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost",
+    ]
+
+
 class DatabaseSettings(_GroupSettings):
     """Postgres connection. Supplied by docker-compose in containers."""
 
@@ -79,6 +94,20 @@ class GoogleSsoSettings(_GroupSettings):
     redirect_uri: str | None = Field(default=None, validation_alias="google_redirect_uri")
 
 
+class ScrapeSettings(_GroupSettings):
+    """Outbound fetch limits (central fetch service / SSRF guard)."""
+
+    timeout_seconds: int = Field(default=20, validation_alias="scrape_timeout_seconds")
+    max_bytes: int = Field(default=2_097_152, validation_alias="scrape_max_bytes")  # 2 MB
+    delay_seconds: float = Field(default=1.5, validation_alias="scrape_delay_seconds")
+
+
+class AudioSettings(_GroupSettings):
+    """TTS provider toggles."""
+
+    sapi_proxy_enabled: bool = True
+
+
 class LlmSettings(_GroupSettings):
     """LLM provider config (Milestone B). Off by default.
 
@@ -127,35 +156,18 @@ class LlmRuntimeSettings(_GroupSettings):
 
 
 class Settings(BaseSettings):
-    """Runtime configuration loaded from environment / `.env`."""
+    """Runtime configuration, composed of env-loaded groups."""
 
-    model_config = SettingsConfigDict(
-        # Repo-root `.env` (compose / local) plus optional `backend/.env` override.
-        env_file=("../.env", ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(extra="ignore")
 
-    app_name: str = "RTM v3"
-    app_env: str = "local"
-    debug: bool = False
-    api_prefix: str = "/api"
-
+    app: AppSettings = Field(default_factory=AppSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
-
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
-
     auth: AuthSettings = Field(default_factory=AuthSettings)
     google: GoogleSsoSettings = Field(default_factory=GoogleSsoSettings)
-
-    scrape_timeout_seconds: int = 20
-    scrape_max_bytes: int = 2_097_152  # 2 MB
-    scrape_delay_seconds: float = 1.5
-
-    sapi_proxy_enabled: bool = True
-
+    scrape: ScrapeSettings = Field(default_factory=ScrapeSettings)
+    audio: AudioSettings = Field(default_factory=AudioSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     llm_runtime: LlmRuntimeSettings = Field(default_factory=LlmRuntimeSettings)
 
