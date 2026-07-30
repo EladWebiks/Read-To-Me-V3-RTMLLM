@@ -13,6 +13,7 @@ def import_all_models() -> None:
     from app.modules.library import models as library_models
     from app.modules.llm import models as llm_models
     from app.modules.reader import models as reader_models
+    from app.modules.runtime_config import models as runtime_config_models
     from app.modules.scraping import models as scraping_models
     from app.modules.summaries import models as summaries_models
     from app.modules.users import models as users_models
@@ -25,6 +26,7 @@ def import_all_models() -> None:
         library_models,
         llm_models,
         reader_models,
+        runtime_config_models,
         scraping_models,
         summaries_models,
         users_models,

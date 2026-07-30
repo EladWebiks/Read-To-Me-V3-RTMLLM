@@ -23,6 +23,8 @@ CLEAR_ORDER = (
     "tool_calls",
     "conversation_messages",
     "conversations",
+    "app_settings_audit",
+    "app_settings",
     "users",
 )
 
