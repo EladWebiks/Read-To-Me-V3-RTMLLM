@@ -1,5 +1,11 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
-import { AdminLayout, AdminPlaceholder, SettingsPage, UsersPage } from '@/features/admin'
+import {
+  AdminLayout,
+  AdminPlaceholder,
+  CatalogPage,
+  SettingsPage,
+  UsersPage,
+} from '@/features/admin'
 import { LoginPage, ProtectedRoute, PublicOnlyRoute, RequireAdmin } from '@/features/auth'
 import { ChapterEditorPage, ChapterNewPage, LibraryPage } from '@/features/library'
 import { libraryBookHref } from '@/features/library/logic/libraryPaths'
@@ -42,7 +48,7 @@ export function App() {
                 <Route path="users" element={<UsersPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="usage" element={<AdminPlaceholder />} />
-                <Route path="catalog" element={<AdminPlaceholder />} />
+                <Route path="catalog" element={<CatalogPage />} />
                 <Route path="tool-calls" element={<AdminPlaceholder />} />
                 <Route path="jobs" element={<AdminPlaceholder />} />
               </Route>

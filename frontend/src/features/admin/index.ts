@@ -1,4 +1,5 @@
 export { AdminLayout } from './components/AdminLayout'
 export { AdminPlaceholder } from './components/AdminPlaceholder'
+export { CatalogPage } from './components/catalog/CatalogPage'
 export { SettingsPage } from './components/settings/SettingsPage'
 export { UsersPage } from './components/users/UsersPage'
