@@ -9,7 +9,8 @@ const user: User = {
   username: 'idan',
   email: 'idan.avin@gmail.com',
   picture_url: 'https://lh3.example.com/photo.jpg',
-  role: 'admin',
+  is_admin: true,
+  membership: 'free',
   created_at: '2026-07-30T00:00:00Z',
 }
 
