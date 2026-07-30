@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
-import { AdminLayout, AdminPlaceholder } from '@/features/admin'
+import { AdminLayout, AdminPlaceholder, UsersPage } from '@/features/admin'
 import { LoginPage, ProtectedRoute, PublicOnlyRoute, RequireAdmin } from '@/features/auth'
 import { ChapterEditorPage, ChapterNewPage, LibraryPage } from '@/features/library'
 import { libraryBookHref } from '@/features/library/logic/libraryPaths'
@@ -39,7 +39,7 @@ export function App() {
             <Route element={<RequireAdmin />}>
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/admin/users" replace />} />
-                <Route path="users" element={<AdminPlaceholder />} />
+                <Route path="users" element={<UsersPage />} />
                 <Route path="settings" element={<AdminPlaceholder />} />
                 <Route path="usage" element={<AdminPlaceholder />} />
                 <Route path="catalog" element={<AdminPlaceholder />} />
