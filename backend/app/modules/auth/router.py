@@ -1,4 +1,4 @@
-"""Auth HTTP routes: login, logout, me."""
+"""Auth HTTP routes: Google login, logout, me."""
 
 import json
 import secrets
@@ -12,7 +12,7 @@ from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user, get_db
 from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleOAuthClient
-from app.modules.auth.schemas import LoginRequest, LoginResponse, MeResponse
+from app.modules.auth.schemas import MeResponse
 from app.modules.auth.service import AuthService
 from app.modules.users.schemas import UserRead
 
@@ -120,19 +120,6 @@ async def google_callback(
     _set_auth_cookie(response, token, settings)
     response.delete_cookie(key=STATE_COOKIE_NAME, path=STATE_COOKIE_PATH)
     return response
-
-
-@router.post("/login", response_model=LoginResponse)
-async def login(
-    body: LoginRequest,
-    response: Response,
-    service: Annotated[AuthService, Depends(_auth_service)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> LoginResponse:
-    """Authenticate and set the session cookie."""
-    user, token = await service.login(body.username, body.password)
-    _set_auth_cookie(response, token, settings)
-    return LoginResponse(user=user)
 
 
 @router.post("/logout", status_code=204)

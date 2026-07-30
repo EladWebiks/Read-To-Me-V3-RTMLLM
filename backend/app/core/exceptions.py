@@ -8,11 +8,7 @@ from app.modules.audio.exceptions import (
     TextTooLongError,
     UnknownProviderError,
 )
-from app.modules.auth.exceptions import (
-    GoogleNotConfiguredError,
-    InvalidCredentialsError,
-    NotAuthenticatedError,
-)
+from app.modules.auth.exceptions import GoogleNotConfiguredError, NotAuthenticatedError
 from app.modules.books.exceptions import BookNotFoundError
 from app.modules.chapters.exceptions import (
     ChapterNotFoundError,
@@ -63,13 +59,6 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 def _register_auth_handlers(app: FastAPI) -> None:
-    @app.exception_handler(InvalidCredentialsError)
-    async def _invalid_credentials(
-        _request: Request,
-        _exc: InvalidCredentialsError,
-    ) -> JSONResponse:
-        return JSONResponse(status_code=401, content={"detail": "Invalid credentials"})
-
     @app.exception_handler(NotAuthenticatedError)
     async def _not_authenticated(
         _request: Request,

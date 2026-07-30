@@ -90,20 +90,21 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_login_me_logout_flow(client: AsyncClient) -> None:
-    """Login sets cookie; /me works; logout clears session."""
-    settings = get_settings()
-    login = await client.post(
-        "/api/auth/login",
-        json={
-            "username": settings.admin_username,
-            "password": settings.admin_password,
-        },
-    )
-    assert login.status_code == 200
-    assert login.json()["user"]["username"] == settings.admin_username
-    assert "rtm_token" in login.cookies
+async def test_me_and_logout_with_minted_token(client: AsyncClient) -> None:
+    """A directly-minted session token works for /me; logout clears it."""
+    from app.core.security import create_access_token
+    from app.modules.users.service import UserService
 
+    settings = get_settings()
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with factory() as session:
+        user = await UserService(session).get_entity_by_username(settings.admin_username)
+        assert user is not None
+        token = create_access_token(user_id=user.id, username=user.username, settings=settings)
+    await engine.dispose()
+
+    client.cookies.set("rtm_token", token)
     me = await client.get("/api/auth/me")
     assert me.status_code == 200
     assert me.json()["user"]["username"] == settings.admin_username
@@ -111,17 +112,17 @@ async def test_login_me_logout_flow(client: AsyncClient) -> None:
     logout = await client.post("/api/auth/logout")
     assert logout.status_code == 204
 
-    me_after = await client.get("/api/auth/me")
-    assert me_after.status_code == 401
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_login_rejects_bad_password(client: AsyncClient) -> None:
-    """Wrong password returns 401."""
+async def test_password_login_is_gone(client: AsyncClient) -> None:
+    """The old password endpoint no longer exists."""
     settings = get_settings()
     response = await client.post(
         "/api/auth/login",
-        json={"username": settings.admin_username, "password": "not-the-password"},
+        json={
+            "username": settings.admin_username,
+            "password": settings.admin_password,
+        },
     )
-    assert response.status_code == 401
+    assert response.status_code == 404

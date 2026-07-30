@@ -8,16 +8,8 @@ import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.security import (
-    create_access_token,
-    decode_access_token,
-    verify_password,
-)
-from app.modules.auth.exceptions import (
-    GoogleAuthError,
-    InvalidCredentialsError,
-    NotAuthenticatedError,
-)
+from app.core.security import create_access_token, decode_access_token
+from app.modules.auth.exceptions import GoogleAuthError, NotAuthenticatedError
 from app.modules.auth.google import GoogleClaims, GoogleOAuthClient
 from app.modules.users.models import User
 from app.modules.users.schemas import UserRead
@@ -30,22 +22,6 @@ class AuthService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._users = UserService(session)
         self._settings = settings
-
-    async def login(self, username: str, password: str) -> tuple[UserRead, str]:
-        """Validate credentials and return (user, jwt)."""
-        user = await self._users.get_entity_by_username(username)
-        if (
-            user is None
-            or user.password_hash is None
-            or not verify_password(user.password_hash, password)
-        ):
-            raise InvalidCredentialsError
-        token = create_access_token(
-            user_id=user.id,
-            username=user.username,
-            settings=self._settings,
-        )
-        return UserRead.model_validate(user), token
 
     async def login_with_google(self, code: str) -> tuple[UserRead, str]:
         """Complete the Google code flow and return (user, jwt)."""
