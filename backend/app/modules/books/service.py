@@ -83,7 +83,7 @@ async def _to_read(book: Book, chapter_count: int) -> BookRead:
     payload = BookRead.model_validate(book)
     cover_url: str | None = None
     if book.cover_object_key:
-        expires = get_settings().signed_url_expires_seconds
+        expires = get_settings().storage.signed_url_expires_seconds
         cover_url = await presigned_get(book.cover_object_key, expires)
     return payload.model_copy(
         update={"chapter_count": chapter_count, "cover_url": cover_url},

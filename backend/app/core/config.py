@@ -3,7 +3,51 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class _GroupSettings(BaseSettings):
+    """Shared loading behavior for every settings group."""
+
+    model_config = SettingsConfigDict(
+        # Repo-root `.env` (native dev / secrets) plus optional `backend/.env`.
+        env_file=("../.env", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class DatabaseSettings(_GroupSettings):
+    """Postgres connection. Supplied by docker-compose in containers."""
+
+    url: str = Field(validation_alias="database_url")
+
+
+class RedisSettings(_GroupSettings):
+    """Redis / arq connection. Supplied by docker-compose in containers."""
+
+    url: str = Field(validation_alias="redis_url")
+
+
+class StorageSettings(_GroupSettings):
+    """MinIO object storage + blob retention.
+
+    `endpoint` is compose-supplied and required. The credentials keep dev
+    defaults that match the compose-provisioned MinIO server; override both
+    together (compose interpolates the same two variables into the server).
+    """
+
+    endpoint: str = Field(validation_alias="minio_endpoint")
+    access_key: str = Field(default="rtm", validation_alias="minio_access_key")
+    secret_key: str = Field(default="rtmsecret", validation_alias="minio_secret_key")
+    bucket: str = Field(default="rtm", validation_alias="minio_bucket")
+    secure: bool = Field(default=False, validation_alias="minio_secure")
+    # Host used inside signed URLs (browser-facing). Defaults to endpoint.
+    public_endpoint: str | None = Field(default=None, validation_alias="minio_public_endpoint")
+    signed_url_expires_seconds: int = 3600
+    # Retention for generated MP3 jobs and MinIO objects (hours).
+    download_job_ttl_hours: int = 24
 
 
 class Settings(BaseSettings):
@@ -21,16 +65,9 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api"
 
-    database_url: str = "postgresql+asyncpg://rtm:rtm@localhost:5432/rtm"
-    redis_url: str = "redis://localhost:6379/0"
-
-    minio_endpoint: str = "localhost:9000"
-    minio_access_key: str = "rtm"
-    minio_secret_key: str = "rtmsecret"
-    minio_bucket: str = "rtm"
-    minio_secure: bool = False
-    # Host used inside signed URLs (browser-facing). Defaults to minio_endpoint.
-    minio_public_endpoint: str | None = None
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
@@ -55,9 +92,6 @@ class Settings(BaseSettings):
     scrape_delay_seconds: float = 1.5
 
     sapi_proxy_enabled: bool = True
-    signed_url_expires_seconds: int = 3600
-    # Retention for generated MP3 jobs and MinIO objects (hours).
-    download_job_ttl_hours: int = 24
 
     # LLM (Milestone B). Off by default so Milestone A stays LLM-free.
     llm_enabled: bool = False

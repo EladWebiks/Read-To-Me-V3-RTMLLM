@@ -80,7 +80,7 @@ async def _mint_token(
 async def client() -> AsyncIterator[AsyncClient]:
     """Authenticated ASGI client with a clean library."""
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     session_factory = async_sessionmaker(
         engine,
         expire_on_commit=False,

@@ -26,7 +26,7 @@ async def _clear_users(sess: AsyncSession) -> None:
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as sess:
         await _clear_users(sess)

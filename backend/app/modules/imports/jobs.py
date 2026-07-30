@@ -108,7 +108,7 @@ async def _run_import(
 ) -> None:
     job = _jobs[job_id]
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     try:
         await _import_with_session(factory, job, req, file_payloads)

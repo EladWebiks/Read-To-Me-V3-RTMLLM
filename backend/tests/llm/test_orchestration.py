@@ -32,7 +32,7 @@ from tests.llm.stream_fakes import stream_from_call
 @pytest.fixture
 async def orch_session() -> AsyncIterator[AsyncSession]:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session

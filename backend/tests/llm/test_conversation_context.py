@@ -25,7 +25,7 @@ from tests.factories import make_settings
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(get_settings().database_url)
+    engine = create_async_engine(get_settings().database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         yield db

@@ -14,7 +14,7 @@ _pool: ArqRedis | None = None
 
 def redis_settings() -> RedisSettings:
     """Build arq Redis settings from app config."""
-    return RedisSettings.from_dsn(get_settings().redis_url)
+    return RedisSettings.from_dsn(get_settings().redis.url)
 
 
 async def get_arq_pool() -> ArqRedis:

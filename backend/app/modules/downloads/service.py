@@ -193,7 +193,7 @@ class DownloadService:
 
     async def _presign(self, object_key: str, filename: str) -> DownloadUrlRead:
         settings = get_settings()
-        expires = settings.signed_url_expires_seconds
+        expires = settings.storage.signed_url_expires_seconds
         url = await presigned_get(object_key, expires)
         return DownloadUrlRead(
             url=url,
@@ -225,5 +225,5 @@ class DownloadService:
 
 
 def _ttl_deadline() -> datetime:
-    hours = get_settings().download_job_ttl_hours
+    hours = get_settings().storage.download_job_ttl_hours
     return datetime.now(UTC) + timedelta(hours=hours)

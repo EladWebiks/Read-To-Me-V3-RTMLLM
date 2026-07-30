@@ -69,7 +69,7 @@ async def _seed_admin(session_factory: async_sessionmaker[AsyncSession]) -> None
 async def client() -> AsyncIterator[AsyncClient]:
     """ASGI client against the migrated database (clears users per test)."""
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     session_factory = async_sessionmaker(
         engine,
         expire_on_commit=False,
@@ -100,7 +100,7 @@ async def test_me_and_logout_with_minted_token(client: AsyncClient) -> None:
     from app.modules.users.service import UserService
 
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
         user = await UserService(session).get_entity_by_username(settings.admin_username)

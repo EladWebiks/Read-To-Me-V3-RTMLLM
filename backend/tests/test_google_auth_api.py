@@ -103,7 +103,7 @@ async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(settings, "google_client_secret", CLIENT_SECRET)
     monkeypatch.setattr(settings, "google_redirect_uri", REDIRECT_URI)
     reset_jwks_cache()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     await _clear_users(engine)
     app.dependency_overrides[get_db] = _make_db_override(session_factory)
@@ -300,7 +300,7 @@ async def _insert_google_sub_squatter(google_sub: str) -> None:
     collides — the same IntegrityError two concurrent first-logins would hit,
     reachable deterministically through the real code path.
     """
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     async with engine.begin() as conn:
         await conn.execute(
             text(

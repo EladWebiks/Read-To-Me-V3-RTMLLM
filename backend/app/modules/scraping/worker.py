@@ -32,7 +32,7 @@ async def run_scrape_job(_ctx: object, job_id: str) -> None:
 
     import_all_models()
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     try:
         async with factory() as session:

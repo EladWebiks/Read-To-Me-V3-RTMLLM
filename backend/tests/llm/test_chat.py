@@ -29,7 +29,7 @@ def test_chat_sse_event_encode() -> None:
 @pytest.fixture
 async def chat_session() -> AsyncIterator[AsyncSession]:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session

@@ -33,7 +33,7 @@ _URL = "https://novelfull.net/book/foo.html"
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         yield db
