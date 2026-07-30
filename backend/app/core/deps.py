@@ -10,6 +10,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.modules.auth.exceptions import NotAuthenticatedError, NotAuthorizedError
 from app.modules.auth.service import AuthService
+from app.modules.runtime_config.service import RuntimeConfigService
 from app.modules.users.membership import Membership, meets_minimum
 from app.modules.users.schemas import UserRead
 
@@ -60,3 +61,15 @@ def require_membership(
         return current_user
 
     return _require
+
+
+async def get_effective_settings(
+    session: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Settings:
+    """Settings with DB overrides applied to runtime-tunable sections.
+
+    Drop-in for `get_settings` — consumers migrate one Depends at a time.
+    Cheap when the per-process cache is warm (no DB query).
+    """
+    return await RuntimeConfigService(session, settings).effective_settings()

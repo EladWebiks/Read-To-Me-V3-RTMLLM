@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_current_user, get_db
+from app.core.deps import get_current_user, get_db, get_effective_settings
 from app.modules.llm.chat_service import ChatService
 from app.modules.llm.schemas import (
     ChatRequest,
@@ -35,7 +35,7 @@ def _llm_service(
 
 def _chat_service(
     session: Annotated[AsyncSession, Depends(get_db)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_effective_settings)],
 ) -> ChatService:
     return ChatService(session, settings)
 
