@@ -8,7 +8,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.modules.users.exceptions import UserAlreadyExistsError, UserNotFoundError
+from app.modules.users.exceptions import (
+    GoogleIdentityConflictError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import UserCreate, UserRead
@@ -68,19 +72,61 @@ class UserService:
         """True when any user already signed in with Google."""
         return await self._repo.any_google_linked()
 
+    async def resolve_google_identity(
+        self, *, google_sub: str, email: str, admin_username: str
+    ) -> UserRead:
+        """Map a verified Google identity onto a user row, provisioning if needed.
+
+        Rules, in precedence order:
+        1. match by `google_sub` (a returning user, even if their email changed);
+        2. match by email — link the Google identity to that existing account;
+        3. first Google login overall claims the seeded admin row named by
+           `admin_username` (accepted risk: no email allowlist gates this);
+        4. otherwise provision a fresh user.
+
+        `admin_username` is passed in rather than read from `Settings` so this
+        module stays free of app configuration.
+        """
+        normalized = email.lower()
+        by_sub = await self._repo.get_by_google_sub(google_sub)
+        if by_sub is not None:
+            return UserRead.model_validate(by_sub)
+        by_email = await self._repo.get_by_email(normalized)
+        if by_email is not None:
+            linked = await self._link_or_reject_conflict(by_email, google_sub, normalized)
+            return UserRead.model_validate(linked)
+        if not await self._repo.any_google_linked():
+            admin = await self._repo.get_by_username(admin_username)
+            if admin is not None:
+                return UserRead.model_validate(
+                    await self.link_google(admin, google_sub, normalized)
+                )
+        return UserRead.model_validate(await self.create_from_google(google_sub, normalized))
+
+    async def _link_or_reject_conflict(self, user: User, google_sub: str, email: str) -> User:
+        """Refuse to rebind an email match already linked to a different sub."""
+        # The `!= google_sub` half is unreachable in the current call path: the
+        # `google_sub` lookup above already missed, so a non-NULL `google_sub`
+        # here is necessarily a different one. Kept as a defensive invariant so
+        # the guard stays correct if this helper is ever called from elsewhere.
+        if user.google_sub is not None and user.google_sub != google_sub:
+            raise GoogleIdentityConflictError(email)
+        return await self.link_google(user, google_sub, email)
+
     async def link_google(self, user: User, google_sub: str, email: str) -> User:
         """Attach a Google identity to an existing user."""
         user.google_sub = google_sub
         if user.email is None:
-            user.email = email
+            user.email = email.lower()
         return await self._repo.save(user)
 
     async def create_from_google(self, google_sub: str, email: str) -> User:
         """Provision a new user from a verified Google identity."""
-        username = await self._unique_username(email.split("@")[0])
+        normalized = email.lower()
+        username = await self._unique_username(normalized.split("@")[0])
         user = User(
             username=username,
-            email=email,
+            email=normalized,
             password_hash=None,
             google_sub=google_sub,
             role="user",

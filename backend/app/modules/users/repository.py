@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User
@@ -36,8 +36,18 @@ class UserRepository:
         return user
 
     async def get_by_email(self, email: str) -> User | None:
-        """Return a non-deleted user by email."""
-        stmt = select(User).where(User.email == email, User.deleted_at.is_(None))
+        """Return a non-deleted user by email, case-insensitively.
+
+        Email is case-insensitive in practice, and rows seeded before Google
+        SSO may hold mixed case (e.g. "Owner@Example.com"). Comparing verbatim
+        would miss the match and silently fork a second, parallel account
+        instead of linking the existing one, stranding its library. Writes
+        normalize to lower case; this `lower()` covers legacy rows.
+        """
+        stmt = select(User).where(
+            func.lower(User.email) == email.lower(),
+            User.deleted_at.is_(None),
+        )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 

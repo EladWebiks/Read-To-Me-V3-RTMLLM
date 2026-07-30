@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleClaims, GoogleOAuthClient
 from app.modules.auth.service import AuthService
+from app.modules.users.exceptions import GoogleIdentityConflictError
 from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from sqlalchemy import text
@@ -112,6 +113,54 @@ async def test_second_google_account_provisions_new_user(
     user, _ = await _service(session).login_with_google("code")
     assert user.username == "two"
     assert user.username != settings.admin_username
+
+
+@pytest.mark.integration
+async def test_email_match_is_case_insensitive(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A mixed-case stored email must still be matched (linked), not forked.
+
+    Without case-insensitive matching the email rule misses and the login
+    silently provisions a second, parallel account — stranding the original
+    account's library.
+    """
+    users = UserService(session)
+    await users.create_from_google("sub-first", "first@example.com")  # rule 3 spent
+    await users.create(
+        UserCreate(
+            username="mixedcase",
+            password="password123",
+            email="Owner@Example.com",
+            role="user",
+        )
+    )
+    _patch_google(monkeypatch, "sub-mixed", "owner@example.com")
+    user, _ = await _service(session).login_with_google("code")
+    assert user.username == "mixedcase"
+    assert await users.get_entity_by_google_sub("sub-mixed") is not None
+
+
+@pytest.mark.integration
+async def test_resolve_google_identity_raises_users_domain_conflict(
+    session: AsyncSession,
+) -> None:
+    """The rule lives in `users`, so the guard raises the users-domain error.
+
+    AuthService translates it back to GoogleAuthError("google_identity_conflict")
+    — see test_email_match_conflicting_google_sub_rejected for the wire contract.
+    """
+    users = UserService(session)
+    await users.create(
+        UserCreate(username="direct", password="password123", email="d@example.com", role="user")
+    )
+    entity = await users.get_entity_by_email("d@example.com")
+    assert entity is not None
+    await users.link_google(entity, "sub-old", "d@example.com")
+    with pytest.raises(GoogleIdentityConflictError):
+        await users.resolve_google_identity(
+            google_sub="sub-new", email="d@example.com", admin_username="admin"
+        )
 
 
 @pytest.mark.integration

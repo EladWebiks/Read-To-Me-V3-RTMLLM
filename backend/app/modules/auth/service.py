@@ -1,4 +1,9 @@
-"""Auth business logic (login / token)."""
+"""Auth business logic: Google sign-in and session-token issue/validation.
+
+Identity *matching* rules live in `users` — this module only orchestrates the
+OAuth exchange and mints the session token. It never touches `users` ORM
+entities (CLAUDE.md: module A calls module B's service, never its models).
+"""
 
 from __future__ import annotations
 
@@ -10,8 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.security import create_access_token, decode_access_token
 from app.modules.auth.exceptions import GoogleAuthError, NotAuthenticatedError
-from app.modules.auth.google import GoogleClaims, GoogleOAuthClient
-from app.modules.users.models import User
+from app.modules.auth.google import GoogleOAuthClient
+from app.modules.users.exceptions import GoogleIdentityConflictError, UserNotFoundError
 from app.modules.users.schemas import UserRead
 from app.modules.users.service import UserService
 
@@ -20,6 +25,7 @@ class AuthService:
     """Authenticate users and issue/validate session tokens."""
 
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
         self._users = UserService(session)
         self._settings = settings
 
@@ -28,34 +34,32 @@ class AuthService:
         client = GoogleOAuthClient(self._settings)
         id_token = await client.exchange_code(code)
         claims = await client.verify_id_token(id_token)
-        user = await self._resolve_google_user(claims)
+        try:
+            user = await self._users.resolve_google_identity(
+                google_sub=claims.sub,
+                email=str(claims.email),
+                admin_username=self._settings.admin_username,
+            )
+        except GoogleIdentityConflictError as exc:
+            # Re-raised as the auth-domain error so the wire reason (and the
+            # frontend's `reason` string) is unchanged by where the rule lives.
+            raise GoogleAuthError("google_identity_conflict") from exc
+        except Exception:
+            # Leave the request-scoped session usable before propagating. A DB
+            # error here — e.g. two concurrent first-logins colliding on the
+            # google_sub unique index — poisons the transaction, and the router
+            # deliberately converts unexpected exceptions into a popup response
+            # rather than re-raising. Without this rollback the session's commit
+            # would then fail during dependency teardown, replacing that popup
+            # with the bare 500 the popup contract exists to prevent.
+            await self._session.rollback()
+            raise
         token = create_access_token(
             user_id=user.id,
             username=user.username,
             settings=self._settings,
         )
-        return UserRead.model_validate(user), token
-
-    async def _resolve_google_user(self, claims: GoogleClaims) -> User:
-        """Spec matching rules: sub → email → first-login admin claim → provision."""
-        email = str(claims.email)
-        user = await self._users.get_entity_by_google_sub(claims.sub)
-        if user is not None:
-            return user
-        by_email = await self._users.get_entity_by_email(email)
-        if by_email is not None:
-            return await self._link_or_reject_conflict(by_email, claims.sub, email)
-        if not await self._users.any_google_linked():
-            admin = await self._users.get_entity_by_username(self._settings.admin_username)
-            if admin is not None:
-                return await self._users.link_google(admin, claims.sub, email)
-        return await self._users.create_from_google(claims.sub, email)
-
-    async def _link_or_reject_conflict(self, user: User, google_sub: str, email: str) -> User:
-        """Refuse to rebind an email match already linked to a different sub."""
-        if user.google_sub is not None and user.google_sub != google_sub:
-            raise GoogleAuthError("google_identity_conflict")
-        return await self._users.link_google(user, google_sub, email)
+        return user, token
 
     async def user_from_token(self, token: str) -> UserRead:
         """Resolve the authenticated user from a JWT."""
@@ -64,7 +68,7 @@ class AuthService:
             user_id = UUID(str(payload["sub"]))
         except (jwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
             raise NotAuthenticatedError from exc
-        user = await self._users.get_entity_by_id(user_id)
-        if user is None:
-            raise NotAuthenticatedError
-        return UserRead.model_validate(user)
+        try:
+            return await self._users.get_by_id(user_id)
+        except UserNotFoundError as exc:
+            raise NotAuthenticatedError from exc
