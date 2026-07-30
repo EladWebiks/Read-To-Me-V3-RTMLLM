@@ -80,7 +80,11 @@ async def client() -> AsyncIterator[AsyncClient]:
     await _seed_admin(session_factory)
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as http:
+    # base_url uses a dotted host ("test.local", not "test"): Python's
+    # http.cookiejar special-cases single-label hostnames when matching a
+    # cookie's Domain attribute, which breaks domain-scoped cookie handling
+    # below (see test_me_and_logout_with_minted_token).
+    async with AsyncClient(transport=transport, base_url="http://test.local") as http:
         yield http
 
     app.dependency_overrides.clear()
@@ -104,13 +108,23 @@ async def test_me_and_logout_with_minted_token(client: AsyncClient) -> None:
         token = create_access_token(user_id=user.id, username=user.username, settings=settings)
     await engine.dispose()
 
-    client.cookies.set("rtm_token", token)
+    # domain="test.local" must match the ASGITransport host (base_url set in
+    # the `client` fixture above). Without an explicit, matching domain,
+    # httpx's cookiejar stores this manually-injected cookie as a
+    # domain-less entry that the logout response's host-scoped Set-Cookie
+    # cannot expire, so the client would keep sending the "deleted" cookie
+    # and /me would wrongly still return 200 after logout — a cookie-jar
+    # artifact, not real proof that logout invalidates the session.
+    client.cookies.set("rtm_token", token, domain="test.local", path="/")
     me = await client.get("/api/auth/me")
     assert me.status_code == 200
     assert me.json()["user"]["username"] == settings.admin_username
 
     logout = await client.post("/api/auth/logout")
     assert logout.status_code == 204
+
+    me_after = await client.get("/api/auth/me")
+    assert me_after.status_code == 401
 
 
 @pytest.mark.integration
