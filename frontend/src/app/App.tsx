@@ -4,6 +4,7 @@ import {
   AdminPlaceholder,
   CatalogPage,
   SettingsPage,
+  UsagePage,
   UsersPage,
 } from '@/features/admin'
 import { LoginPage, ProtectedRoute, PublicOnlyRoute, RequireAdmin } from '@/features/auth'
@@ -47,7 +48,7 @@ export function App() {
                 <Route index element={<Navigate to="/admin/users" replace />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="settings" element={<SettingsPage />} />
-                <Route path="usage" element={<AdminPlaceholder />} />
+                <Route path="usage" element={<UsagePage />} />
                 <Route path="catalog" element={<CatalogPage />} />
                 <Route path="tool-calls" element={<AdminPlaceholder />} />
                 <Route path="jobs" element={<AdminPlaceholder />} />
