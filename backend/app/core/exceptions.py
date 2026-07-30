@@ -30,8 +30,12 @@ from app.modules.downloads.exceptions import (
 from app.modules.imports.exceptions import ImportJobNotFoundError, InvalidEpubUploadError
 from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.llm.exceptions import (
+    AdapterNotRegisteredError,
     CapabilityNotSupportedError,
+    CatalogModelNotFoundError,
+    CatalogProviderNotFoundError,
     ConversationNotFoundError,
+    DuplicateCatalogModelError,
     LlmConfigError,
     LlmDisabledError,
     LlmProviderError,
@@ -65,6 +69,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_import_handlers(app)
     _register_discovery_handlers(app)
     _register_llm_handlers(app)
+    _register_llm_catalog_handlers(app)
     _register_runtime_config_handlers(app)
 
 
@@ -345,3 +350,36 @@ def _register_runtime_config_handlers(app: FastAPI) -> None:
         exc: SettingValueInvalidError,
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+def _register_llm_catalog_handlers(app: FastAPI) -> None:
+    @app.exception_handler(CatalogProviderNotFoundError)
+    async def _catalog_provider_missing(
+        _request: Request,
+        exc: CatalogProviderNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": f"Unknown provider: {exc}"})
+
+    @app.exception_handler(CatalogModelNotFoundError)
+    async def _catalog_model_missing(
+        _request: Request,
+        exc: CatalogModelNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": f"Unknown model: {exc}"})
+
+    @app.exception_handler(AdapterNotRegisteredError)
+    async def _catalog_no_adapter(
+        _request: Request,
+        exc: AdapterNotRegisteredError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": f"No adapter registered for provider: {exc}"},
+        )
+
+    @app.exception_handler(DuplicateCatalogModelError)
+    async def _catalog_duplicate(
+        _request: Request,
+        exc: DuplicateCatalogModelError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": f"Model already exists: {exc}"})
