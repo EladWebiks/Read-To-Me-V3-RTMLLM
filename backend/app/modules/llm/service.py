@@ -50,7 +50,7 @@ class LlmService:
         self._router = ModelRouter(settings)
         self._telemetry = LlmTelemetry(
             session,
-            build_tracer(langfuse_enabled=settings.langfuse_enabled),
+            build_tracer(langfuse_enabled=settings.llm.langfuse_enabled),
         )
 
     @property
@@ -65,9 +65,9 @@ class LlmService:
 
     def ensure_enabled(self) -> None:
         """Raise if LLM is off or misconfigured."""
-        if not self._settings.llm_enabled:
+        if not self._settings.llm.enabled:
             raise LlmDisabledError("LLM_ENABLED is false")
-        if self._settings.llm_provider == "gemini" and not self._settings.gemini_api_key:
+        if self._settings.llm.provider == "gemini" and not self._settings.llm.gemini_api_key:
             raise LlmConfigError("GEMINI_API_KEY is required when LLM is enabled")
 
     def list_public_models(self) -> ModelListResponse:
@@ -86,9 +86,9 @@ class LlmService:
             for m in list_models(enabled_only=False)
         ]
         return ModelListResponse(
-            llm_enabled=self._settings.llm_enabled,
-            default_provider=self._settings.llm_provider,
-            default_model=self._settings.llm_model,
+            llm_enabled=self._settings.llm.enabled,
+            default_provider=self._settings.llm.provider,
+            default_model=self._settings.llm.model,
             models=models,
         )
 

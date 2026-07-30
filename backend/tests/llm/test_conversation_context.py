@@ -38,8 +38,8 @@ def _settings(trigger: int) -> Settings:
         gemini_api_key="test-key",
         llm_provider="gemini",
         llm_model="gemini-3.5-flash-lite",
-        llm_summary_trigger_tokens=trigger,
-        llm_context_recent_messages=8,
+        summary_trigger_tokens=trigger,
+        context_recent_messages=8,
     )
 
 

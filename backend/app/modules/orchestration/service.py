@@ -369,7 +369,7 @@ class OrchestrationService:
         return ToolCallingRequest(
             messages=messages,
             tools=self._registry.list_specs(ctx.mode),
-            max_output_tokens=self._settings.llm_max_output_tokens,
+            max_output_tokens=self._settings.llm.max_output_tokens,
             task="chat_tools",
         )
 
@@ -427,7 +427,7 @@ class OrchestrationService:
             yield event
 
     async def _pause_for_confirm(self, pack: _PausePack) -> AsyncIterator[ChatSseEvent]:
-        if pack.hitl_rounds >= self._settings.llm_max_hitl_rounds:
+        if pack.hitl_rounds >= self._settings.llm_runtime.max_hitl_rounds:
             async for event in _fail_tool(
                 pack.messages, pack.call, "max confirmation rounds exceeded"
             ):
@@ -451,7 +451,7 @@ class OrchestrationService:
                 budget=pack.budget,
                 usage=pack.usage,
                 hitl_rounds=pack.hitl_rounds + 1,
-                ttl_seconds=self._settings.llm_hitl_ttl_seconds,
+                ttl_seconds=self._settings.llm_runtime.hitl_ttl_seconds,
                 proposed=proposed,
                 provided_fields=set(pack.call.arguments),
                 summary=summary,
@@ -507,7 +507,7 @@ class OrchestrationService:
             user_id=user_id,
             conversation_id=conversation_id,
             run_id=run_id,
-            mode=_parse_mode(self._settings.llm_assistant_mode),
+            mode=_parse_mode(self._settings.llm_runtime.assistant_mode),
             session=self._session,
         )
 

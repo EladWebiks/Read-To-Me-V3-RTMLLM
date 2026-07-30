@@ -5,6 +5,7 @@ from app.core.config import (
     AuthSettings,
     DatabaseSettings,
     GoogleSsoSettings,
+    LlmRuntimeSettings,
     RedisSettings,
     StorageSettings,
 )
@@ -70,3 +71,42 @@ def test_google_sso_has_no_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert google.client_id is None
     assert google.client_secret is None
     assert google.redirect_uri is None
+
+
+@pytest.mark.unit
+def test_llm_enabled_requires_gemini_key() -> None:
+    with pytest.raises(ValidationError, match="GEMINI_API_KEY"):
+        make_settings(llm_enabled=True, gemini_api_key=None)
+
+
+@pytest.mark.unit
+def test_llm_disabled_allows_missing_key() -> None:
+    settings = make_settings(llm_enabled=False, gemini_api_key=None)
+    assert settings.llm.enabled is False
+
+
+@pytest.mark.unit
+def test_llm_runtime_defaults() -> None:
+    runtime = make_settings(max_tool_iters=2).llm_runtime
+    assert runtime.max_tool_iters == 2
+    assert runtime.max_external_calls == 3
+    assert runtime.max_turn_tokens_in == 64_000
+    assert runtime.max_turn_tokens_out == 8_192
+    assert runtime.max_turn_cost_usd == 0.05
+    assert runtime.run_deadline_seconds == 60
+    assert runtime.context_recent_messages == 10
+    assert runtime.summary_trigger_tokens == 12_000
+    assert runtime.summary_max_output_tokens == 1_200
+    assert runtime.assistant_mode == "internal_only"
+    assert runtime.hitl_ttl_seconds == 900
+    assert runtime.max_hitl_rounds == 3
+
+
+@pytest.mark.unit
+def test_llm_runtime_ignores_legacy_env_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The 12 knobs are code-only until the runtime-config layer lands."""
+    monkeypatch.setenv("LLM_MAX_TOOL_ITERS", "99")
+    monkeypatch.setenv("LLM_ASSISTANT_MODE", "external_allowed")
+    runtime = LlmRuntimeSettings(_env_file=None)
+    assert runtime.max_tool_iters == 6
+    assert runtime.assistant_mode == "internal_only"

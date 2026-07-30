@@ -30,12 +30,12 @@ class RunBudget:
     def from_settings(cls, settings: Settings) -> RunBudget:
         """Build budget from app settings."""
         return cls(
-            max_iters=settings.llm_max_tool_iters,
-            max_external_calls=settings.llm_max_external_calls,
-            max_tokens_in=settings.llm_max_turn_tokens_in,
-            max_tokens_out=settings.llm_max_turn_tokens_out,
-            max_cost_usd=settings.llm_max_turn_cost_usd,
-            deadline_mono=time.monotonic() + settings.llm_run_deadline_seconds,
+            max_iters=settings.llm_runtime.max_tool_iters,
+            max_external_calls=settings.llm_runtime.max_external_calls,
+            max_tokens_in=settings.llm_runtime.max_turn_tokens_in,
+            max_tokens_out=settings.llm_runtime.max_turn_tokens_out,
+            max_cost_usd=settings.llm_runtime.max_turn_cost_usd,
+            deadline_mono=time.monotonic() + settings.llm_runtime.run_deadline_seconds,
         )
 
     def begin_iter(self) -> None:

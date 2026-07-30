@@ -37,8 +37,8 @@ class ModelRouter:
         """Enabled models for capability, preferred settings model first."""
         return models_for_capability(
             capability,
-            prefer_provider=self._settings.llm_provider,
-            prefer_model=self._settings.llm_model,
+            prefer_provider=self._settings.llm.provider,
+            prefer_model=self._settings.llm.model,
         )
 
     def build(self, model: ModelSpec) -> GeminiProvider:

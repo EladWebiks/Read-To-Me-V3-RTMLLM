@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.bootstrap import seed_admin_user
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.orm import import_all_models
@@ -37,21 +37,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-def _validate_llm_startup(settings: Settings) -> None:
-    """Fail fast when LLM is on but the provider key is missing."""
-    from app.modules.llm.exceptions import LlmConfigError
-
-    if not settings.llm_enabled:
-        return
-    if settings.llm_provider == "gemini" and not settings.gemini_api_key:
-        raise LlmConfigError("GEMINI_API_KEY is required when LLM_ENABLED=true")
-
-
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
     configure_logging(debug=settings.debug)
-    _validate_llm_startup(settings)
 
     app = FastAPI(
         title=settings.app_name,

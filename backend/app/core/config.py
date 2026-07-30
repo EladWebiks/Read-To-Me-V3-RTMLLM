@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -79,6 +79,53 @@ class GoogleSsoSettings(_GroupSettings):
     redirect_uri: str | None = Field(default=None, validation_alias="google_redirect_uri")
 
 
+class LlmSettings(_GroupSettings):
+    """LLM provider config (Milestone B). Off by default.
+
+    GEMINI_API_KEY is `.env` only — no default, never in docker-compose.yml.
+    """
+
+    enabled: bool = Field(default=False, validation_alias="llm_enabled")
+    provider: str = Field(default="gemini", validation_alias="llm_provider")
+    model: str = Field(default="gemini-3.5-flash-lite", validation_alias="llm_model")
+    gemini_api_key: str | None = None
+    timeout_seconds: int = Field(default=30, validation_alias="llm_timeout_seconds")
+    max_output_tokens: int = Field(default=2048, validation_alias="llm_max_output_tokens")
+    max_retries: int = Field(default=2, validation_alias="llm_max_retries")
+    langfuse_enabled: bool = False
+
+    @model_validator(mode="after")
+    def _require_key_when_enabled(self) -> "LlmSettings":
+        if self.enabled and self.provider == "gemini" and not self.gemini_api_key:
+            msg = "GEMINI_API_KEY is required when LLM_ENABLED=true"
+            raise ValueError(msg)
+        return self
+
+
+class LlmRuntimeSettings(_GroupSettings):
+    """Orchestration budgets and knobs (B3). Exceeding any one ends the run.
+
+    Deliberately code-only: these have no env names, so they cannot be
+    tuned per-deployment yet. They move to a DB-backed dynamic config layer
+    with per-tier overrides next (see the runtime-config plan). Read them
+    only via `settings.llm_runtime` so extraction stays a one-object swap.
+    """
+
+    max_tool_iters: int = 6
+    max_external_calls: int = 3
+    max_turn_tokens_in: int = 64_000
+    max_turn_tokens_out: int = 8_192
+    max_turn_cost_usd: float = 0.05
+    run_deadline_seconds: int = 60
+    context_recent_messages: int = 10
+    summary_trigger_tokens: int = 12_000
+    summary_max_output_tokens: int = 1_200
+    assistant_mode: str = "internal_only"
+    # HITL: how long a pending confirmation stays valid; max pauses per turn.
+    hitl_ttl_seconds: int = 900
+    max_hitl_rounds: int = 3
+
+
 class Settings(BaseSettings):
     """Runtime configuration loaded from environment / `.env`."""
 
@@ -109,30 +156,8 @@ class Settings(BaseSettings):
 
     sapi_proxy_enabled: bool = True
 
-    # LLM (Milestone B). Off by default so Milestone A stays LLM-free.
-    llm_enabled: bool = False
-    llm_provider: str = "gemini"
-    llm_model: str = "gemini-3.5-flash-lite"
-    gemini_api_key: str | None = None
-    llm_timeout_seconds: int = 30
-    llm_max_output_tokens: int = 2048
-    llm_max_retries: int = 2
-    langfuse_enabled: bool = False
-    # Orchestration budgets (B3). Exceeding any one ends the run.
-    # Caps are cumulative across all LLM rounds in one user turn (tool loop).
-    llm_max_tool_iters: int = 6
-    llm_max_external_calls: int = 3
-    llm_max_turn_tokens_in: int = 64_000
-    llm_max_turn_tokens_out: int = 8_192
-    llm_max_turn_cost_usd: float = 0.05
-    llm_run_deadline_seconds: int = 60
-    llm_context_recent_messages: int = 10
-    llm_summary_trigger_tokens: int = 12_000
-    llm_summary_max_output_tokens: int = 1_200
-    llm_assistant_mode: str = "internal_only"
-    # HITL: how long a pending confirmation stays valid; max pauses per turn.
-    llm_hitl_ttl_seconds: int = 900
-    llm_max_hitl_rounds: int = 3
+    llm: LlmSettings = Field(default_factory=LlmSettings)
+    llm_runtime: LlmRuntimeSettings = Field(default_factory=LlmRuntimeSettings)
 
 
 @lru_cache

@@ -39,16 +39,16 @@ def build_provider_for(
 
 
 def _build_gemini(ctx: ProviderBuildContext) -> GeminiProvider:
-    key = ctx.settings.gemini_api_key
+    key = ctx.settings.llm.gemini_api_key
     if not key:
         raise LlmConfigError("GEMINI_API_KEY is required when LLM is enabled")
     return GeminiProvider(
         GeminiProviderConfig(
             api_key=key,
             model_name=ctx.model.model_name,
-            timeout_seconds=ctx.settings.llm_timeout_seconds,
-            max_output_tokens=ctx.settings.llm_max_output_tokens,
-            max_retries=ctx.settings.llm_max_retries,
+            timeout_seconds=ctx.settings.llm.timeout_seconds,
+            max_output_tokens=ctx.settings.llm.max_output_tokens,
+            max_retries=ctx.settings.llm.max_retries,
             supports_tools=ctx.model.supports_tools,
             supports_structured=ctx.model.supports_structured,
             supports_streaming=ctx.model.supports_streaming,

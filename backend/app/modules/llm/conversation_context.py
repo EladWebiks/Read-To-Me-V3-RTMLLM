@@ -55,13 +55,16 @@ class ConversationContextService:
         if conversation is None:
             raise ConversationNotFoundError(str(conversation_id))
         history = await self._repo.list_all_messages(conversation_id)
-        recent_count = min(12, max(8, self._settings.llm_context_recent_messages))
+        recent_count = min(12, max(8, self._settings.llm_runtime.context_recent_messages))
         cutoff = max(0, len(history) - recent_count)
         stored = await self._repo.get_conversation_summary(conversation_id, user_id)
         stored, covered = await self._validated_summary(stored, history)
         older = history[covered:cutoff]
         recent = history[cutoff:]
-        if not older or _estimated_tokens(older) < self._settings.llm_summary_trigger_tokens:
+        if (
+            not older
+            or _estimated_tokens(older) < self._settings.llm_runtime.summary_trigger_tokens
+        ):
             return ConversationContext(
                 summary=stored.summary if stored else None,
                 messages=older + recent,
@@ -118,7 +121,7 @@ class ConversationContextService:
                     Message(role=Role.USER, content=_summary_source(summary, chunk)),
                 ],
                 response_model=_SummaryResult,
-                max_output_tokens=self._settings.llm_summary_max_output_tokens,
+                max_output_tokens=self._settings.llm_runtime.summary_max_output_tokens,
                 temperature=0.1,
                 task="conversation_summary",
             )

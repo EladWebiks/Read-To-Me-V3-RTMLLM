@@ -52,7 +52,7 @@ def _settings() -> Settings:
         gemini_api_key="test-key",
         llm_provider="gemini",
         llm_model="gemini-3.5-flash-lite",
-        llm_assistant_mode="external_allowed",
+        assistant_mode="external_allowed",
     )
 
 
