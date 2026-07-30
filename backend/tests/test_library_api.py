@@ -57,8 +57,8 @@ async def _seed_admin(session_factory: async_sessionmaker[AsyncSession]) -> None
     async with session_factory() as session:
         await UserService(session).ensure_user(
             UserCreate(
-                username=settings.admin_username,
-                password=settings.admin_password,
+                username=settings.auth.admin_username,
+                password=settings.auth.admin_password,
                 role="admin",
             )
         )
@@ -71,7 +71,7 @@ async def _mint_token(
     """Mint a session token directly, bypassing the (removed) password endpoint."""
     settings = get_settings()
     async with session_factory() as session:
-        user = await UserService(session).get_entity_by_username(settings.admin_username)
+        user = await UserService(session).get_entity_by_username(settings.auth.admin_username)
         assert user is not None
         return create_access_token(user_id=user.id, username=user.username, settings=settings)
 

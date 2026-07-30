@@ -36,9 +36,9 @@ def _set_auth_cookie(response: Response, token: str, settings: Settings) -> None
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_expire_days * 24 * 60 * 60,
+        secure=settings.auth.cookie_secure,
+        samesite=settings.auth.cookie_samesite,
+        max_age=settings.auth.jwt_expire_days * 24 * 60 * 60,
         path="/",
     )
 
@@ -125,8 +125,8 @@ async def google_login(
         key=STATE_COOKIE_NAME,
         value=state,
         httponly=True,
-        secure=settings.cookie_secure,
-        # Hardcoded, not settings.cookie_samesite: the callback is a cross-site
+        secure=settings.auth.cookie_secure,
+        # Hardcoded, not settings.auth.cookie_samesite: the callback is a cross-site
         # top-level navigation from accounts.google.com, which "Strict" cookies
         # are not sent on. If cookie_samesite were ever set to "strict", every
         # Google login would break with an opaque state_mismatch. "Lax" is

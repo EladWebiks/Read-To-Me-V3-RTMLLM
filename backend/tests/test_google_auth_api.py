@@ -99,9 +99,9 @@ async def _clear_users(engine: AsyncEngine) -> None:
 @pytest.fixture
 async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     settings = get_settings()
-    monkeypatch.setattr(settings, "google_client_id", CLIENT_ID)
-    monkeypatch.setattr(settings, "google_client_secret", CLIENT_SECRET)
-    monkeypatch.setattr(settings, "google_redirect_uri", REDIRECT_URI)
+    monkeypatch.setattr(settings.google, "client_id", CLIENT_ID)
+    monkeypatch.setattr(settings.google, "client_secret", CLIENT_SECRET)
+    monkeypatch.setattr(settings.google, "redirect_uri", REDIRECT_URI)
     reset_jwks_cache()
     engine = create_async_engine(settings.database.url, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
@@ -383,6 +383,6 @@ async def test_popup_reason_cannot_break_out_of_the_script_block(client: AsyncCl
 async def test_google_login_unconfigured_returns_503(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(get_settings(), "google_client_id", None)
+    monkeypatch.setattr(get_settings().google, "client_id", None)
     response = await client.get("/api/auth/google/login")
     assert response.status_code == 503

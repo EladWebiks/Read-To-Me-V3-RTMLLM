@@ -63,11 +63,11 @@ async def test_first_google_login_claims_admin(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123", role="admin")
     )
     _patch_google(monkeypatch, "sub-admin", "owner@example.com")
     user, token = await _service(session).login_with_google("code")
-    assert user.username == settings.admin_username
+    assert user.username == settings.auth.admin_username
     assert user.email == "owner@example.com"
     assert token
 
@@ -113,7 +113,7 @@ async def test_first_login_stores_picture_on_admin_claim(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123", role="admin")
     )
     _patch_google(
         monkeypatch, "sub-admin", "owner@example.com", picture="https://p.example.com/me"
@@ -147,13 +147,13 @@ async def test_second_google_account_provisions_new_user(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123", role="admin")
     )
     await UserService(session).create_from_google("sub-one", "one@example.com")
     _patch_google(monkeypatch, "sub-two", "two@example.com")
     user, _ = await _service(session).login_with_google("code")
     assert user.username == "two"
-    assert user.username != settings.admin_username
+    assert user.username != settings.auth.admin_username
 
 
 @pytest.mark.integration

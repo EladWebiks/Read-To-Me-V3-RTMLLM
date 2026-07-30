@@ -38,7 +38,7 @@ class AuthService:
             user = await self._users.resolve_google_identity(
                 google_sub=claims.sub,
                 email=str(claims.email),
-                admin_username=self._settings.admin_username,
+                admin_username=self._settings.auth.admin_username,
                 picture_url=claims.picture,
             )
         except GoogleIdentityConflictError as exc:

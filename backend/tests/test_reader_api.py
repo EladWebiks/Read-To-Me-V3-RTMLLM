@@ -63,8 +63,8 @@ async def client() -> AsyncIterator[AsyncClient]:
     async with factory() as session:
         user = await UserService(session).ensure_user(
             UserCreate(
-                username=settings.admin_username,
-                password=settings.admin_password,
+                username=settings.auth.admin_username,
+                password=settings.auth.admin_password,
                 role="admin",
             )
         )

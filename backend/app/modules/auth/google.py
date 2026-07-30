@@ -52,14 +52,14 @@ class GoogleOAuthClient:
 
     def __init__(self, settings: Settings) -> None:
         if not (
-            settings.google_client_id
-            and settings.google_client_secret
-            and settings.google_redirect_uri
+            settings.google.client_id
+            and settings.google.client_secret
+            and settings.google.redirect_uri
         ):
             raise GoogleNotConfiguredError
-        self._client_id = settings.google_client_id
-        self._client_secret = settings.google_client_secret
-        self._redirect_uri = settings.google_redirect_uri
+        self._client_id = settings.google.client_id
+        self._client_secret = settings.google.client_secret
+        self._redirect_uri = settings.google.redirect_uri
 
     def build_auth_url(self, state: str) -> str:
         """Return the Google consent-screen URL for the popup redirect."""

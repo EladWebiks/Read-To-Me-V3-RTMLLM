@@ -50,6 +50,35 @@ class StorageSettings(_GroupSettings):
     download_job_ttl_hours: int = 24
 
 
+class AuthSettings(_GroupSettings):
+    """Session JWT, cookie flags, seeded admin account.
+
+    Dev-correct defaults: a real deployment overrides JWT_SECRET,
+    ADMIN_PASSWORD and COOKIE_SECURE through real environment variables.
+    """
+
+    jwt_secret: str = "dev-only-change-me-to-a-long-random-secret"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_days: int = 7
+    cookie_secure: bool = False
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    admin_username: str = "admin"
+    admin_password: str = "changeme123"
+
+
+class GoogleSsoSettings(_GroupSettings):
+    """Google SSO (server-side authorization-code flow).
+
+    `.env` only — never in docker-compose.yml. All three are required for
+    login to work; the endpoints return 503 while any is unset.
+    """
+
+    client_id: str | None = Field(default=None, validation_alias="google_client_id")
+    client_secret: str | None = Field(default=None, validation_alias="google_client_secret")
+    # Browser-facing callback, e.g. http://localhost:5173/api/auth/google/callback
+    redirect_uri: str | None = Field(default=None, validation_alias="google_redirect_uri")
+
+
 class Settings(BaseSettings):
     """Runtime configuration loaded from environment / `.env`."""
 
@@ -71,21 +100,8 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
-    jwt_secret: str = "dev-only-change-me-to-a-long-random-secret"
-    jwt_algorithm: str = "HS256"
-    jwt_expire_days: int = 7
-    cookie_secure: bool = False
-    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
-
-    admin_username: str = "admin"
-    admin_password: str = "changeme123"
-
-    # Google SSO (server-side authorization-code flow). All three are required
-    # for login to work; endpoints return 503 when unset.
-    google_client_id: str | None = None
-    google_client_secret: str | None = None
-    # Browser-facing callback, e.g. http://localhost:5173/api/auth/google/callback
-    google_redirect_uri: str | None = None
+    auth: AuthSettings = Field(default_factory=AuthSettings)
+    google: GoogleSsoSettings = Field(default_factory=GoogleSsoSettings)
 
     scrape_timeout_seconds: int = 20
     scrape_max_bytes: int = 2_097_152  # 2 MB

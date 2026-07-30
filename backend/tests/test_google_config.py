@@ -12,6 +12,6 @@ def test_google_settings_default_to_none(monkeypatch: pytest.MonkeyPatch) -> Non
     for var in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"):
         monkeypatch.delenv(var, raising=False)
     settings = make_settings()
-    assert settings.google_client_id is None
-    assert settings.google_client_secret is None
-    assert settings.google_redirect_uri is None
+    assert settings.google.client_id is None
+    assert settings.google.client_secret is None
+    assert settings.google.redirect_uri is None
