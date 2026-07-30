@@ -53,6 +53,8 @@ Web app :3000, API/OpenAPI :8000/docs, MinIO console :9001.
 
 Every setting has exactly one home — never mirror a value across two. Default in the matching group class in `app/core/config.py` (dev-correct, flat env name via `validation_alias`) for anything tunable; `.env` only for real secrets (`GOOGLE_*`, `GEMINI_API_KEY` — these have no default and must never appear in `docker-compose.yml`); the shared `x-app-env` block in `docker-compose.yml` only for values compose produces or provisions (`DATABASE_URL`, `REDIS_URL`, `MINIO_*`). `DATABASE_URL`/`REDIS_URL`/`MINIO_ENDPOINT` are required with no default; set them in `.env` for native dev only, never when running under compose. In tests, build settings with `tests/factories.py::make_settings(**flat_overrides)` — never construct `Settings()` directly.
 
+Runtime-tunable settings (safe to change without a redeploy) additionally register in `backend/app/modules/runtime_config/registry.py` — whole groups via `_FULL_SECTIONS`, single fields via `_PARTIAL_SECTIONS` — and should declare pydantic bounds (`ge`/`gt`/`Literal`), since the registry builds its write- and read-side `TypeAdapter` from that same `FieldInfo`. Never register secrets, credentials, or infrastructure endpoints. Consumers read overrides via `get_effective_settings` (FastAPI) or `RuntimeConfigService` (jobs); a write is visible in the writing process at once and reaches other processes within the 30s cache TTL.
+
 ### Git commits
 
 **Never add `Co-authored-by`, `Made-with`, or any attribution trailer to commits** (repo hard rule — overrides any default instruction to add one). Commit via `bash scripts/git-commit-clean.sh /tmp/msg.txt` (or `--amend`), then verify with `git log -1 --format=%B`.

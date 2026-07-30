@@ -522,6 +522,41 @@ pass the secrets through to the backend and worker. Its `x-app-env` block carrie
 what compose itself produces or provisions, and is merged into both services, so they
 cannot drift.
 
+### Runtime configuration overrides
+
+Some settings are safe to change without a redeploy. Admins can override those at
+runtime through `GET/PUT/DELETE /api/admin/settings[/{key}]` (admin session required);
+no new env vars are involved, so `.env.example` and `docker-compose.yml` are unaffected.
+
+- Keys are `section.field` — e.g. `llm_runtime.max_turn_cost_usd`,
+  `scrape.delay_seconds`, `storage.download_job_ttl_hours`, `audio.sapi_proxy_enabled`.
+  The whitelist lives in `backend/app/modules/runtime_config/registry.py`; secrets and
+  infrastructure endpoints (DB/Redis/MinIO/JWT/Google) can never be overridden, because
+  their groups and fields simply never appear in it.
+- Effective value = the env value unless an override row exists; deleting the override
+  restores the env value. Every change is attributed to the acting admin and recorded in
+  `app_settings_audit` (append-only, with old and new values).
+- Values are validated against the same pydantic types and bounds as the env vars, so a
+  rejected env value is a rejected override too. Since this release those bounds are
+  enforced at startup as well — e.g. `SCRAPE_TIMEOUT_SECONDS=0` now fails to boot.
+- **Propagation:** each process caches overrides for 30 seconds. The process that takes
+  the write sees it immediately; the arq worker and any other API worker converge within
+  the TTL, so a budget or throttle change can take up to 30s to reach running jobs.
+
+Request handlers read overrides by depending on `get_effective_settings` instead of
+`get_settings`. Jobs, which have no FastAPI dependency injection, construct the service
+directly:
+
+```python
+from app.core.config import LlmRuntimeSettings, get_settings
+from app.core.db import SessionLocal
+from app.modules.runtime_config.service import RuntimeConfigService
+
+async with SessionLocal() as session:
+    service = RuntimeConfigService(session, get_settings())
+    runtime = await service.get_effective(LlmRuntimeSettings)
+```
+
 Security-sensitive production changes include:
 
 - Use a long random `JWT_SECRET` and strong unique credentials.
