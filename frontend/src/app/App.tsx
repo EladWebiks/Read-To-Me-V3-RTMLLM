@@ -4,6 +4,7 @@ import {
   AdminPlaceholder,
   CatalogPage,
   SettingsPage,
+  ToolCallsPage,
   UsagePage,
   UsersPage,
 } from '@/features/admin'
@@ -50,7 +51,7 @@ export function App() {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="usage" element={<UsagePage />} />
                 <Route path="catalog" element={<CatalogPage />} />
-                <Route path="tool-calls" element={<AdminPlaceholder />} />
+                <Route path="tool-calls" element={<ToolCallsPage />} />
                 <Route path="jobs" element={<AdminPlaceholder />} />
               </Route>
             </Route>
