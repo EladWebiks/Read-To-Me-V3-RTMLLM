@@ -5,10 +5,18 @@ import {
   useRestoreUser,
 } from '@/features/admin/hooks/useAdminUsers'
 
-function UserRowActions({ user, deleted }: { user: AdminUser; deleted: boolean }) {
+function UserRowActions({
+  user,
+  deleted,
+  patchError,
+}: {
+  user: AdminUser
+  deleted: boolean
+  patchError?: Error | null
+}) {
   const remove = useDeleteUser()
   const restore = useRestoreUser()
-  const error = remove.error ?? restore.error
+  const error = patchError ?? remove.error ?? restore.error
 
   const softDelete = () => {
     if (window.confirm(`Soft-delete ${user.username}?`)) {
@@ -87,7 +95,7 @@ export function UserRow({ user }: { user: AdminUser }) {
       <td className="px-2 py-1.5 text-muted-foreground">
         {new Date(user.created_at).toLocaleDateString()}
       </td>
-      <UserRowActions user={user} deleted={deleted} />
+      <UserRowActions user={user} deleted={deleted} patchError={patch.error} />
     </tr>
   )
 }
