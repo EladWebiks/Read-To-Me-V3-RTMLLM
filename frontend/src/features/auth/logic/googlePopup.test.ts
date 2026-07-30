@@ -77,4 +77,16 @@ describe('openGooglePopup', () => {
     vi.advanceTimersByTime(600)
     expect(results).toHaveLength(1)
   })
+
+  it('cleanup detaches the message listener and clears the poll interval', () => {
+    const popup = fakePopup()
+    mockOpen(popup)
+    const results: PopupResult[] = []
+    const cleanup = openGooglePopup('/api/auth/google/login', (r) => results.push(r))
+    cleanup()
+    dispatchAuthMessage({ type: 'rtm-google-auth', ok: true, reason: null })
+    popup.closed = true
+    vi.advanceTimersByTime(600)
+    expect(results).toEqual([])
+  })
 })
