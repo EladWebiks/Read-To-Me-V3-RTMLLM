@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from app.core.deps import require_admin
+from app.core.deps import require_admin, require_membership
 from app.modules.auth.exceptions import NotAuthorizedError
 from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
@@ -31,3 +31,21 @@ async def test_require_admin_returns_the_admin_user() -> None:
 async def test_require_admin_rejects_non_admin() -> None:
     with pytest.raises(NotAuthorizedError):
         await require_admin(_user())
+
+
+@pytest.mark.unit
+async def test_require_membership_passes_sufficient_tier() -> None:
+    dep = require_membership(Membership.FREE)
+    user = _user()
+    assert await dep(user) is user
+
+
+@pytest.mark.unit
+async def test_require_membership_rejects_insufficient_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only `free` exists; simulate a higher requirement by failing the comparator.
+    monkeypatch.setattr("app.core.deps.meets_minimum", lambda actual, minimum: False)
+    dep = require_membership(Membership.FREE)
+    with pytest.raises(NotAuthorizedError):
+        await dep(_user())

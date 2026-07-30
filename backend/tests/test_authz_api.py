@@ -5,9 +5,10 @@ from typing import Annotated
 
 import pytest
 from app.core.config import get_settings
-from app.core.deps import get_db, require_admin
+from app.core.deps import get_db, require_admin, require_membership
 from app.core.exceptions import register_exception_handlers
 from app.core.security import create_access_token
+from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from fastapi import Depends, FastAPI
@@ -29,6 +30,12 @@ def _build_app() -> FastAPI:
     @test_app.get("/admin-only")
     async def admin_only(
         user: Annotated[UserRead, Depends(require_admin)],
+    ) -> dict[str, str]:
+        return {"username": user.username}
+
+    @test_app.get("/free-tier")
+    async def free_tier(
+        user: Annotated[UserRead, Depends(require_membership(Membership.FREE))],
     ) -> dict[str, str]:
         return {"username": user.username}
 
@@ -104,3 +111,30 @@ async def test_admin_route_allows_admin(client: AsyncClient) -> None:
     response = await client.get("/admin-only")
     assert response.status_code == 200
     assert response.json() == {"username": "matrix-admin"}
+
+
+@pytest.mark.integration
+async def test_membership_route_rejects_anonymous(client: AsyncClient) -> None:
+    response = await client.get("/free-tier")
+    assert response.status_code == 401
+
+
+@pytest.mark.integration
+async def test_membership_route_allows_free_user_at_free_minimum(
+    client: AsyncClient,
+) -> None:
+    await _login_as(client, is_admin=False)
+    response = await client.get("/free-tier")
+    assert response.status_code == 200
+    assert response.json() == {"username": "matrix-user"}
+
+
+@pytest.mark.integration
+async def test_membership_route_rejects_insufficient_tier(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.core.deps.meets_minimum", lambda actual, minimum: False)
+    await _login_as(client, is_admin=False)
+    response = await client.get("/free-tier")
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not authorized"}

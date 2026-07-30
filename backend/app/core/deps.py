@@ -1,6 +1,6 @@
 """Shared FastAPI dependencies."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Cookie, Depends
@@ -10,6 +10,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
 from app.modules.auth.exceptions import NotAuthenticatedError, NotAuthorizedError
 from app.modules.auth.service import AuthService
+from app.modules.users.membership import Membership, meets_minimum
 from app.modules.users.schemas import UserRead
 
 COOKIE_NAME = "rtm_token"
@@ -40,3 +41,22 @@ async def require_admin(
     if not current_user.is_admin:
         raise NotAuthorizedError
     return current_user
+
+
+def require_membership(
+    minimum: Membership,
+) -> Callable[[UserRead], Awaitable[UserRead]]:
+    """Dependency factory gating a route on a minimum membership tier.
+
+    Ordering comes from MEMBERSHIP_RANK (in code, fail-closed) — this is the
+    hook for tier-gated features and per-tier AI budgets.
+    """
+
+    async def _require(
+        current_user: Annotated[UserRead, Depends(get_current_user)],
+    ) -> UserRead:
+        if not meets_minimum(current_user.membership, minimum):
+            raise NotAuthorizedError
+        return current_user
+
+    return _require
