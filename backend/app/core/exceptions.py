@@ -40,6 +40,11 @@ from app.modules.llm.exceptions import (
     NoCandidateModelError,
 )
 from app.modules.reader.exceptions import ProgressNotFoundError
+from app.modules.runtime_config.exceptions import (
+    OverrideNotFoundError,
+    SettingValueInvalidError,
+    UnknownSettingKeyError,
+)
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
@@ -60,6 +65,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_import_handlers(app)
     _register_discovery_handlers(app)
     _register_llm_handlers(app)
+    _register_runtime_config_handlers(app)
 
 
 def _register_auth_handlers(app: FastAPI) -> None:
@@ -316,3 +322,26 @@ def _register_llm_handlers(app: FastAPI) -> None:
         exc: LlmProviderError,
     ) -> JSONResponse:
         return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+def _register_runtime_config_handlers(app: FastAPI) -> None:
+    @app.exception_handler(UnknownSettingKeyError)
+    async def _unknown_setting(
+        _request: Request,
+        exc: UnknownSettingKeyError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(OverrideNotFoundError)
+    async def _override_missing(
+        _request: Request,
+        exc: OverrideNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(SettingValueInvalidError)
+    async def _setting_invalid(
+        _request: Request,
+        exc: SettingValueInvalidError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
