@@ -57,6 +57,7 @@ class ExecutionWrite:
     error: str | None
     unit_cost_in: float
     unit_cost_out: float
+    user_id: uuid.UUID
     conversation_id: uuid.UUID | None = None
 
 
@@ -108,6 +109,7 @@ class LlmRepository:
         """Insert llm_execution + cost_record; return execution id."""
         execution = LlmExecution(
             conversation_id=data.conversation_id,
+            user_id=data.user_id,
             task=data.task,
             provider=data.provider,
             model=data.model,

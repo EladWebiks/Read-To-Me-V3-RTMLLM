@@ -89,6 +89,7 @@ class SummaryService:
             raise SummaryUnavailableError("This book has no text or description to summarize")
         draft, provider, model = await self._llm.generate_structured_with_model(
             _request(book, kind, source),
+            user_id=user_id,
             capability=ModelCapability.LONG_CONTEXT_SUMMARIZATION,
             conversation_id=conversation_id,
         )

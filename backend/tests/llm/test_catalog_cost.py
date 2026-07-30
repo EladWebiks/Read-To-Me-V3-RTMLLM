@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from app.core.db import SessionLocal
 from app.modules.llm import catalog
 from app.modules.llm.models import CostRecord, ModelConfiguration
 from app.modules.llm.telemetry import LlmTelemetry, NoOpTracer, TelemetryContext
 from app.modules.llm.types import Usage
+from app.modules.users.models import User
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 LITE = "gemini-3.5-flash-lite"
+
+
+async def _user(session: AsyncSession) -> User:
+    """Throwaway owner so the execution's NOT NULL user FK has a target."""
+    user = User(username=f"cost-{uuid.uuid4().hex[:10]}", password_hash=None)
+    session.add(user)
+    await session.flush()
+    return user
 
 
 async def _reprice(*, input_cost: float, output_cost: float) -> None:
@@ -36,8 +48,14 @@ async def test_repriced_model_drives_cost_records(seeded_catalog: None) -> None:
         assert model is not None
         assert model.input_cost_per_1m == 1.0
 
+        user = await _user(session)
         telemetry = LlmTelemetry(session, NoOpTracer())
-        context = TelemetryContext(task="cost-test", model=model, fallback_used=False)
+        context = TelemetryContext(
+            task="cost-test",
+            model=model,
+            fallback_used=False,
+            user_id=user.id,
+        )
 
         async def _call() -> tuple[str, Usage]:
             return "ok", Usage(1_000_000, 1_000_000)

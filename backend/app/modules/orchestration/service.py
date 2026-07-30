@@ -121,10 +121,15 @@ class _StreamedRound:
         self,
         llm: LlmService,
         request: ToolCallingRequest,
-        conversation_id: UUID,
+        ctx: ToolContext,
     ) -> AsyncIterator[ChatSseEvent]:
-        async with aclosing(llm.stream_tools(request, conversation_id=conversation_id)) as stream:
-            async for chunk in stream:
+        stream = llm.stream_tools(
+            request,
+            user_id=ctx.user_id,
+            conversation_id=ctx.conversation_id,
+        )
+        async with aclosing(stream) as chunks:
+            async for chunk in chunks:
                 if chunk.text:
                     if self.prefix and not self.started:
                         yield ChatSseEvent("delta", {"text": "\n\n"})
@@ -336,7 +341,7 @@ class OrchestrationService:
             async for event in streamed.events(
                 self._llm,
                 self._tool_request(state.messages, state.ctx),
-                state.ctx.conversation_id,
+                state.ctx,
             ):
                 yield event
             resp = streamed.require_response()

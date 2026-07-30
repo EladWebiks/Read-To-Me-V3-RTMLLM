@@ -13,6 +13,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     String,
     Text,
@@ -122,6 +123,9 @@ class LlmExecution(Base):
     """One provider call (tokens, cost, latency)."""
 
     __tablename__ = "llm_executions"
+    # Composite (user_id, created_at): billing-month aggregation does one
+    # index range scan; leftmost prefix also covers user_id-only lookups.
+    __table_args__ = (Index("ix_llm_executions_user_id_created_at", "user_id", "created_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -129,6 +133,13 @@ class LlmExecution(Base):
         ForeignKey("conversations.id"),
         nullable=True,
         index=True,
+    )
+    # Plain FK, no cascade: usage rows must survive user soft-deletion for
+    # billing/audit. No index=True — the composite index above covers it.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
     )
     task: Mapped[str] = mapped_column(String(64), index=True)
     provider: Mapped[str] = mapped_column(String(32), index=True)

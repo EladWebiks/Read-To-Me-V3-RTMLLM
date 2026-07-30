@@ -106,6 +106,7 @@ class LlmService:
         self,
         req: GenerateTextRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.FAST_CHAT,
         conversation_id: UUID | None = None,
     ) -> GenerateTextResponse:
@@ -119,12 +120,20 @@ class LlmService:
             return await provider.generate_text(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, conversation_id, result, result.usage)
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return await self._record(ctx, result, result.usage)
 
     async def call_tools(
         self,
         req: ToolCallingRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.TOOL_CALLING,
         conversation_id: UUID | None = None,
     ) -> ToolCallingResponse:
@@ -138,12 +147,20 @@ class LlmService:
             return await provider.call_tools(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, conversation_id, result, result.usage)
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return await self._record(ctx, result, result.usage)
 
     async def stream_tools(
         self,
         req: ToolCallingRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.TOOL_CALLING,
         conversation_id: UUID | None = None,
     ) -> AsyncGenerator[ToolCallingStreamChunk, None]:
@@ -158,6 +175,7 @@ class LlmService:
             task=req.task,
             model=model,
             fallback_used=False,
+            user_id=user_id,
             conversation_id=conversation_id,
         )
         async with aclosing(self._stream_tools_from(provider, req, context)) as stream:
@@ -194,12 +212,14 @@ class LlmService:
         self,
         req: StructuredOutputRequest[T],
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.STRUCTURED_EXTRACTION,
         conversation_id: UUID | None = None,
     ) -> T:
         """Structured output via routed provider."""
         result, _provider, _model = await self.generate_structured_with_model(
             req,
+            user_id=user_id,
             capability=capability,
             conversation_id=conversation_id,
         )
@@ -209,6 +229,7 @@ class LlmService:
         self,
         req: StructuredOutputRequest[T],
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.STRUCTURED_EXTRACTION,
         conversation_id: UUID | None = None,
     ) -> tuple[T, str, str]:
@@ -219,14 +240,14 @@ class LlmService:
             return await provider.generate_structured_output(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        recorded = await self._record(
-            req.task,
-            model,
-            fallback,
-            conversation_id,
-            result,
-            Usage(0, 0),
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=conversation_id,
         )
+        recorded = await self._record(ctx, result, Usage(0, 0))
         return recorded, model.provider, model.model_name
 
     async def stream_text(
@@ -248,6 +269,7 @@ class LlmService:
         self,
         req: EmbeddingRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.EMBEDDING,
     ) -> EmbeddingResponse:
         """Embeddings via routed provider (may be unsupported in B1)."""
@@ -260,29 +282,20 @@ class LlmService:
             return await provider.create_embeddings(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, None, result, result.usage)
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=None,
+        )
+        return await self._record(ctx, result, result.usage)
 
-    async def _record(
-        self,
-        task: str,
-        model: ModelSpec,
-        fallback: bool,
-        conversation_id: UUID | None,
-        result: R,
-        usage: Usage,
-    ) -> R:
+    async def _record(self, ctx: TelemetryContext, result: R, usage: Usage) -> R:
         async def _once() -> tuple[R, Usage]:
             return result, usage
 
-        return await self._telemetry.record_call(
-            TelemetryContext(
-                task=task,
-                model=model,
-                fallback_used=fallback,
-                conversation_id=conversation_id,
-            ),
-            _once,
-        )
+        return await self._telemetry.record_call(ctx, _once)
 
     async def _record_stream(
         self,

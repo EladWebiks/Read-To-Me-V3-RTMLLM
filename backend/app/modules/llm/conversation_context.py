@@ -73,6 +73,7 @@ class ConversationContextService:
             summary = await self._summarize(
                 stored.summary if stored else None,
                 older,
+                user_id,
                 conversation_id,
             )
         except LlmError:
@@ -111,6 +112,7 @@ class ConversationContextService:
         self,
         existing: str | None,
         rows: list[ConversationMessage],
+        user_id: UUID,
         conversation_id: UUID,
     ) -> str:
         summary = existing
@@ -127,6 +129,7 @@ class ConversationContextService:
             )
             result = await self._llm.generate_structured(
                 request,
+                user_id=user_id,
                 conversation_id=conversation_id,
             )
             summary = result.summary.strip()
