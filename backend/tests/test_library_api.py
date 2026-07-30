@@ -59,7 +59,6 @@ async def _seed_admin(session_factory: async_sessionmaker[AsyncSession]) -> None
             UserCreate(
                 username=settings.auth.admin_username,
                 password=settings.auth.admin_password,
-                role="admin",
             )
         )
         await session.commit()

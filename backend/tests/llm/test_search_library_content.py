@@ -35,7 +35,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 @pytest.mark.asyncio
 async def test_search_library_content_matches_chapter_text(session: AsyncSession) -> None:
     user = await UserService(session).ensure_user(
-        UserCreate(username=f"fts_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"fts_{uuid4().hex[:8]}", password="test-pass-123")
     )
     library = LibraryService(session)
     book = await library.add_book(
@@ -66,10 +66,10 @@ async def test_search_library_content_matches_chapter_text(session: AsyncSession
 @pytest.mark.asyncio
 async def test_search_library_content_tool_scopes_to_owner(session: AsyncSession) -> None:
     owner = await UserService(session).ensure_user(
-        UserCreate(username=f"own_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"own_{uuid4().hex[:8]}", password="test-pass-123")
     )
     other = await UserService(session).ensure_user(
-        UserCreate(username=f"oth_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"oth_{uuid4().hex[:8]}", password="test-pass-123")
     )
     library = LibraryService(session)
     book = await library.add_book(

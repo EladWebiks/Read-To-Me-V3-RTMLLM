@@ -45,7 +45,7 @@ def _settings(trigger: int) -> Settings:
 
 async def _conversation(session: AsyncSession) -> tuple[Any, Any, LlmRepository]:
     user = await UserService(session).ensure_user(
-        UserCreate(username=f"context_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"context_{uuid4().hex[:8]}", password="test-pass-123")
     )
     repo = LlmRepository(session)
     conversation = await repo.create_conversation(user.id)
@@ -99,7 +99,7 @@ async def test_summary_access_checks_conversation_ownership(
 ) -> None:
     _user, conversation, repo = await _conversation(session)
     other = await UserService(session).ensure_user(
-        UserCreate(username=f"other_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"other_{uuid4().hex[:8]}", password="test-pass-123")
     )
 
     with pytest.raises(ConversationNotFoundError):

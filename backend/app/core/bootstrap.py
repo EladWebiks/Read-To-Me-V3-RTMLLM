@@ -20,7 +20,7 @@ async def seed_admin_user(session: AsyncSession | None = None) -> None:
     data = UserCreate(
         username=settings.auth.admin_username,
         password=settings.auth.admin_password,
-        role="admin",
+        is_admin=True,
     )
     if session is not None:
         user = await UserService(session).ensure_user(data)

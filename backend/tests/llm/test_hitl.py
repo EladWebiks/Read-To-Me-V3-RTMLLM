@@ -42,7 +42,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 
 async def _user(session: AsyncSession) -> UserRead:
     return await UserService(session).ensure_user(
-        UserCreate(username=f"hitl_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"hitl_{uuid4().hex[:8]}", password="test-pass-123")
     )
 
 

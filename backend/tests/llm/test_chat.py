@@ -39,7 +39,7 @@ async def chat_session() -> AsyncIterator[AsyncSession]:
 async def _user(session: AsyncSession) -> UserRead:
     svc = UserService(session)
     return await svc.ensure_user(
-        UserCreate(username=f"chat_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"chat_{uuid4().hex[:8]}", password="test-pass-123")
     )
 
 

@@ -48,7 +48,7 @@ class UserService:
             username=data.username,
             email=str(data.email) if data.email else None,
             password_hash=hash_password(data.password),
-            role=data.role,
+            is_admin=data.is_admin,
         )
         created = await self._repo.add(user)
         return UserRead.model_validate(created)
@@ -154,7 +154,6 @@ class UserService:
             password_hash=None,
             google_sub=google_sub,
             picture_url=picture_url,
-            role="user",
         )
         return await self._repo.add(user)
 

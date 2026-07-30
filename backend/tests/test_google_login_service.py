@@ -63,7 +63,7 @@ async def test_first_google_login_claims_admin(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.auth.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123")
     )
     _patch_google(monkeypatch, "sub-admin", "owner@example.com")
     user, token = await _service(session).login_with_google("code")
@@ -113,7 +113,7 @@ async def test_first_login_stores_picture_on_admin_claim(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.auth.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123")
     )
     _patch_google(
         monkeypatch, "sub-admin", "owner@example.com", picture="https://p.example.com/me"
@@ -133,7 +133,6 @@ async def test_email_match_links_existing_user(
             username="emailuser",
             password="password123",
             email="match@example.com",
-            role="user",
         )
     )
     _patch_google(monkeypatch, "sub-linked", "match@example.com")
@@ -147,7 +146,7 @@ async def test_second_google_account_provisions_new_user(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.auth.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123")
     )
     await UserService(session).create_from_google("sub-one", "one@example.com")
     _patch_google(monkeypatch, "sub-two", "two@example.com")
@@ -173,7 +172,6 @@ async def test_email_match_is_case_insensitive(
             username="mixedcase",
             password="password123",
             email="Owner@Example.com",
-            role="user",
         )
     )
     _patch_google(monkeypatch, "sub-mixed", "owner@example.com")
@@ -193,7 +191,7 @@ async def test_resolve_google_identity_raises_users_domain_conflict(
     """
     users = UserService(session)
     await users.create(
-        UserCreate(username="direct", password="password123", email="d@example.com", role="user")
+        UserCreate(username="direct", password="password123", email="d@example.com")
     )
     entity = await users.get_entity_by_email("d@example.com")
     assert entity is not None
@@ -215,7 +213,6 @@ async def test_email_match_conflicting_google_sub_rejected(
             username="conflictuser",
             password="password123",
             email="x@example.com",
-            role="user",
         )
     )
     entity = await users.get_entity_by_email("x@example.com")

@@ -304,8 +304,9 @@ async def _insert_google_sub_squatter(google_sub: str) -> None:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "INSERT INTO users (id, username, email, google_sub, role, deleted_at)"
-                " VALUES (:id, 'ghost', 'ghost@example.com', :sub, 'user', now())"
+                # is_admin / membership come from their server defaults.
+                "INSERT INTO users (id, username, email, google_sub, deleted_at)"
+                " VALUES (:id, 'ghost', 'ghost@example.com', :sub, now())"
             ),
             {"id": str(uuid4()), "sub": google_sub},
         )

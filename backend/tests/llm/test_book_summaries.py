@@ -35,7 +35,6 @@ async def _user(session: AsyncSession, prefix: str) -> UserRead:
         UserCreate(
             username=f"{prefix}_{uuid4().hex[:8]}",
             password="test-pass-123",
-            role="user",
         )
     )
 

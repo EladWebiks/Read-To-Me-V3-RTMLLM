@@ -65,7 +65,6 @@ async def client() -> AsyncIterator[AsyncClient]:
             UserCreate(
                 username=settings.auth.admin_username,
                 password=settings.auth.admin_password,
-                role="admin",
             )
         )
         await session.commit()

@@ -41,7 +41,7 @@ async def orch_session() -> AsyncIterator[AsyncSession]:
 
 async def _seed_user_with_book(session: AsyncSession) -> UserRead:
     user = await UserService(session).ensure_user(
-        UserCreate(username=f"orch_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"orch_{uuid4().hex[:8]}", password="test-pass-123")
     )
     await LibraryService(session).add_book(
         user.id,

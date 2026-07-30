@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.modules.users.membership import Membership
+
 
 class UserCreate(BaseModel):
     """Input for creating a user."""
@@ -12,7 +14,7 @@ class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=8, max_length=128)
     email: EmailStr | None = None
-    role: str = "admin"
+    is_admin: bool = False
 
 
 class UserRead(BaseModel):
@@ -24,5 +26,6 @@ class UserRead(BaseModel):
     username: str
     email: str | None
     picture_url: str | None = None
-    role: str
+    is_admin: bool
+    membership: Membership
     created_at: datetime
