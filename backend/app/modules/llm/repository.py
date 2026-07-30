@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.llm.models import (
@@ -59,6 +59,16 @@ class ExecutionWrite:
     unit_cost_out: float
     user_id: uuid.UUID
     conversation_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UsageTotals:
+    """Aggregate of llm_executions for one user over a period."""
+
+    tokens_in: int
+    tokens_out: int
+    total_cost: float
+    execution_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +147,37 @@ class LlmRepository:
         )
         await self._session.commit()
         return execution.id
+
+    async def usage_summary_for_user(
+        self,
+        user_id: uuid.UUID,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> UsageTotals:
+        """Billing-month aggregate over [period_start, period_end).
+
+        Served by ix_llm_executions_user_id_created_at as one index range scan.
+        """
+        result = await self._session.execute(
+            select(
+                func.coalesce(func.sum(LlmExecution.tokens_in), 0),
+                func.coalesce(func.sum(LlmExecution.tokens_out), 0),
+                func.coalesce(func.sum(LlmExecution.cost), 0.0),
+                func.count(LlmExecution.id),
+            ).where(
+                LlmExecution.user_id == user_id,
+                LlmExecution.created_at >= period_start,
+                LlmExecution.created_at < period_end,
+            )
+        )
+        tokens_in, tokens_out, total_cost, count = result.one()
+        return UsageTotals(
+            tokens_in=int(tokens_in),
+            tokens_out=int(tokens_out),
+            total_cost=float(total_cost),
+            execution_count=int(count),
+        )
 
     async def upsert_provider(self, name: str, *, enabled: bool = True) -> ModelProvider:
         """Insert provider row if missing."""

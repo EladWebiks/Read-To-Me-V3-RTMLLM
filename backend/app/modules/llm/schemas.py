@@ -135,3 +135,15 @@ class CatalogAdminResponse(BaseModel):
     """GET /api/admin/llm/catalog payload."""
 
     providers: list[ProviderAdminRead] = Field(default_factory=list)
+
+
+class UserUsageSummary(BaseModel):
+    """Aggregated per-user LLM usage for a period (tier quotas / billing)."""
+
+    user_id: UUID
+    period_start: datetime
+    period_end: datetime
+    tokens_in: int
+    tokens_out: int
+    total_cost: float
+    execution_count: int

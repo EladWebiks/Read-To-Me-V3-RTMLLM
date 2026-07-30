@@ -6,6 +6,7 @@ import asyncio
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import aclosing
+from datetime import datetime
 from typing import TypeVar
 from uuid import UUID
 
@@ -24,7 +25,8 @@ from app.modules.llm.exceptions import (
 from app.modules.llm.model_router import ModelRouter
 from app.modules.llm.providers.gemini_provider import GeminiProvider
 from app.modules.llm.registry import ModelSpec
-from app.modules.llm.schemas import ModelListResponse, ModelRead
+from app.modules.llm.repository import LlmRepository
+from app.modules.llm.schemas import ModelListResponse, ModelRead, UserUsageSummary
 from app.modules.llm.telemetry import LlmTelemetry, TelemetryContext, build_tracer
 from app.modules.llm.types import (
     EmbeddingRequest,
@@ -54,6 +56,7 @@ class LlmService:
             session,
             build_tracer(langfuse_enabled=settings.llm.langfuse_enabled),
         )
+        self._repo = LlmRepository(session)
 
     @property
     def router(self) -> ModelRouter:
@@ -290,6 +293,29 @@ class LlmService:
             conversation_id=None,
         )
         return await self._record(ctx, result, result.usage)
+
+    async def usage_summary(
+        self,
+        user_id: UUID,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> UserUsageSummary:
+        """Per-user usage aggregate over [period_start, period_end); no HTTP route yet."""
+        totals = await self._repo.usage_summary_for_user(
+            user_id,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        return UserUsageSummary(
+            user_id=user_id,
+            period_start=period_start,
+            period_end=period_end,
+            tokens_in=totals.tokens_in,
+            tokens_out=totals.tokens_out,
+            total_cost=totals.total_cost,
+            execution_count=totals.execution_count,
+        )
 
     async def _record(self, ctx: TelemetryContext, result: R, usage: Usage) -> R:
         async def _once() -> tuple[R, Usage]:
