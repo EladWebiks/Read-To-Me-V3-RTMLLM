@@ -165,7 +165,7 @@ async def test_final_answer_is_not_discarded_when_usage_crosses_soft_limit(
     settings = make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
-        max_turn_tokens_in=5,
+        llm_max_turn_tokens_in=5,
     )
     user = await _seed_user_with_book(orch_session)
     service = ChatService(orch_session, settings)

@@ -89,7 +89,7 @@ def test_llm_disabled_allows_missing_key() -> None:
 
 @pytest.mark.unit
 def test_llm_runtime_defaults() -> None:
-    runtime = make_settings(max_tool_iters=2).llm_runtime
+    runtime = make_settings(llm_max_tool_iters=2).llm_runtime
     assert runtime.max_tool_iters == 2
     assert runtime.max_external_calls == 3
     assert runtime.max_turn_tokens_in == 64_000
@@ -105,10 +105,25 @@ def test_llm_runtime_defaults() -> None:
 
 
 @pytest.mark.unit
-def test_llm_runtime_ignores_legacy_env_names(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The 12 knobs are code-only until the runtime-config layer lands."""
+def test_llm_runtime_reads_prefixed_env_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The knobs became env-addressable when the runtime-config layer landed."""
     monkeypatch.setenv("LLM_MAX_TOOL_ITERS", "99")
     monkeypatch.setenv("LLM_ASSISTANT_MODE", "external_allowed")
+    runtime = LlmRuntimeSettings(_env_file=None)
+    assert runtime.max_tool_iters == 99
+    assert runtime.assistant_mode == "external_allowed"
+
+
+@pytest.mark.unit
+def test_llm_runtime_ignores_unprefixed_env_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`validation_alias` is what stops a bare name from configuring a run.
+
+    Without it pydantic-settings matches the field name itself, so a generic
+    `MAX_TOOL_ITERS` or `ASSISTANT_MODE` in the environment would silently
+    change orchestration budgets.
+    """
+    monkeypatch.setenv("MAX_TOOL_ITERS", "99")
+    monkeypatch.setenv("ASSISTANT_MODE", "external_allowed")
     runtime = LlmRuntimeSettings(_env_file=None)
     assert runtime.max_tool_iters == 6
     assert runtime.assistant_mode == "internal_only"

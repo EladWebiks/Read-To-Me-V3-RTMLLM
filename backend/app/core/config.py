@@ -60,9 +60,9 @@ class StorageSettings(_GroupSettings):
     secure: bool = Field(default=False, validation_alias="minio_secure")
     # Host used inside signed URLs (browser-facing). Defaults to endpoint.
     public_endpoint: str | None = Field(default=None, validation_alias="minio_public_endpoint")
-    signed_url_expires_seconds: int = 3600
+    signed_url_expires_seconds: int = Field(default=3600, ge=60)
     # Retention for generated MP3 jobs and MinIO objects (hours).
-    download_job_ttl_hours: int = 24
+    download_job_ttl_hours: int = Field(default=24, ge=1)
 
 
 class AuthSettings(_GroupSettings):
@@ -97,9 +97,9 @@ class GoogleSsoSettings(_GroupSettings):
 class ScrapeSettings(_GroupSettings):
     """Outbound fetch limits (central fetch service / SSRF guard)."""
 
-    timeout_seconds: int = Field(default=20, validation_alias="scrape_timeout_seconds")
-    max_bytes: int = Field(default=2_097_152, validation_alias="scrape_max_bytes")  # 2 MB
-    delay_seconds: float = Field(default=1.5, validation_alias="scrape_delay_seconds")
+    timeout_seconds: int = Field(default=20, ge=1, validation_alias="scrape_timeout_seconds")
+    max_bytes: int = Field(default=2_097_152, ge=1024, validation_alias="scrape_max_bytes")  # 2 MB
+    delay_seconds: float = Field(default=1.5, ge=0, validation_alias="scrape_delay_seconds")
 
 
 class AudioSettings(_GroupSettings):
@@ -134,25 +134,46 @@ class LlmSettings(_GroupSettings):
 class LlmRuntimeSettings(_GroupSettings):
     """Orchestration budgets and knobs (B3). Exceeding any one ends the run.
 
-    Deliberately code-only: these have no env names, so they cannot be
-    tuned per-deployment yet. They move to a DB-backed dynamic config layer
-    with per-tier overrides next (see the runtime-config plan). Read them
-    only via `settings.llm_runtime` so extraction stays a one-object swap.
+    Every field is runtime-tunable: the whole group is registered in
+    `app.modules.runtime_config.registry`, so an admin can override any of
+    these in the DB without a redeploy. The declared bounds below are the
+    contract for both paths — env values fail at startup and overrides are
+    rejected on write, because the registry builds its TypeAdapters from
+    these same FieldInfos. Read them only via `settings.llm_runtime` (or
+    `get_effective_settings`) so the override layer stays a one-object swap.
+
+    The `llm_` aliases are what makes each knob addressable as a single flat
+    env name; without one, pydantic-settings would match the bare field name
+    and a stray `MAX_TOOL_ITERS` in the environment would configure the run.
     """
 
-    max_tool_iters: int = 6
-    max_external_calls: int = 3
-    max_turn_tokens_in: int = 64_000
-    max_turn_tokens_out: int = 8_192
-    max_turn_cost_usd: float = 0.05
-    run_deadline_seconds: int = 60
-    context_recent_messages: int = 10
-    summary_trigger_tokens: int = 12_000
-    summary_max_output_tokens: int = 1_200
-    assistant_mode: str = "internal_only"
+    max_tool_iters: int = Field(default=6, ge=1, validation_alias="llm_max_tool_iters")
+    max_external_calls: int = Field(default=3, ge=0, validation_alias="llm_max_external_calls")
+    max_turn_tokens_in: int = Field(
+        default=64_000, ge=1, validation_alias="llm_max_turn_tokens_in"
+    )
+    max_turn_tokens_out: int = Field(
+        default=8_192, ge=1, validation_alias="llm_max_turn_tokens_out"
+    )
+    max_turn_cost_usd: float = Field(default=0.05, gt=0, validation_alias="llm_max_turn_cost_usd")
+    run_deadline_seconds: int = Field(
+        default=60, ge=1, validation_alias="llm_run_deadline_seconds"
+    )
+    context_recent_messages: int = Field(
+        default=10, ge=1, validation_alias="llm_context_recent_messages"
+    )
+    summary_trigger_tokens: int = Field(
+        default=12_000, ge=1, validation_alias="llm_summary_trigger_tokens"
+    )
+    summary_max_output_tokens: int = Field(
+        default=1_200, ge=1, validation_alias="llm_summary_max_output_tokens"
+    )
+    assistant_mode: Literal["internal_only", "external_allowed"] = Field(
+        default="internal_only", validation_alias="llm_assistant_mode"
+    )
     # HITL: how long a pending confirmation stays valid; max pauses per turn.
-    hitl_ttl_seconds: int = 900
-    max_hitl_rounds: int = 3
+    hitl_ttl_seconds: int = Field(default=900, ge=1, validation_alias="llm_hitl_ttl_seconds")
+    max_hitl_rounds: int = Field(default=3, ge=0, validation_alias="llm_max_hitl_rounds")
 
 
 class Settings(BaseSettings):
