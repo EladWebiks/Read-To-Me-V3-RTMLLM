@@ -216,7 +216,7 @@ class LlmRepository:
             .where(ConversationMessage.conversation_id == conversation_id)
             .order_by(
                 ConversationMessage.created_at.desc(),
-                ConversationMessage.id.desc(),
+                ConversationMessage.seq.desc(),
             )
             .limit(limit)
         )
@@ -229,7 +229,7 @@ class LlmRepository:
         result = await self._session.execute(
             select(ConversationMessage)
             .where(ConversationMessage.conversation_id == conversation_id)
-            .order_by(ConversationMessage.created_at, ConversationMessage.id)
+            .order_by(ConversationMessage.created_at, ConversationMessage.seq)
         )
         return list(result.scalars().all())
 

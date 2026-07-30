@@ -7,10 +7,12 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
     ForeignKey,
+    Identity,
     Integer,
     String,
     Text,
@@ -56,6 +58,10 @@ class ConversationMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Insertion-order tiebreaker. created_at comes from the Python clock, whose
+    # resolution is ~15ms on Windows, so a batch appended in one request ties;
+    # the UUID PK sorts randomly, so history order needs a monotonic column.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), index=True)
 
 
 class ConversationSummary(Base):
