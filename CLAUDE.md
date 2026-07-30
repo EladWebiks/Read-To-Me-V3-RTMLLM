@@ -55,6 +55,8 @@ Every setting has exactly one home — never mirror a value across two. Default 
 
 Runtime-tunable settings (safe to change without a redeploy) additionally register in `backend/app/modules/runtime_config/registry.py` — whole groups via `_FULL_SECTIONS`, single fields via `_PARTIAL_SECTIONS` — and should declare pydantic bounds (`ge`/`gt`/`Literal`), since the registry builds its write- and read-side `TypeAdapter` from that same `FieldInfo`. Never register secrets, credentials, or infrastructure endpoints. Consumers read overrides via `get_effective_settings` (FastAPI) or `RuntimeConfigService` (jobs); a write is visible in the writing process at once and reaches other processes within the 30s cache TTL.
 
+The LLM model catalog is likewise DB-backed at runtime: `modules/llm/registry.py` holds seed-only defaults (inserted if missing at startup — a restart never overwrites admin edits), the effective catalog (provider/model enablement + per-1M pricing used for cost records) is served from `model_providers`/`model_configurations` through the cached snapshot in `modules/llm/catalog.py` (same 30s-TTL/invalidate pattern), and admins manage it via `/api/admin/llm/catalog`. A catalog row is only served when a registered adapter exists for its provider (`modules/llm/providers/KNOWN_ADAPTERS`); rows without one are skipped with a warning.
+
 ### Git commits
 
 **Never add `Co-authored-by`, `Made-with`, or any attribution trailer to commits** (repo hard rule — overrides any default instruction to add one). Commit via `bash scripts/git-commit-clean.sh /tmp/msg.txt` (or `--amend`), then verify with `git log -1 --format=%B`.

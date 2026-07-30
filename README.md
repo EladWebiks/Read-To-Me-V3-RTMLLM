@@ -543,6 +543,20 @@ no new env vars are involved, so `.env.example` and `docker-compose.yml` are una
   the write sees it immediately; the arq worker and any other API worker converge within
   the TTL, so a budget or throttle change can take up to 30s to reach running jobs.
 
+### LLM model catalog (DB-backed)
+
+Which LLM providers/models exist, whether they are enabled, and their
+USD-per-1M-token prices (used for cost records) live in the
+`model_providers` / `model_configurations` tables — manageable at runtime
+via `GET/PATCH/POST /api/admin/llm/catalog...` (admin session required),
+no redeploy needed. The code catalog in
+`backend/app/modules/llm/registry.py` is only the seed default: startup
+inserts missing rows and never overwrites existing ones, so admin edits
+(enablement, pricing) survive restarts. Catalog reads are cached
+per-process for 30 seconds; the process performing a write sees it
+immediately. Disabling every model makes chat return the same 503 as
+`LLM_ENABLED=false`.
+
 Request handlers read overrides by depending on `get_effective_settings` instead of
 `get_settings`. Jobs, which have no FastAPI dependency injection, construct the service
 directly:
