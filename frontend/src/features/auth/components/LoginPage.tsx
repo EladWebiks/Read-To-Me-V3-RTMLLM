@@ -6,13 +6,21 @@ const ERROR_MESSAGES: Record<string, string> = {
   popup_closed: 'The sign-in window was closed before finishing.',
   email_not_verified: 'This Google account has no verified email address.',
   google_denied: 'Google sign-in was cancelled.',
+  google_identity_conflict:
+    'This account is already linked to a different Google account.',
 }
 const FALLBACK_ERROR = 'Google sign-in failed. Please try again.'
 
+// Object.hasOwn, not `ERROR_MESSAGES[reason] ?? FALLBACK_ERROR`: a reason of
+// "__proto__" resolves through the prototype chain to Object.prototype — a
+// truthy non-string that defeats `??` and makes React throw when rendered.
+function errorMessageFor(reason: string): string {
+  return Object.hasOwn(ERROR_MESSAGES, reason) ? ERROR_MESSAGES[reason] : FALLBACK_ERROR
+}
+
 export function LoginPage() {
   const { state, start } = useGoogleLogin()
-  const errorMessage =
-    state.status === 'error' ? (ERROR_MESSAGES[state.reason] ?? FALLBACK_ERROR) : null
+  const errorMessage = state.status === 'error' ? errorMessageFor(state.reason) : null
 
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
@@ -21,9 +29,15 @@ export function LoginPage() {
         Continue with your Google account.
       </p>
       <GoogleButton disabled={state.status === 'pending'} onClick={start} />
-      {errorMessage ? (
-        <p className="mt-4 text-sm text-destructive">{errorMessage}</p>
-      ) : null}
+      {/* A failed sign-in produces no other feedback, so the message must be
+          announced. The live region is the always-mounted wrapper, not the
+          conditional <p>: screen readers only announce changes *inside* a
+          region that was already in the accessibility tree. */}
+      <div aria-live="polite">
+        {errorMessage ? (
+          <p className="mt-4 text-sm text-destructive">{errorMessage}</p>
+        ) : null}
+      </div>
     </div>
   )
 }

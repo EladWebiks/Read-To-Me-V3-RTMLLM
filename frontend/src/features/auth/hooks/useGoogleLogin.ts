@@ -21,7 +21,14 @@ export function useGoogleLogin() {
     setState({ status: 'pending' })
     cleanupRef.current = openGooglePopup(GOOGLE_LOGIN_URL, (result: PopupResult) => {
       if (result.status === 'success') {
-        void queryClient.invalidateQueries({ queryKey: meQueryKey })
+        // resetQueries, not invalidateQueries: on this page the `me` query is
+        // already cached in `status: 'error'` (401). Invalidation only starts a
+        // refetch and leaves the error in place, so the ProtectedRoute mounted
+        // by the navigate below sees isLoading === false / isError === true and
+        // bounces straight back to /login until the refetch lands. Resetting
+        // clears the cached error synchronously, putting the guard into its
+        // "Checking session…" branch instead.
+        void queryClient.resetQueries({ queryKey: meQueryKey })
         void navigate('/reader', { replace: true })
         return
       }

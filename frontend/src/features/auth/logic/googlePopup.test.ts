@@ -50,6 +50,16 @@ describe('openGooglePopup', () => {
     expect(results).toEqual([])
   })
 
+  it('ignores same-origin messages whose ok/reason fields are malformed', () => {
+    mockOpen(fakePopup())
+    const results: PopupResult[] = []
+    openGooglePopup('/api/auth/google/login', (r) => results.push(r))
+    dispatchAuthMessage({ type: 'rtm-google-auth' })
+    dispatchAuthMessage({ type: 'rtm-google-auth', ok: 'yes', reason: null })
+    dispatchAuthMessage({ type: 'rtm-google-auth', ok: false, reason: { a: 1 } })
+    expect(results).toEqual([])
+  })
+
   it('reports popup_blocked when window.open returns null', () => {
     mockOpen(null)
     const results: PopupResult[] = []

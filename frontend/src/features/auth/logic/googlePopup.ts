@@ -10,11 +10,16 @@ const POPUP_NAME = 'rtm-google-auth'
 const POPUP_FEATURES = 'width=500,height=600,popup=yes'
 const CLOSED_POLL_MS = 500
 
+// Validates every field the caller reads, not just `type`: the type predicate
+// otherwise lets a same-origin message with a bogus shape (e.g. `ok: 'yes'`,
+// `reason: {}`) through as a GoogleAuthMessage and settle the flow on it.
 function isGoogleAuthMessage(data: unknown): data is GoogleAuthMessage {
+  if (typeof data !== 'object' || data === null) return false
+  const message = data as { type?: unknown; ok?: unknown; reason?: unknown }
   return (
-    typeof data === 'object' &&
-    data !== null &&
-    (data as { type?: unknown }).type === 'rtm-google-auth'
+    message.type === 'rtm-google-auth' &&
+    typeof message.ok === 'boolean' &&
+    (message.reason === null || typeof message.reason === 'string')
   )
 }
 

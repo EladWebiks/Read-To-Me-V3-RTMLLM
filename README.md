@@ -263,10 +263,30 @@ cp .env.example .env
 ```
 
 The development defaults work without an LLM key. Before exposing this stack outside
-your machine, change `JWT_SECRET`, `ADMIN_PASSWORD`, and all database/MinIO credentials.
-Never commit `.env`; it is ignored by Git.
+your machine, change `JWT_SECRET` and all database/MinIO credentials. `ADMIN_PASSWORD`
+is a legacy seed-only value: it is hashed into a column that nothing verifies any more,
+because Google SSO is the only way to sign in. Never commit `.env`; it is ignored by Git.
 
-### 2. Build and start
+### 2. Create a Google OAuth client (required to sign in)
+
+Google SSO is the only sign-in method, so this step is not optional: with
+`GOOGLE_CLIENT_ID` unset the login endpoints return **503** and nobody can get in.
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), select or create a
+   project, then open **APIs & Services → Credentials**.
+2. Configure the OAuth consent screen if prompted (External, testing mode is fine), and
+   add your own Google account as a test user.
+3. **Create credentials → OAuth client ID → Web application**.
+4. Add both of these as **Authorized redirect URIs**:
+   - `http://localhost:5173/api/auth/google/callback` (Vite dev server)
+   - `http://localhost:3000/api/auth/google/callback` (Docker)
+5. Copy the client ID and secret into `.env` as `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`, and set `GOOGLE_REDIRECT_URI` to whichever of the two URIs
+   matches how you run the app (`:3000` for the Docker quick start).
+
+The redirect URI in `.env` must match a registered one exactly, character for character.
+
+### 3. Build and start
 
 ```bash
 docker compose up --build
@@ -284,7 +304,7 @@ docker compose ps
 docker compose logs -f backend worker
 ```
 
-### 3. Open the application
+### 4. Open the application
 
 - Web app: <http://localhost:3000>
 - FastAPI/OpenAPI docs: <http://localhost:8000/docs>
@@ -293,18 +313,38 @@ docker compose logs -f backend worker
 
 With an unchanged `.env.example`:
 
-- RTM login: `admin` / `changeme123`
+- RTM login: **Sign in with Google** (requires the `GOOGLE_*` values from step 2 — see
+  [Configuration](#configuration))
 - MinIO login: `rtm` / `rtmsecret`
 
 These are local development credentials only.
 
-### 4. First-use path
+### 5. First-use path
 
-1. Sign in and open **Library**.
+1. Sign in with Google and open **Library**. **Sign in yourself first** — see the
+   security note below.
 2. Add a book manually, upload an EPUB from **Scraper → Upload EPUB**, or run a supported
    site scrape.
 3. Open a chapter in the reader and select browser or server TTS.
 4. Configure Gemini as described below if you want the assistant.
+
+### Security notes for the Google sign-in flow
+
+Two properties of the sign-in flow are known and accepted as designed for this
+local-first stack. Neither is a bug; both matter if you expose the stack.
+
+- **The first Google account to sign in claims the seeded admin row — and its whole
+  library.** There is no email allowlist gating that claim. The intended owner must
+  therefore be the first person to sign in. Until that has happened, do not expose this
+  stack beyond `localhost`: whoever signs in first becomes the owner of the seeded
+  account and everything already in it. After the first login the rule is spent, and
+  every later Google account is provisioned as its own separate user.
+- **The OAuth authorization code appears in the uvicorn access log.** This is inherent
+  to the authorization-code flow — Google returns the code as a query parameter on the
+  callback URL, and the access log records request lines verbatim. The application layer
+  never logs the code, the ID token, or any claim. The exposure is bounded: the code is
+  single-use, short-lived, and unusable without `GOOGLE_CLIENT_SECRET`. Treat access
+  logs as sensitive, or disable the access log, if that residual risk matters to you.
 
 Stop the stack with:
 
@@ -456,13 +496,18 @@ Important groups:
 - **PostgreSQL:** `DATABASE_URL`, `TEST_DATABASE_URL`, `DB_*`
 - **Redis:** `REDIS_URL`, `REDIS_PORT`
 - **MinIO:** `MINIO_ENDPOINT`, `MINIO_PUBLIC_ENDPOINT`, credentials, bucket, TLS flag
-- **HTTP/auth:** ports, CORS origins, `JWT_SECRET`, admin credentials, cookie flags
+- **HTTP/auth:** ports, CORS origins, `JWT_SECRET`, cookie flags, and `ADMIN_USERNAME` /
+  `ADMIN_PASSWORD`. `ADMIN_PASSWORD` is **legacy and seed-only**: startup hashes it into
+  a column that nothing verifies, since password login was removed. It authenticates
+  nothing. `ADMIN_USERNAME` still matters — it names the seeded row that the first
+  Google login claims.
 - **Google SSO:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — all
-  three must be set for Google sign-in to work; login endpoints return 503 while unset.
-  Create an OAuth 2.0 Web client in the Google Cloud console: **APIs & Services →
-  Credentials → Create OAuth client ID → Web application**, then add both
-  `http://localhost:5173/api/auth/google/callback` (Vite dev) and
-  `http://localhost:3000/api/auth/google/callback` (Docker) as Authorized redirect URIs.
+  three must be set for Google sign-in to work; login endpoints return 503 while unset,
+  which means nobody can sign in at all. Setup steps are in
+  [Quick start step 2](#2-create-a-google-oauth-client-required-to-sign-in).
+  `VITE_API_URL` must stay same-origin with the web app: the popup reports its result
+  with `postMessage(..., window.location.origin)`, so a cross-origin API base breaks
+  sign-in even though every other call would still work.
 - **Downloads:** `DOWNLOAD_JOB_TTL_HOURS`, `SIGNED_URL_EXPIRES_SECONDS`
 - **LLM:** provider/model/key, timeout, retries, token/context limits, assistant mode,
   HITL expiry/round limits, optional Langfuse flag
@@ -475,6 +520,11 @@ update `Settings`, `.env.example`, Compose, and this README together.
 Security-sensitive production changes include:
 
 - Use a long random `JWT_SECRET` and strong unique credentials.
+- Sign in with the intended owner's Google account before anyone else can reach the app
+  — the first Google login claims the seeded admin row and its library. See
+  [Security notes for the Google sign-in flow](#security-notes-for-the-google-sign-in-flow).
+- Treat uvicorn access logs as sensitive: the OAuth authorization code is part of the
+  callback query string.
 - Set `COOKIE_SECURE=true` behind HTTPS and review `COOKIE_SAMESITE`.
 - Limit `CORS_ORIGINS` to trusted frontend origins.
 - Use TLS-enabled PostgreSQL/Redis/MinIO or private networking.

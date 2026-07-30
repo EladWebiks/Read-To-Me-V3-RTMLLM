@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { meQueryKey } from './hooks'
 import { useGoogleLogin } from './useGoogleLogin'
 
 const navigateMock = vi.fn()
@@ -46,7 +47,7 @@ describe('useGoogleLogin', () => {
   it('starts idle, goes pending, then navigates to /reader on success', () => {
     mockOpen(fakePopup())
     const queryClient = new QueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const resetSpy = vi.spyOn(queryClient, 'resetQueries')
     const view = renderUseGoogleLogin(queryClient)
 
     expect(view.result.current.state).toEqual({ status: 'idle' })
@@ -57,7 +58,35 @@ describe('useGoogleLogin', () => {
     act(() => dispatchAuthMessage({ type: 'rtm-google-auth', ok: true, reason: null }))
 
     expect(navigateMock).toHaveBeenCalledWith('/reader', { replace: true })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['auth', 'me'] })
+    expect(resetSpy).toHaveBeenCalledWith({ queryKey: meQueryKey })
+  })
+
+  it('clears the cached me error before navigating, so the guard shows loading', async () => {
+    // Pins the fix for the invalidate+navigate race: with invalidateQueries the
+    // cached 401 error survives the navigate, ProtectedRoute reads
+    // isLoading === false / isError === true and bounces back to /login.
+    mockOpen(fakePopup())
+    const queryClient = new QueryClient()
+    await queryClient
+      .fetchQuery({
+        queryKey: meQueryKey,
+        queryFn: () => Promise.reject(new Error('401')),
+        retry: false,
+      })
+      .catch(() => undefined)
+    expect(queryClient.getQueryState(meQueryKey)?.status).toBe('error')
+
+    let statusAtNavigate: string | undefined
+    navigateMock.mockImplementation(() => {
+      statusAtNavigate = queryClient.getQueryState(meQueryKey)?.status
+    })
+
+    const view = renderUseGoogleLogin(queryClient)
+    act(() => view.result.current.start())
+    act(() => dispatchAuthMessage({ type: 'rtm-google-auth', ok: true, reason: null }))
+
+    expect(navigateMock).toHaveBeenCalledWith('/reader', { replace: true })
+    expect(statusAtNavigate).toBe('pending')
   })
 
   it('surfaces the backend reason as an error state', () => {
