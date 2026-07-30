@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -177,12 +178,20 @@ class ModelProvider(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ModelConfiguration(Base):
     """Per-model capabilities and feature flags."""
 
     __tablename__ = "model_configurations"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_id", "model_name", name="uq_model_configurations_provider_model"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     provider_id: Mapped[uuid.UUID] = mapped_column(
@@ -195,6 +204,12 @@ class ModelConfiguration(Base):
     supports_structured: Mapped[bool] = mapped_column(Boolean, default=False)
     supports_streaming: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # USD per 1M tokens; runtime truth for cost records (code catalog is seed-only).
+    input_cost_per_1m: Mapped[float] = mapped_column(Float, default=0.0)
+    output_cost_per_1m: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

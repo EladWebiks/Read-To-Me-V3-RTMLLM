@@ -152,6 +152,8 @@ class LlmRepository:
                 supports_structured=spec.supports_structured,
                 supports_streaming=spec.supports_streaming,
                 enabled=spec.enabled,
+                input_cost_per_1m=spec.input_cost_per_1m,
+                output_cost_per_1m=spec.output_cost_per_1m,
             )
         )
 
