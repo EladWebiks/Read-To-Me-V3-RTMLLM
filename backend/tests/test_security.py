@@ -5,20 +5,15 @@ from uuid import uuid4
 import jwt
 import pytest
 from app.core.config import Settings
-from app.core.security import (
-    create_access_token,
-    decode_access_token,
-    hash_password,
-    verify_password,
-)
+from app.core.security import create_access_token, decode_access_token, hash_password
 
 
 @pytest.mark.unit
-def test_password_hash_roundtrip() -> None:
-    """Hashed passwords verify; wrong passwords fail."""
+def test_hash_password_produces_a_distinct_hash() -> None:
+    """Hashing never returns the plaintext, and is non-deterministic (salted)."""
     hashed = hash_password("correct-horse")
-    assert verify_password(hashed, "correct-horse")
-    assert not verify_password(hashed, "wrong-password")
+    assert hashed != "correct-horse"
+    assert hash_password("correct-horse") != hashed
 
 
 @pytest.mark.unit

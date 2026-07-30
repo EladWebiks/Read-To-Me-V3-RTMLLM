@@ -4,6 +4,7 @@ import { useLogout, useMe } from '@/features/auth/hooks'
 import { AssistantNavButton } from '@/features/assistant'
 import { SettingsSheet } from '@/features/settings/SettingsSheet'
 import { Button, IconTooltip, TooltipProvider } from '@/shared/ui'
+import { UserAvatar } from './UserAvatar'
 
 export function ShellActions() {
   const { data } = useMe()
@@ -26,9 +27,7 @@ export function ShellActions() {
         </Button>
       </IconTooltip>
       <SettingsSheet />
-      <span className="hidden text-sm text-muted-foreground sm:inline">
-        {data?.user.username}
-      </span>
+      {data ? <UserAvatar user={data.user} /> : null}
       <IconTooltip label="Log out">
         <Button
           type="button"

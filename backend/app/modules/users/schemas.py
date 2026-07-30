@@ -23,5 +23,6 @@ class UserRead(BaseModel):
     id: UUID
     username: str
     email: str | None
+    picture_url: str | None = None
     role: str
     created_at: datetime

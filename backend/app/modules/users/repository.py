@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User
@@ -31,6 +31,45 @@ class UserRepository:
     async def add(self, user: User) -> User:
         """Persist a new user and flush to assign defaults."""
         self._session.add(user)
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
+
+    async def get_by_email(self, email: str) -> User | None:
+        """Return a non-deleted user by email, case-insensitively.
+
+        Email is case-insensitive in practice, and rows seeded before Google
+        SSO may hold mixed case (e.g. "Owner@Example.com"). Comparing verbatim
+        would miss the match and silently fork a second, parallel account
+        instead of linking the existing one, stranding its library. Writes
+        normalize to lower case; this `lower()` covers legacy rows.
+        """
+        stmt = select(User).where(
+            func.lower(User.email) == email.lower(),
+            User.deleted_at.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_google_sub(self, google_sub: str) -> User | None:
+        """Return a non-deleted user by Google subject id."""
+        stmt = select(User).where(
+            User.google_sub == google_sub,
+            User.deleted_at.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def any_google_linked(self) -> bool:
+        """True when any non-deleted user has a Google identity."""
+        stmt = (
+            select(User.id).where(User.google_sub.is_not(None), User.deleted_at.is_(None)).limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+    async def save(self, user: User) -> User:
+        """Flush pending changes on an already-tracked user."""
         await self._session.flush()
         await self._session.refresh(user)
         return user

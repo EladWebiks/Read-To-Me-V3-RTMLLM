@@ -1,5 +1,10 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+/** Absolute (or base-prefixed) URL for an API path. */
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`
+}
+
 export class ApiError extends Error {
   readonly status: number
 

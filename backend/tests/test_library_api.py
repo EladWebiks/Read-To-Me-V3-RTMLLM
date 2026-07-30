@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Callable
 import pytest
 from app.core.config import get_settings
 from app.core.deps import get_db
+from app.core.security import create_access_token
 from app.main import app
 from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
@@ -64,16 +65,15 @@ async def _seed_admin(session_factory: async_sessionmaker[AsyncSession]) -> None
         await session.commit()
 
 
-async def _login(http: AsyncClient) -> None:
+async def _mint_token(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> str:
+    """Mint a session token directly, bypassing the (removed) password endpoint."""
     settings = get_settings()
-    login = await http.post(
-        "/api/auth/login",
-        json={
-            "username": settings.admin_username,
-            "password": settings.admin_password,
-        },
-    )
-    assert login.status_code == 200
+    async with session_factory() as session:
+        user = await UserService(session).get_entity_by_username(settings.admin_username)
+        assert user is not None
+        return create_access_token(user_id=user.id, username=user.username, settings=settings)
 
 
 @pytest.fixture
@@ -89,10 +89,11 @@ async def client() -> AsyncIterator[AsyncClient]:
     await _clear_library(engine)
     app.dependency_overrides[get_db] = _make_db_override(session_factory)
     await _seed_admin(session_factory)
+    token = await _mint_token(session_factory)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
-        await _login(http)
+        http.cookies.set("rtm_token", token)
         yield http
 
     app.dependency_overrides.clear()

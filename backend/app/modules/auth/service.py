@@ -1,4 +1,9 @@
-"""Auth business logic (login / token)."""
+"""Auth business logic: Google sign-in and session-token issue/validation.
+
+Identity *matching* rules live in `users` — this module only orchestrates the
+OAuth exchange and mints the session token. It never touches `users` ORM
+entities (CLAUDE.md: module A calls module B's service, never its models).
+"""
 
 from __future__ import annotations
 
@@ -8,12 +13,10 @@ import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.security import (
-    create_access_token,
-    decode_access_token,
-    verify_password,
-)
-from app.modules.auth.exceptions import InvalidCredentialsError, NotAuthenticatedError
+from app.core.security import create_access_token, decode_access_token
+from app.modules.auth.exceptions import GoogleAuthError, NotAuthenticatedError
+from app.modules.auth.google import GoogleOAuthClient
+from app.modules.users.exceptions import GoogleIdentityConflictError, UserNotFoundError
 from app.modules.users.schemas import UserRead
 from app.modules.users.service import UserService
 
@@ -22,20 +25,42 @@ class AuthService:
     """Authenticate users and issue/validate session tokens."""
 
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
         self._users = UserService(session)
         self._settings = settings
 
-    async def login(self, username: str, password: str) -> tuple[UserRead, str]:
-        """Validate credentials and return (user, jwt)."""
-        user = await self._users.get_entity_by_username(username)
-        if user is None or not verify_password(user.password_hash, password):
-            raise InvalidCredentialsError
+    async def login_with_google(self, code: str) -> tuple[UserRead, str]:
+        """Complete the Google code flow and return (user, jwt)."""
+        client = GoogleOAuthClient(self._settings)
+        id_token = await client.exchange_code(code)
+        claims = await client.verify_id_token(id_token)
+        try:
+            user = await self._users.resolve_google_identity(
+                google_sub=claims.sub,
+                email=str(claims.email),
+                admin_username=self._settings.admin_username,
+                picture_url=claims.picture,
+            )
+        except GoogleIdentityConflictError as exc:
+            # Re-raised as the auth-domain error so the wire reason (and the
+            # frontend's `reason` string) is unchanged by where the rule lives.
+            raise GoogleAuthError("google_identity_conflict") from exc
+        except Exception:
+            # Leave the request-scoped session usable before propagating. A DB
+            # error here — e.g. two concurrent first-logins colliding on the
+            # google_sub unique index — poisons the transaction, and the router
+            # deliberately converts unexpected exceptions into a popup response
+            # rather than re-raising. Without this rollback the session's commit
+            # would then fail during dependency teardown, replacing that popup
+            # with the bare 500 the popup contract exists to prevent.
+            await self._session.rollback()
+            raise
         token = create_access_token(
             user_id=user.id,
             username=user.username,
             settings=self._settings,
         )
-        return UserRead.model_validate(user), token
+        return user, token
 
     async def user_from_token(self, token: str) -> UserRead:
         """Resolve the authenticated user from a JWT."""
@@ -44,7 +69,7 @@ class AuthService:
             user_id = UUID(str(payload["sub"]))
         except (jwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
             raise NotAuthenticatedError from exc
-        user = await self._users.get_entity_by_id(user_id)
-        if user is None:
-            raise NotAuthenticatedError
-        return UserRead.model_validate(user)
+        try:
+            return await self._users.get_by_id(user_id)
+        except UserNotFoundError as exc:
+            raise NotAuthenticatedError from exc

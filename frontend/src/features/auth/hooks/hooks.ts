@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { ApiError } from '@/shared/lib/api'
-import { fetchMe, login, logout } from '@/features/auth/api'
+import { fetchMe, logout } from '@/features/auth/api'
 
 export const meQueryKey = ['auth', 'me'] as const
 
@@ -11,17 +11,6 @@ export function useMe() {
     queryFn: fetchMe,
     retry: false,
     staleTime: 60_000,
-  })
-}
-
-export function useLogin() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ username, password }: { username: string; password: string }) =>
-      login(username, password),
-    onSuccess: (data) => {
-      queryClient.setQueryData(meQueryKey, data)
-    },
   })
 }
 

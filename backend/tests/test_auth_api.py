@@ -80,7 +80,11 @@ async def client() -> AsyncIterator[AsyncClient]:
     await _seed_admin(session_factory)
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as http:
+    # base_url uses a dotted host ("test.local", not "test"): Python's
+    # http.cookiejar special-cases single-label hostnames when matching a
+    # cookie's Domain attribute, which breaks domain-scoped cookie handling
+    # below (see test_me_and_logout_with_minted_token).
+    async with AsyncClient(transport=transport, base_url="http://test.local") as http:
         yield http
 
     app.dependency_overrides.clear()
@@ -90,20 +94,28 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_login_me_logout_flow(client: AsyncClient) -> None:
-    """Login sets cookie; /me works; logout clears session."""
-    settings = get_settings()
-    login = await client.post(
-        "/api/auth/login",
-        json={
-            "username": settings.admin_username,
-            "password": settings.admin_password,
-        },
-    )
-    assert login.status_code == 200
-    assert login.json()["user"]["username"] == settings.admin_username
-    assert "rtm_token" in login.cookies
+async def test_me_and_logout_with_minted_token(client: AsyncClient) -> None:
+    """A directly-minted session token works for /me; logout clears it."""
+    from app.core.security import create_access_token
+    from app.modules.users.service import UserService
 
+    settings = get_settings()
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with factory() as session:
+        user = await UserService(session).get_entity_by_username(settings.admin_username)
+        assert user is not None
+        token = create_access_token(user_id=user.id, username=user.username, settings=settings)
+    await engine.dispose()
+
+    # domain="test.local" must match the ASGITransport host (base_url set in
+    # the `client` fixture above). Without an explicit, matching domain,
+    # httpx's cookiejar stores this manually-injected cookie as a
+    # domain-less entry that the logout response's host-scoped Set-Cookie
+    # cannot expire, so the client would keep sending the "deleted" cookie
+    # and /me would wrongly still return 200 after logout — a cookie-jar
+    # artifact, not real proof that logout invalidates the session.
+    client.cookies.set("rtm_token", token, domain="test.local", path="/")
     me = await client.get("/api/auth/me")
     assert me.status_code == 200
     assert me.json()["user"]["username"] == settings.admin_username
@@ -117,11 +129,14 @@ async def test_login_me_logout_flow(client: AsyncClient) -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_login_rejects_bad_password(client: AsyncClient) -> None:
-    """Wrong password returns 401."""
+async def test_password_login_is_gone(client: AsyncClient) -> None:
+    """The old password endpoint no longer exists."""
     settings = get_settings()
     response = await client.post(
         "/api/auth/login",
-        json={"username": settings.admin_username, "password": "not-the-password"},
+        json={
+            "username": settings.admin_username,
+            "password": settings.admin_password,
+        },
     )
-    assert response.status_code == 401
+    assert response.status_code == 404
