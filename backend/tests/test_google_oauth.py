@@ -19,6 +19,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import Response
 
+from tests.factories import make_settings
+
 CLIENT_ID = "test-client-id.apps.googleusercontent.com"
 KID = "test-kid"
 FORGED_KID = "forged-kid"
@@ -41,8 +43,7 @@ _FORGED_PRIVATE_PEM = _FORGED_PRIVATE_KEY.private_bytes(
 
 
 def _settings() -> Settings:
-    return Settings(
-        _env_file=None,
+    return make_settings(
         google_client_id=CLIENT_ID,
         google_client_secret="test-secret",
         google_redirect_uri="http://localhost:5173/api/auth/google/callback",
@@ -92,8 +93,12 @@ def _fresh_jwks_cache() -> None:
 
 
 @pytest.mark.unit
-def test_missing_config_raises() -> None:
-    settings = Settings(_env_file=None)
+def test_missing_config_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The developer's real `.env` may export these; "unconfigured" is the case
+    # under test, so clear them first.
+    for var in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"):
+        monkeypatch.delenv(var, raising=False)
+    settings = make_settings()
     with pytest.raises(GoogleNotConfiguredError):
         GoogleOAuthClient(settings)
 

@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.modules.llm.chat_service import ChatService, ChatSseEvent
 from app.modules.llm.repository import LlmRepository
 from app.modules.llm.types import ToolCallingRequest, ToolCallingResponse, Usage
@@ -15,6 +15,7 @@ from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
 from tests.llm.stream_fakes import stream_from_call
 
 
@@ -65,7 +66,7 @@ async def test_stream_chat_persists_with_fake_llm(
     chat_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(
+    settings = make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",

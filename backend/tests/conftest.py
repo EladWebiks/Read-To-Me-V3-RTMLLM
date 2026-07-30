@@ -1,13 +1,40 @@
-"""Pytest bootstrap: isolate integration tests from the app database."""
+"""Pytest bootstrap: hermetic env for settings + isolated test database."""
 
 from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 from urllib.parse import urlparse
 
+from dotenv import dotenv_values
+
 # Must run before any app.core.config / alembic import.
+_ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 _DEFAULT_TEST_DB = "postgresql+asyncpg://rtm:rtm@localhost:5432/rtm_test"
+# Infra keys only. The repo-root `.env` also holds real secrets (GOOGLE_*,
+# GEMINI_API_KEY); importing those would silently configure tests that assert
+# a feature is *unconfigured*, and would make results depend on the developer's
+# `.env`. Settings built by `tests.factories` read os.environ for anything not
+# passed explicitly, so what lands here has to stay boring.
+_INFRA_PREFIXES = ("DATABASE_URL", "TEST_DATABASE_URL", "REDIS_URL", "MINIO_")
+
+# 1) Real dev values from the repo-root .env (if present) win over dummies,
+#    so integration tests keep talking to the local stack's credentials.
+if _ROOT_ENV.exists():
+    for _key, _value in dotenv_values(_ROOT_ENV).items():
+        if _value is not None and _key.startswith(_INFRA_PREFIXES):
+            os.environ.setdefault(_key, _value)
+
+# 2) The two remaining no-default vars, so a clean checkout (or a
+#    docker-compose .env, which must not contain them) still boots.
+for _key, _value in {
+    "REDIS_URL": "redis://localhost:6379/0",
+    "MINIO_ENDPOINT": "localhost:9000",
+}.items():
+    os.environ.setdefault(_key, _value)
+
+# 3) Integration tests must never touch the app database.
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", _DEFAULT_TEST_DB)
 
 

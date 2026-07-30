@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.modules.books.schemas import BookCreate
 from app.modules.library.service import LibraryService
 from app.modules.llm.chat_service import ChatService
@@ -25,6 +25,7 @@ from app.modules.users.service import UserService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
 from tests.llm.stream_fakes import stream_from_call
 
 
@@ -90,7 +91,7 @@ async def test_orchestration_runs_search_user_books(
     orch_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(
+    settings = make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",
@@ -128,7 +129,7 @@ async def test_thinking_step_is_sent_before_llm_finishes(
     orch_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(
+    settings = make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",
@@ -161,7 +162,7 @@ async def test_final_answer_is_not_discarded_when_usage_crosses_soft_limit(
     orch_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(
+    settings = make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_max_turn_tokens_in=5,
@@ -192,7 +193,7 @@ async def test_text_delta_arrives_before_tool_stream_finishes(
     orch_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(llm_enabled=True, gemini_api_key="test-key")
+    settings = make_settings(llm_enabled=True, gemini_api_key="test-key")
     user = await _seed_user_with_book(orch_session)
     service = ChatService(orch_session, settings)
     release = asyncio.Event()

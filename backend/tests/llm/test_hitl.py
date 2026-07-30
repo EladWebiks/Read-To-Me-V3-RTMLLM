@@ -24,6 +24,7 @@ from app.modules.users.service import UserService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
 from tests.llm.stream_fakes import stream_from_call
 
 _URL = "https://novelfull.net/book/foo.html"
@@ -46,7 +47,7 @@ async def _user(session: AsyncSession) -> UserRead:
 
 
 def _settings() -> Settings:
-    return Settings(
+    return make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",

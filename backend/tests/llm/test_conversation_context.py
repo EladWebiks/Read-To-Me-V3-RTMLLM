@@ -20,6 +20,8 @@ from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
+
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
@@ -31,7 +33,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 
 
 def _settings(trigger: int) -> Settings:
-    return Settings(
+    return make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",
