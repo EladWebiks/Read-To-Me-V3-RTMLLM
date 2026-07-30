@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.orm import import_all_models
+from app.modules.admin.router import router as admin_router
 from app.modules.audio.router import router as audio_router
 from app.modules.auth.router import router as auth_router
 from app.modules.chapters.router import router as chapters_router
@@ -39,6 +40,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def _register_routers(app: FastAPI, api_prefix: str) -> None:
+    app.include_router(health_router, prefix=api_prefix)
+    app.include_router(auth_router, prefix=api_prefix)
+    app.include_router(library_router, prefix=api_prefix)
+    app.include_router(chapters_router, prefix=api_prefix)
+    app.include_router(reader_router, prefix=api_prefix)
+    app.include_router(audio_router, prefix=api_prefix)
+    app.include_router(downloads_router, prefix=api_prefix)
+    app.include_router(scraping_router, prefix=api_prefix)
+    app.include_router(imports_router, prefix=api_prefix)
+    app.include_router(discovery_router, prefix=api_prefix)
+    app.include_router(llm_router, prefix=api_prefix)
+    app.include_router(chat_router, prefix=api_prefix)
+    app.include_router(llm_admin_router, prefix=api_prefix)
+    app.include_router(runtime_config_router, prefix=api_prefix)
+    app.include_router(admin_router, prefix=api_prefix)
+
+
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
@@ -58,20 +77,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     register_exception_handlers(app)
-    app.include_router(health_router, prefix=settings.app.api_prefix)
-    app.include_router(auth_router, prefix=settings.app.api_prefix)
-    app.include_router(library_router, prefix=settings.app.api_prefix)
-    app.include_router(chapters_router, prefix=settings.app.api_prefix)
-    app.include_router(reader_router, prefix=settings.app.api_prefix)
-    app.include_router(audio_router, prefix=settings.app.api_prefix)
-    app.include_router(downloads_router, prefix=settings.app.api_prefix)
-    app.include_router(scraping_router, prefix=settings.app.api_prefix)
-    app.include_router(imports_router, prefix=settings.app.api_prefix)
-    app.include_router(discovery_router, prefix=settings.app.api_prefix)
-    app.include_router(llm_router, prefix=settings.app.api_prefix)
-    app.include_router(chat_router, prefix=settings.app.api_prefix)
-    app.include_router(llm_admin_router, prefix=settings.app.api_prefix)
-    app.include_router(runtime_config_router, prefix=settings.app.api_prefix)
+    _register_routers(app, settings.app.api_prefix)
     return app
 
 
