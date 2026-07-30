@@ -3,11 +3,13 @@
 from collections.abc import AsyncIterator
 
 import pytest
+from app.core.bootstrap import seed_admin_user
 from app.core.config import get_settings
 from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleClaims, GoogleOAuthClient
 from app.modules.auth.service import AuthService
 from app.modules.users.exceptions import GoogleIdentityConflictError
+from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from sqlalchemy import text
@@ -62,13 +64,13 @@ async def test_first_google_login_claims_admin(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = get_settings()
-    await UserService(session).create(
-        UserCreate(username=settings.auth.admin_username, password="password123")
-    )
+    await seed_admin_user(session)  # exactly how the row exists in production
     _patch_google(monkeypatch, "sub-admin", "owner@example.com")
     user, token = await _service(session).login_with_google("code")
     assert user.username == settings.auth.admin_username
     assert user.email == "owner@example.com"
+    assert user.is_admin is True
+    assert user.membership == Membership.FREE
     assert token
 
 
@@ -145,14 +147,13 @@ async def test_second_google_account_provisions_new_user(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = get_settings()
-    await UserService(session).create(
-        UserCreate(username=settings.auth.admin_username, password="password123")
-    )
+    await seed_admin_user(session)
     await UserService(session).create_from_google("sub-one", "one@example.com")
     _patch_google(monkeypatch, "sub-two", "two@example.com")
     user, _ = await _service(session).login_with_google("code")
     assert user.username == "two"
     assert user.username != settings.auth.admin_username
+    assert user.is_admin is False
 
 
 @pytest.mark.integration
