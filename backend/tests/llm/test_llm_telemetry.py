@@ -6,8 +6,8 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from app.core.config import get_settings
+from app.modules.llm.catalog import get_model
 from app.modules.llm.models import CostRecord, LlmExecution
-from app.modules.llm.registry import get_model
 from app.modules.llm.telemetry import LlmTelemetry, NoOpTracer, TelemetryContext
 from app.modules.llm.types import Usage
 from sqlalchemy import select

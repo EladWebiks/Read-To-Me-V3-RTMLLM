@@ -60,7 +60,7 @@ class ChatService:
         ui_context: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChatSseEvent]:
         """Persist user turn, run orchestrated assistant turn."""
-        self._llm.ensure_enabled()
+        await self._llm.ensure_ready()
         text = message.strip()
         try:
             conv_id = await self._prepare_conversation(user_id, text, conversation_id)
@@ -81,7 +81,7 @@ class ChatService:
         values: dict[str, Any] | None,
     ) -> AsyncIterator[ChatSseEvent]:
         """Resume a turn after HITL confirmation (new SSE stream)."""
-        self._llm.ensure_enabled()
+        await self._llm.ensure_ready()
         try:
             conv = await self._repo.get_conversation_for_user(conversation_id, user_id)
             if conv is None:

@@ -8,11 +8,12 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 from app.core.config import Settings
+from app.modules.llm import catalog
 from app.modules.llm.capabilities import ModelCapability
 from app.modules.llm.exceptions import LlmError, LlmProviderError, NoCandidateModelError
-from app.modules.llm.providers import build_provider_for
+from app.modules.llm.providers import ProviderBuildContext, build_provider
 from app.modules.llm.providers.gemini_provider import GeminiProvider
-from app.modules.llm.registry import ModelSpec, models_for_capability
+from app.modules.llm.registry import ModelSpec
 
 T = TypeVar("T")
 
@@ -34,8 +35,8 @@ class ModelRouter:
         self._breakers: dict[str, _BreakerState] = {}
 
     def candidates(self, capability: ModelCapability) -> list[ModelSpec]:
-        """Enabled models for capability, preferred settings model first."""
-        return models_for_capability(
+        """Enabled snapshot models for capability, preferred settings model first."""
+        return catalog.models_for_capability(
             capability,
             prefer_provider=self._settings.llm.provider,
             prefer_model=self._settings.llm.model,
@@ -43,11 +44,7 @@ class ModelRouter:
 
     def build(self, model: ModelSpec) -> GeminiProvider:
         """Instantiate adapter for a catalog model."""
-        return build_provider_for(
-            self._settings,
-            provider=model.provider,
-            model_name=model.model_name,
-        )
+        return build_provider(ProviderBuildContext(settings=self._settings, model=model))
 
     async def run(
         self,

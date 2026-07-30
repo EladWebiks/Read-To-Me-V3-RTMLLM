@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import urlparse
 
+import pytest
 from dotenv import dotenv_values
 
 # Must run before any app.core.config / alembic import.
@@ -85,3 +87,20 @@ def pytest_configure() -> None:
     """Create rtm_test (if needed) and apply migrations once per session."""
     asyncio.run(_ensure_database())
     _run_migrations()
+
+
+@pytest.fixture(autouse=True)
+def _warm_model_catalog() -> Iterator[None]:
+    """Pre-warm the model-catalog snapshot with the seed defaults.
+
+    The runtime catalog is DB-backed; warming it from MODEL_CATALOG keeps
+    unit tests hermetic and gives every existing test exactly the catalog it
+    saw when the registry was static. DB-facing catalog tests call
+    catalog.invalidate() themselves (see tests/llm/conftest.py).
+    """
+    from app.modules.llm import catalog
+    from app.modules.llm.registry import MODEL_CATALOG
+
+    catalog.put_snapshot(MODEL_CATALOG)
+    yield
+    catalog.invalidate()

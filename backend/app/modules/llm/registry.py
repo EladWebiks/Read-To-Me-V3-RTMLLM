@@ -1,4 +1,9 @@
-"""Static model catalog — seeded into DB; domain never hardcodes names."""
+"""Seed-only model catalog defaults.
+
+The DB (model_providers / model_configurations) is the runtime source of
+truth — see modules/llm/catalog.py. This tuple only defines what startup
+seeding inserts when rows are missing; it never overwrites admin edits.
+"""
 
 from __future__ import annotations
 
@@ -65,39 +70,3 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         output_cost_per_1m=2.50,
     ),
 )
-
-
-def list_models(*, enabled_only: bool = True) -> list[ModelSpec]:
-    """Return catalog entries."""
-    if enabled_only:
-        return [m for m in MODEL_CATALOG if m.enabled]
-    return list(MODEL_CATALOG)
-
-
-def get_model(provider: str, model_name: str) -> ModelSpec | None:
-    """Lookup a catalog entry."""
-    for model in MODEL_CATALOG:
-        if model.provider == provider and model.model_name == model_name:
-            return model
-    return None
-
-
-def models_for_capability(
-    capability: ModelCapability,
-    *,
-    prefer_provider: str | None = None,
-    prefer_model: str | None = None,
-) -> list[ModelSpec]:
-    """Ordered candidates supporting capability (preferred model first)."""
-    matches = [m for m in MODEL_CATALOG if m.enabled and capability in m.capabilities]
-    if prefer_model and prefer_provider:
-        preferred = [
-            m for m in matches if m.provider == prefer_provider and m.model_name == prefer_model
-        ]
-        rest = [m for m in matches if m not in preferred]
-        return preferred + rest
-    if prefer_provider:
-        preferred = [m for m in matches if m.provider == prefer_provider]
-        rest = [m for m in matches if m not in preferred]
-        return preferred + rest
-    return matches

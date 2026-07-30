@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.modules.llm import catalog
 from app.modules.llm.capabilities import ModelCapability
 from app.modules.llm.exceptions import (
     LlmConfigError,
@@ -22,7 +23,7 @@ from app.modules.llm.exceptions import (
 )
 from app.modules.llm.model_router import ModelRouter
 from app.modules.llm.providers.gemini_provider import GeminiProvider
-from app.modules.llm.registry import ModelSpec, list_models
+from app.modules.llm.registry import ModelSpec
 from app.modules.llm.schemas import ModelListResponse, ModelRead
 from app.modules.llm.telemetry import LlmTelemetry, TelemetryContext, build_tracer
 from app.modules.llm.types import (
@@ -46,6 +47,7 @@ class LlmService:
     """Entry point for capability-based LLM calls."""
 
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
         self._settings = settings
         self._router = ModelRouter(settings)
         self._telemetry = LlmTelemetry(
@@ -70,8 +72,16 @@ class LlmService:
         if self._settings.llm.provider == "gemini" and not self._settings.llm.gemini_api_key:
             raise LlmConfigError("GEMINI_API_KEY is required when LLM is enabled")
 
-    def list_public_models(self) -> ModelListResponse:
+    async def ensure_ready(self) -> None:
+        """Raise if LLM is off, misconfigured, or no catalog model is enabled."""
+        self.ensure_enabled()
+        await catalog.ensure_loaded(self._session)
+        if not catalog.list_models(enabled_only=True):
+            raise NoCandidateModelError("no enabled models in catalog")
+
+    async def list_public_models(self) -> ModelListResponse:
         """Catalog for GET /api/llm/models (no secrets)."""
+        await catalog.ensure_loaded(self._session)
         models = [
             ModelRead(
                 provider=m.provider,
@@ -83,7 +93,7 @@ class LlmService:
                 supports_streaming=m.supports_streaming,
                 enabled=m.enabled,
             )
-            for m in list_models(enabled_only=False)
+            for m in catalog.list_models(enabled_only=False)
         ]
         return ModelListResponse(
             llm_enabled=self._settings.llm.enabled,
@@ -100,7 +110,7 @@ class LlmService:
         conversation_id: UUID | None = None,
     ) -> GenerateTextResponse:
         """Generate text via routed provider."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(
             provider: GeminiProvider,
@@ -119,7 +129,7 @@ class LlmService:
         conversation_id: UUID | None = None,
     ) -> ToolCallingResponse:
         """Tool-calling completion via routed provider."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(
             provider: GeminiProvider,
@@ -138,7 +148,7 @@ class LlmService:
         conversation_id: UUID | None = None,
     ) -> AsyncGenerator[ToolCallingStreamChunk, None]:
         """Stream a tool-capable round from one provider; no mid-stream fallback."""
-        self.ensure_enabled()
+        await self.ensure_ready()
         matches = self._router.candidates(capability)
         if not matches:
             raise NoCandidateModelError(capability.value)
@@ -203,7 +213,7 @@ class LlmService:
         conversation_id: UUID | None = None,
     ) -> tuple[T, str, str]:
         """Structured output plus provider/model provenance."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(provider: GeminiProvider, _model: ModelSpec) -> T:
             return await provider.generate_structured_output(req)
@@ -226,7 +236,7 @@ class LlmService:
         capability: ModelCapability = ModelCapability.FAST_CHAT,
     ) -> AsyncIterator[StreamChunk]:
         """Stream from the first candidate (no mid-stream fallback)."""
-        self.ensure_enabled()
+        await self.ensure_ready()
         matches = self._router.candidates(capability)
         if not matches:
             raise NoCandidateModelError(capability.value)
@@ -241,7 +251,7 @@ class LlmService:
         capability: ModelCapability = ModelCapability.EMBEDDING,
     ) -> EmbeddingResponse:
         """Embeddings via routed provider (may be unsupported in B1)."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(
             provider: GeminiProvider,

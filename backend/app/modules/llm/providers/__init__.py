@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from app.core.config import Settings
 from app.modules.llm.exceptions import LlmConfigError
 from app.modules.llm.providers.gemini_provider import GeminiProvider, GeminiProviderConfig
-from app.modules.llm.registry import ModelSpec, get_model
+from app.modules.llm.registry import ModelSpec
 
 # Provider names with a registered adapter factory. A DB catalog row for any
 # other provider is unserveable and is skipped by the runtime catalog.
@@ -32,19 +32,6 @@ def build_provider(ctx: ProviderBuildContext) -> GeminiProvider:
     if ctx.model.provider == "gemini":
         return _build_gemini(ctx)
     raise LlmConfigError(f"Unknown provider: {ctx.model.provider}")
-
-
-def build_provider_for(
-    settings: Settings,
-    *,
-    provider: str,
-    model_name: str,
-) -> GeminiProvider:
-    """Lookup catalog + build."""
-    spec = get_model(provider, model_name)
-    if spec is None:
-        raise LlmConfigError(f"Unknown model: {provider}/{model_name}")
-    return build_provider(ProviderBuildContext(settings=settings, model=spec))
 
 
 def _build_gemini(ctx: ProviderBuildContext) -> GeminiProvider:

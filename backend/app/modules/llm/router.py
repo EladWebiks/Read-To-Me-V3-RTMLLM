@@ -58,7 +58,7 @@ async def list_models(
     service: Annotated[LlmService, Depends(_llm_service)],
 ) -> ModelListResponse:
     """List enabled/catalog models and capabilities (no secrets)."""
-    return service.list_public_models()
+    return await service.list_public_models()
 
 
 @chat_router.post("")
