@@ -232,6 +232,10 @@ class UserService:
         users, total = await self._repo.list_all(limit=limit, offset=offset)
         return [UserAdminRead.from_user(user) for user in users], total
 
+    async def usernames_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
+        """Backoffice attribution: ids → usernames, soft-deleted included."""
+        return await self._repo.usernames_for_ids(user_ids)
+
     async def update_user_admin(
         self, *, actor_id: UUID, user_id: UUID, patch: UserAdminPatch
     ) -> UserAdminRead:

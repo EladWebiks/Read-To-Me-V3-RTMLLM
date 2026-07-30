@@ -6,6 +6,7 @@ import asyncio
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import aclosing
+from dataclasses import asdict
 from datetime import datetime
 from typing import TypeVar
 from uuid import UUID
@@ -26,7 +27,16 @@ from app.modules.llm.model_router import ModelRouter
 from app.modules.llm.providers.gemini_provider import GeminiProvider
 from app.modules.llm.registry import ModelSpec
 from app.modules.llm.repository import LlmRepository
-from app.modules.llm.schemas import ModelListResponse, ModelRead, UserUsageSummary
+from app.modules.llm.schemas import (
+    AdminUsageOverview,
+    LlmExecutionRead,
+    ModelListResponse,
+    ModelRead,
+    ModelUsageRead,
+    TaskUsageRead,
+    UserUsageRead,
+    UserUsageSummary,
+)
 from app.modules.llm.telemetry import LlmTelemetry, TelemetryContext, build_tracer
 from app.modules.llm.types import (
     EmbeddingRequest,
@@ -316,6 +326,48 @@ class LlmService:
             total_cost=totals.total_cost,
             execution_count=totals.execution_count,
         )
+
+    async def usage_overview_admin(
+        self, *, period_start: datetime, period_end: datetime
+    ) -> AdminUsageOverview:
+        """Backoffice cross-user usage totals with model/task breakdowns."""
+        totals = await self._repo.usage_totals_admin(
+            period_start=period_start, period_end=period_end
+        )
+        by_model = await self._repo.usage_by_model_admin(
+            period_start=period_start, period_end=period_end
+        )
+        by_task = await self._repo.usage_by_task_admin(
+            period_start=period_start, period_end=period_end
+        )
+        return AdminUsageOverview(
+            period_start=period_start,
+            period_end=period_end,
+            tokens_in=totals.tokens_in,
+            tokens_out=totals.tokens_out,
+            total_cost=totals.total_cost,
+            execution_count=totals.execution_count,
+            by_model=[ModelUsageRead(**asdict(row)) for row in by_model],
+            by_task=[TaskUsageRead(**asdict(row)) for row in by_task],
+        )
+
+    async def usage_by_user_admin(
+        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+    ) -> tuple[list[UserUsageRead], int]:
+        """Backoffice per-user usage rows (usernames resolved by the caller)."""
+        rows, total = await self._repo.usage_by_user_admin(
+            period_start=period_start, period_end=period_end, limit=limit, offset=offset
+        )
+        return [UserUsageRead(**asdict(row)) for row in rows], total
+
+    async def list_executions_admin(
+        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+    ) -> tuple[list[LlmExecutionRead], int]:
+        """Backoffice recent-executions page, newest first."""
+        rows, total = await self._repo.list_executions_admin(
+            period_start=period_start, period_end=period_end, limit=limit, offset=offset
+        )
+        return [LlmExecutionRead.model_validate(row) for row in rows], total
 
     async def _record(self, ctx: TelemetryContext, result: R, usage: Usage) -> R:
         async def _once() -> tuple[R, Usage]:

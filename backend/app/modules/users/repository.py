@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -108,6 +109,14 @@ class UserRepository:
         """Identity-collision lookup by Google subject id, deleted included."""
         result = await self._session.execute(select(User).where(User.google_sub == google_sub))
         return result.scalar_one_or_none()
+
+    async def usernames_for_ids(self, user_ids: Sequence[UUID]) -> dict[UUID, str]:
+        """Map ids → usernames, soft-deleted included (backoffice attribution)."""
+        if not user_ids:
+            return {}
+        stmt = select(User.id, User.username).where(User.id.in_(user_ids))
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: row[1] for row in rows}
 
     async def count_active_admins(self) -> int:
         """Non-deleted users with the admin flag."""

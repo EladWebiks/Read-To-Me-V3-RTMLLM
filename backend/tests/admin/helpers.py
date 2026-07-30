@@ -10,6 +10,7 @@ from uuid import UUID
 from app.core.config import get_settings
 from app.core.deps import COOKIE_NAME
 from app.core.security import create_access_token
+from app.modules.llm.models import LlmExecution
 from app.modules.users.models import User
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -50,6 +51,35 @@ async def create_user(
         await session.flush()
         user_id = user.id
     return user_id
+
+
+async def seed_execution(  # noqa: PLR0913 — test seeding needs the full column set
+    user_id: UUID,
+    *,
+    created_at: datetime,
+    task: str = "chat",
+    provider: str = "gemini",
+    model: str = "gemini-3.5-flash",
+    tokens_in: int = 100,
+    tokens_out: int = 10,
+    cost: float = 0.5,
+) -> None:
+    """Insert one llm_execution row with an explicit timestamp."""
+    async with seed_session() as session:
+        session.add(
+            LlmExecution(
+                user_id=user_id,
+                task=task,
+                provider=provider,
+                model=model,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost=cost,
+                latency_ms=100,
+                status="ok",
+                created_at=created_at,
+            )
+        )
 
 
 def login(client: AsyncClient, user_id: UUID, username: str) -> None:

@@ -20,6 +20,9 @@ ROUTES: list[tuple[str, str, dict[str, object] | None]] = [
     ("PATCH", f"/api/admin/users/{ZERO}", {"is_admin": True}),
     ("DELETE", f"/api/admin/users/{ZERO}", None),
     ("POST", f"/api/admin/users/{ZERO}/restore", None),
+    ("GET", "/api/admin/usage/summary?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z", None),
+    ("GET", "/api/admin/usage/by-user?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z", None),
+    ("GET", "/api/admin/usage/executions?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z", None),
 ]
 
 

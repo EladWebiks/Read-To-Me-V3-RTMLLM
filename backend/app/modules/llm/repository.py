@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.llm.models import (
@@ -65,6 +65,40 @@ class ExecutionWrite:
 class UsageTotals:
     """Aggregate of llm_executions for one user over a period."""
 
+    tokens_in: int
+    tokens_out: int
+    total_cost: float
+    execution_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ModelUsageRow:
+    """Cross-user aggregate for one (provider, model)."""
+
+    provider: str
+    model: str
+    tokens_in: int
+    tokens_out: int
+    total_cost: float
+    execution_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class TaskUsageRow:
+    """Cross-user aggregate for one task."""
+
+    task: str
+    tokens_in: int
+    tokens_out: int
+    total_cost: float
+    execution_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class UserUsageRow:
+    """Aggregate for one user over a period."""
+
+    user_id: uuid.UUID
     tokens_in: int
     tokens_out: int
     total_cost: float
@@ -178,6 +212,127 @@ class LlmRepository:
             total_cost=float(total_cost),
             execution_count=int(count),
         )
+
+    @staticmethod
+    def _in_period(period_start: datetime, period_end: datetime) -> ColumnElement[bool]:
+        return and_(
+            LlmExecution.created_at >= period_start,
+            LlmExecution.created_at < period_end,
+        )
+
+    @staticmethod
+    def _usage_sums() -> tuple[Any, ...]:
+        return (
+            func.coalesce(func.sum(LlmExecution.tokens_in), 0),
+            func.coalesce(func.sum(LlmExecution.tokens_out), 0),
+            func.coalesce(func.sum(LlmExecution.cost), 0.0),
+            func.count(LlmExecution.id),
+        )
+
+    async def usage_totals_admin(
+        self, *, period_start: datetime, period_end: datetime
+    ) -> UsageTotals:
+        """Cross-user totals over [period_start, period_end)."""
+        result = await self._session.execute(
+            select(*self._usage_sums()).where(self._in_period(period_start, period_end))
+        )
+        tokens_in, tokens_out, total_cost, count = result.one()
+        return UsageTotals(
+            tokens_in=int(tokens_in),
+            tokens_out=int(tokens_out),
+            total_cost=float(total_cost),
+            execution_count=int(count),
+        )
+
+    async def usage_by_model_admin(
+        self, *, period_start: datetime, period_end: datetime
+    ) -> list[ModelUsageRow]:
+        """Cross-user aggregates grouped by (provider, model), cost-desc."""
+        stmt = (
+            select(LlmExecution.provider, LlmExecution.model, *self._usage_sums())
+            .where(self._in_period(period_start, period_end))
+            .group_by(LlmExecution.provider, LlmExecution.model)
+            .order_by(func.coalesce(func.sum(LlmExecution.cost), 0.0).desc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            ModelUsageRow(
+                provider=row[0],
+                model=row[1],
+                tokens_in=int(row[2]),
+                tokens_out=int(row[3]),
+                total_cost=float(row[4]),
+                execution_count=int(row[5]),
+            )
+            for row in rows
+        ]
+
+    async def usage_by_task_admin(
+        self, *, period_start: datetime, period_end: datetime
+    ) -> list[TaskUsageRow]:
+        """Cross-user aggregates grouped by task, cost-desc."""
+        stmt = (
+            select(LlmExecution.task, *self._usage_sums())
+            .where(self._in_period(period_start, period_end))
+            .group_by(LlmExecution.task)
+            .order_by(func.coalesce(func.sum(LlmExecution.cost), 0.0).desc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            TaskUsageRow(
+                task=row[0],
+                tokens_in=int(row[1]),
+                tokens_out=int(row[2]),
+                total_cost=float(row[3]),
+                execution_count=int(row[4]),
+            )
+            for row in rows
+        ]
+
+    async def usage_by_user_admin(
+        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+    ) -> tuple[list[UserUsageRow], int]:
+        """Per-user aggregates, cost-desc, with total distinct-user count."""
+        condition = self._in_period(period_start, period_end)
+        total_stmt = select(func.count(func.distinct(LlmExecution.user_id))).where(condition)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(LlmExecution.user_id, *self._usage_sums())
+            .where(condition)
+            .group_by(LlmExecution.user_id)
+            .order_by(func.coalesce(func.sum(LlmExecution.cost), 0.0).desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        items = [
+            UserUsageRow(
+                user_id=row[0],
+                tokens_in=int(row[1]),
+                tokens_out=int(row[2]),
+                total_cost=float(row[3]),
+                execution_count=int(row[4]),
+            )
+            for row in rows
+        ]
+        return items, total
+
+    async def list_executions_admin(
+        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+    ) -> tuple[list[LlmExecution], int]:
+        """Cross-user execution rows, newest first."""
+        condition = self._in_period(period_start, period_end)
+        total_stmt = select(func.count()).select_from(LlmExecution).where(condition)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(LlmExecution)
+            .where(condition)
+            .order_by(LlmExecution.created_at.desc(), LlmExecution.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total
 
     async def upsert_provider(self, name: str, *, enabled: bool = True) -> ModelProvider:
         """Insert provider row if missing."""

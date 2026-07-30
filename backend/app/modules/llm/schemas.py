@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.llm.capabilities import ModelCapability
 
@@ -147,3 +147,61 @@ class UserUsageSummary(BaseModel):
     tokens_out: int
     total_cost: float
     execution_count: int
+
+
+class UsageBreakdownRead(BaseModel):
+    """Shared aggregate fields for admin usage buckets."""
+
+    tokens_in: int
+    tokens_out: int
+    total_cost: float
+    execution_count: int
+
+
+class ModelUsageRead(UsageBreakdownRead):
+    """Cross-user aggregate for one (provider, model)."""
+
+    provider: str
+    model: str
+
+
+class TaskUsageRead(UsageBreakdownRead):
+    """Cross-user aggregate for one task."""
+
+    task: str
+
+
+class UserUsageRead(UsageBreakdownRead):
+    """Aggregate for one user over the period."""
+
+    user_id: UUID
+
+
+class AdminUsageOverview(UsageBreakdownRead):
+    """GET /api/admin/usage/summary payload."""
+
+    period_start: datetime
+    period_end: datetime
+    by_model: list[ModelUsageRead] = Field(default_factory=list)
+    by_task: list[TaskUsageRead] = Field(default_factory=list)
+
+
+class LlmExecutionRead(BaseModel):
+    """One llm_execution row for the backoffice recent-executions table."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    conversation_id: UUID | None
+    task: str
+    provider: str
+    model: str
+    tokens_in: int
+    tokens_out: int
+    cost: float
+    latency_ms: int
+    status: str
+    fallback_used: bool
+    error: str | None
+    created_at: datetime
