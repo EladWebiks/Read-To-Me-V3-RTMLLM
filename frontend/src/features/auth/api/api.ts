@@ -1,12 +1,10 @@
 import { apiGet, apiPost } from '@/shared/lib/api'
-import type { LoginResponse, MeResponse } from '@/features/auth/types'
+import type { MeResponse } from '@/features/auth/types'
+
+export const GOOGLE_LOGIN_URL = '/api/auth/google/login'
 
 export function fetchMe(): Promise<MeResponse> {
   return apiGet<MeResponse>('/api/auth/me')
-}
-
-export function login(username: string, password: string): Promise<LoginResponse> {
-  return apiPost<LoginResponse>('/api/auth/login', { username, password })
 }
 
 export function logout(): Promise<void> {

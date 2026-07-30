@@ -9,7 +9,3 @@ export type User = {
 export type MeResponse = {
   user: User
 }
-
-export type LoginResponse = {
-  user: User
-}
