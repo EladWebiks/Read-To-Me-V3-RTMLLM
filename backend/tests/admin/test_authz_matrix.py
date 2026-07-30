@@ -15,7 +15,12 @@ from tests.admin.helpers import create_user, login
 ZERO = "00000000-0000-0000-0000-000000000000"
 
 # (method, path, json body) — screen plans append here.
-ROUTES: list[tuple[str, str, dict[str, object] | None]] = []
+ROUTES: list[tuple[str, str, dict[str, object] | None]] = [
+    ("GET", "/api/admin/users", None),
+    ("PATCH", f"/api/admin/users/{ZERO}", {"is_admin": True}),
+    ("DELETE", f"/api/admin/users/{ZERO}", None),
+    ("POST", f"/api/admin/users/{ZERO}/restore", None),
+]
 
 
 @pytest.mark.integration
