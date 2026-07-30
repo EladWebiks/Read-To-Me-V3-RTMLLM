@@ -9,6 +9,15 @@ from app.modules.llm.exceptions import LlmConfigError
 from app.modules.llm.providers.gemini_provider import GeminiProvider, GeminiProviderConfig
 from app.modules.llm.registry import ModelSpec, get_model
 
+# Provider names with a registered adapter factory. A DB catalog row for any
+# other provider is unserveable and is skipped by the runtime catalog.
+KNOWN_ADAPTERS: frozenset[str] = frozenset({"gemini"})
+
+
+def has_adapter(provider: str) -> bool:
+    """True when an adapter factory exists for this provider name."""
+    return provider in KNOWN_ADAPTERS
+
 
 @dataclass(frozen=True, slots=True)
 class ProviderBuildContext:

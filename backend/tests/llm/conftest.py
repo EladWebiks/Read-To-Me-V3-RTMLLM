@@ -5,6 +5,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 import pytest
+from app.core.db import SessionLocal
+from app.modules.llm import catalog
+from app.modules.llm.seed import seed_llm_models
+from sqlalchemy import text
 
 
 @pytest.fixture(autouse=True)
@@ -23,3 +27,22 @@ async def _fresh_global_engine() -> AsyncIterator[None]:
     await engine.dispose()
     yield
     await engine.dispose()
+
+
+async def _reset_catalog_rows() -> None:
+    async with SessionLocal() as session:
+        await session.execute(text("DELETE FROM model_configurations"))
+        await session.execute(text("DELETE FROM model_providers"))
+        await session.commit()
+
+
+@pytest.fixture
+async def seeded_catalog() -> AsyncIterator[None]:
+    """Pristine seeded catalog rows + cold snapshot; restores both afterwards."""
+    await _reset_catalog_rows()
+    await seed_llm_models()
+    catalog.invalidate()
+    yield
+    await _reset_catalog_rows()
+    await seed_llm_models()
+    catalog.invalidate()

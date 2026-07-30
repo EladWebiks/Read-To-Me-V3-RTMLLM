@@ -24,6 +24,23 @@ from app.modules.llm.registry import ModelSpec
 
 
 @dataclass(frozen=True, slots=True)
+class CatalogRow:
+    """One joined provider+model row for the runtime catalog snapshot."""
+
+    provider_name: str
+    provider_enabled: bool
+    model_name: str
+    model_enabled: bool
+    capabilities: list[str]
+    context_window: int
+    supports_tools: bool
+    supports_structured: bool
+    supports_streaming: bool
+    input_cost_per_1m: float
+    output_cost_per_1m: float
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionWrite:
     """Fields for one llm_execution + cost_record insert."""
 
@@ -156,6 +173,30 @@ class LlmRepository:
                 output_cost_per_1m=spec.output_cost_per_1m,
             )
         )
+
+    async def list_catalog_rows(self) -> list[CatalogRow]:
+        """All catalog rows, deterministically ordered (provider, model)."""
+        result = await self._session.execute(
+            select(ModelConfiguration, ModelProvider)
+            .join(ModelProvider, ModelConfiguration.provider_id == ModelProvider.id)
+            .order_by(ModelProvider.name, ModelConfiguration.model_name)
+        )
+        return [
+            CatalogRow(
+                provider_name=provider.name,
+                provider_enabled=provider.enabled,
+                model_name=model.model_name,
+                model_enabled=model.enabled,
+                capabilities=[str(c) for c in model.capabilities],
+                context_window=model.context_window,
+                supports_tools=model.supports_tools,
+                supports_structured=model.supports_structured,
+                supports_streaming=model.supports_streaming,
+                input_cost_per_1m=model.input_cost_per_1m,
+                output_cost_per_1m=model.output_cost_per_1m,
+            )
+            for model, provider in result.all()
+        ]
 
     async def create_conversation(
         self,
