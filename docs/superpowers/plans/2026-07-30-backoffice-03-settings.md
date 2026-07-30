@@ -38,7 +38,7 @@
 - Consumes: existing `GET/PUT/DELETE /api/admin/settings[/{key}]`; foundation's `apiGet`/`apiPut`/`apiDelete` + `ApiError` (message carries the backend `detail`).
 - Produces: `SettingsPage` export; `EffectiveSetting` type mirroring `EffectiveSettingRead` exactly (`key`, `effective_value`, `env_value`, `overridden`, `updated_by?`, `updated_at?`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```typescript
 // frontend/src/features/admin/logic/settingValue.test.ts
@@ -132,12 +132,12 @@ describe('SettingsPage', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run (from `frontend/`): `npm run test -- settingValue SettingsPage`
 Expected: FAIL — modules not found.
 
-- [ ] **Step 3: Implement logic + API + hooks**
+- [x] **Step 3: Implement logic + API + hooks**
 
 ```typescript
 // frontend/src/features/admin/logic/settingValue.ts
@@ -226,7 +226,7 @@ export function useClearSetting() {
 }
 ```
 
-- [ ] **Step 4: Implement the components**
+- [x] **Step 4: Implement the components**
 
 ```tsx
 // frontend/src/features/admin/components/settings/SettingsPage.tsx
@@ -375,7 +375,7 @@ export function ValueEditor({
 }
 ```
 
-- [ ] **Step 5: Wire the route and barrel**
+- [x] **Step 5: Wire the route and barrel**
 
 Append to `frontend/src/features/admin/index.ts`:
 
@@ -389,12 +389,12 @@ In `frontend/src/app/App.tsx`: extend the `@/features/admin` import with `Settin
 <Route path="settings" element={<SettingsPage />} />
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `npm run test -- settingValue SettingsPage`
 Expected: PASS (5 tests)
 
-- [ ] **Step 7: Gates + commit**
+- [x] **Step 7: Gates + commit**
 
 ```bash
 cd frontend && npm run lint && npm run build && npm run test && cd ..
