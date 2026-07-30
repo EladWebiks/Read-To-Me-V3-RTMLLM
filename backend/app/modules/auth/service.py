@@ -39,6 +39,7 @@ class AuthService:
                 google_sub=claims.sub,
                 email=str(claims.email),
                 admin_username=self._settings.admin_username,
+                picture_url=claims.picture,
             )
         except GoogleIdentityConflictError as exc:
             # Re-raised as the auth-domain error so the wire reason (and the

@@ -63,6 +63,29 @@ async def test_link_google_stamps_sub_and_backfills_email(
 
 
 @pytest.mark.integration
+async def test_create_from_google_stores_picture(session: AsyncSession) -> None:
+    service = UserService(session)
+    user = await service.create_from_google(
+        "sub-pic", "pic@example.com", "https://lh3.example.com/photo.jpg"
+    )
+    assert user.picture_url == "https://lh3.example.com/photo.jpg"
+
+
+@pytest.mark.integration
+async def test_link_google_stores_picture(session: AsyncSession) -> None:
+    service = UserService(session)
+    created = await service.create(
+        UserCreate(username="pictured", password="password123", role="admin")
+    )
+    entity = await service.get_entity_by_id(created.id)
+    assert entity is not None
+    linked = await service.link_google(
+        entity, "sub-pic-2", "pictured@example.com", "https://lh3.example.com/p2.jpg"
+    )
+    assert linked.picture_url == "https://lh3.example.com/p2.jpg"
+
+
+@pytest.mark.integration
 async def test_any_google_linked(session: AsyncSession) -> None:
     service = UserService(session)
     assert await service.any_google_linked() is False

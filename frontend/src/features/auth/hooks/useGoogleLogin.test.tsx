@@ -6,10 +6,16 @@ import { meQueryKey } from './hooks'
 import { useGoogleLogin } from './useGoogleLogin'
 
 const navigateMock = vi.fn()
+const fetchMeMock = vi.hoisted(() => vi.fn())
 
 vi.mock('react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router')>()
   return { ...actual, useNavigate: () => navigateMock }
+})
+
+vi.mock('@/features/auth/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/auth/api')>()
+  return { ...actual, fetchMe: fetchMeMock }
 })
 
 type FakePopup = { closed: boolean }
@@ -37,11 +43,13 @@ function renderUseGoogleLogin(queryClient: QueryClient) {
 describe('useGoogleLogin', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    fetchMeMock.mockImplementation(() => Promise.reject(new Error('401')))
   })
   afterEach(() => {
     vi.restoreAllMocks()
     vi.useRealTimers()
     navigateMock.mockReset()
+    fetchMeMock.mockReset()
   })
 
   it('starts idle, goes pending, then navigates to /reader on success', () => {
@@ -106,6 +114,24 @@ describe('useGoogleLogin', () => {
       status: 'error',
       reason: 'state_mismatch',
     })
+  })
+
+  it('navigates when the popup reads closed but the session check confirms', async () => {
+    // The COOP path: Google's Cross-Origin-Opener-Policy severs the opener, so
+    // no postMessage arrives and popup.closed misreports true mid-flow. The
+    // session cookie is still set; the hook must recover via /me.
+    const popup = fakePopup()
+    mockOpen(popup)
+    fetchMeMock.mockImplementation(() => Promise.resolve({ user: { id: 'u1' } }))
+    const view = renderUseGoogleLogin(new QueryClient())
+
+    act(() => view.result.current.start())
+    popup.closed = true
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600)
+    })
+
+    expect(navigateMock).toHaveBeenCalledWith('/reader', { replace: true })
   })
 
   it('detaches the previous popup listener when start is called again', () => {

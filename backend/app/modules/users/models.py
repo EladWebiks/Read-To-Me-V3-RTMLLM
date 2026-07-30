@@ -31,6 +31,7 @@ class User(Base):
         index=True,
         nullable=True,
     )
+    picture_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     role: Mapped[str] = mapped_column(String(32), default="admin")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

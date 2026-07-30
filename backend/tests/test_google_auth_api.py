@@ -115,11 +115,11 @@ async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     await engine.dispose()
 
 
-_PAYLOAD_RE = re.compile(r"postMessage\((\{.*?\}), window\.location\.origin\)")
+_PAYLOAD_RE = re.compile(r"var payload = (\{.*?\});")
 
 
 def _popup_payload(response: Response) -> dict[str, Any]:
-    """Parse the postMessage payload out of the popup page.
+    """Parse the result payload out of the popup page.
 
     Asserting on the parsed object (rather than on raw substrings like
     '"ok": true') keeps these tests independent of json.dumps whitespace and
@@ -135,6 +135,11 @@ def _popup_payload(response: Response) -> dict[str, Any]:
 def _assert_popup(response: Response, *, ok: bool, reason: str | None) -> None:
     assert response.headers["cache-control"] == "no-store"
     assert _popup_payload(response) == {"type": "rtm-google-auth", "ok": ok, "reason": reason}
+    # Both delivery paths must be present: BroadcastChannel is the one that
+    # survives Google's Cross-Origin-Opener-Policy severing window.opener;
+    # opener.postMessage stays as the fallback for browsers without COOP swaps.
+    assert "new BroadcastChannel('rtm-google-auth').postMessage(payload)" in response.text
+    assert "window.opener.postMessage(payload, window.location.origin)" in response.text
 
 
 def _state_cookie_header(response: Response) -> str:

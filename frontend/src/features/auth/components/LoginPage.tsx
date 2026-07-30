@@ -3,7 +3,7 @@ import { GoogleButton } from './GoogleButton'
 
 const ERROR_MESSAGES: Record<string, string> = {
   popup_blocked: 'Your browser blocked the sign-in window. Allow popups and try again.',
-  popup_closed: 'The sign-in window was closed before finishing.',
+  timeout: 'Google sign-in did not finish in time. Please try again.',
   email_not_verified: 'This Google account has no verified email address.',
   google_denied: 'Google sign-in was cancelled.',
   google_identity_conflict:

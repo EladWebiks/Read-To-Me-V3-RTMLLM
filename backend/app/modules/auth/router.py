@@ -74,11 +74,22 @@ def _script_safe_json(payload: dict[str, object]) -> str:
 
 
 def _popup_response(*, ok: bool, reason: str | None, status_code: int) -> HTMLResponse:
-    """Tiny page that reports the result to the opener window and closes."""
+    """Tiny page that reports the result to the opener window and closes.
+
+    Delivery is BroadcastChannel-first: accounts.google.com serves
+    Cross-Origin-Opener-Policy: same-origin, which severs the popup/opener pair
+    the moment the popup navigates to Google — this page usually loads with
+    `window.opener === null`, and only a same-origin channel still reaches the
+    app. The opener postMessage is kept as a fallback for user agents that do
+    not perform COOP browsing-context-group swaps. `window.close()` may also be
+    refused after the swap, hence the visible fallback text.
+    """
     payload = _script_safe_json({"type": "rtm-google-auth", "ok": ok, "reason": reason})
     html = (
         "<!doctype html><html><body><script>"
-        f"if (window.opener) {{ window.opener.postMessage({payload}, window.location.origin); }}"
+        f"var payload = {payload};"
+        "try { new BroadcastChannel('rtm-google-auth').postMessage(payload); } catch (err) {}"
+        "if (window.opener) { window.opener.postMessage(payload, window.location.origin); }"
         "window.close();"
         "</script><p>You can close this window.</p></body></html>"
     )

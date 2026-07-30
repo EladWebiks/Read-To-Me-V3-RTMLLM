@@ -506,8 +506,9 @@ Important groups:
   which means nobody can sign in at all. Setup steps are in
   [Quick start step 2](#2-create-a-google-oauth-client-required-to-sign-in).
   `VITE_API_URL` must stay same-origin with the web app: the popup reports its result
-  with `postMessage(..., window.location.origin)`, so a cross-origin API base breaks
-  sign-in even though every other call would still work.
+  over a `BroadcastChannel` (plus an opener `postMessage` fallback), both scoped to the
+  popup's own origin, so a cross-origin API base breaks sign-in even though every
+  other call would still work.
 - **Downloads:** `DOWNLOAD_JOB_TTL_HOURS`, `SIGNED_URL_EXPIRES_SECONDS`
 - **LLM:** provider/model/key, timeout, retries, token/context limits, assistant mode,
   HITL expiry/round limits, optional Langfuse flag

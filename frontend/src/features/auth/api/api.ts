@@ -6,10 +6,11 @@ import type { MeResponse } from '@/features/auth/types'
  *
  * Routed through `apiUrl` like every other call, so a configured
  * `VITE_API_URL` doesn't 404 against the frontend origin. Note the flow still
- * REQUIRES the API to be same-origin with the app: the callback page posts its
- * result with `postMessage(..., window.location.origin)`, i.e. targeting the
- * popup's *own* origin, so a cross-origin `VITE_API_URL` means the opener
- * never receives the message and sign-in hangs until the closed-poll fires.
+ * REQUIRES the API to be same-origin with the app: the callback page reports
+ * its result over a BroadcastChannel (and opener postMessage), both scoped to
+ * the popup's *own* origin, so a cross-origin `VITE_API_URL` means the result
+ * never arrives and sign-in only recovers via the /me session poll — if the
+ * cookie is readable cross-origin at all.
  */
 export const GOOGLE_LOGIN_URL = apiUrl('/api/auth/google/login')
 

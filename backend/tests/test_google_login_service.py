@@ -39,12 +39,14 @@ async def session() -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
-def _patch_google(monkeypatch: pytest.MonkeyPatch, sub: str, email: str) -> None:
+def _patch_google(
+    monkeypatch: pytest.MonkeyPatch, sub: str, email: str, picture: str | None = None
+) -> None:
     async def fake_exchange(self: GoogleOAuthClient, code: str) -> str:
         return "raw-id-token"
 
     async def fake_verify(self: GoogleOAuthClient, raw_token: str) -> GoogleClaims:
-        return GoogleClaims(sub=sub, email=email, email_verified=True)
+        return GoogleClaims(sub=sub, email=email, email_verified=True, picture=picture)
 
     monkeypatch.setattr(GoogleOAuthClient, "__init__", lambda self, settings: None)
     monkeypatch.setattr(GoogleOAuthClient, "exchange_code", fake_exchange)
@@ -79,6 +81,45 @@ async def test_repeat_login_matches_by_sub(
     _patch_google(monkeypatch, "sub-repeat", "changed-email@example.com")
     user, _ = await _service(session).login_with_google("code")
     assert user.email == "repeat@example.com"  # sub wins over email
+
+
+@pytest.mark.integration
+async def test_repeat_login_refreshes_changed_picture(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    users = UserService(session)
+    await users.create_from_google("sub-pic", "pic@example.com", "https://old.example.com/a.jpg")
+    _patch_google(
+        monkeypatch, "sub-pic", "pic@example.com", picture="https://new.example.com/b.jpg"
+    )
+    user, _ = await _service(session).login_with_google("code")
+    assert user.picture_url == "https://new.example.com/b.jpg"
+
+
+@pytest.mark.integration
+async def test_missing_picture_claim_keeps_stored_picture(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    users = UserService(session)
+    await users.create_from_google("sub-keep", "keep@example.com", "https://old.example.com/a.jpg")
+    _patch_google(monkeypatch, "sub-keep", "keep@example.com")
+    user, _ = await _service(session).login_with_google("code")
+    assert user.picture_url == "https://old.example.com/a.jpg"
+
+
+@pytest.mark.integration
+async def test_first_login_stores_picture_on_admin_claim(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = get_settings()
+    await UserService(session).create(
+        UserCreate(username=settings.admin_username, password="password123", role="admin")
+    )
+    _patch_google(
+        monkeypatch, "sub-admin", "owner@example.com", picture="https://p.example.com/me"
+    )
+    user, _ = await _service(session).login_with_google("code")
+    assert user.picture_url == "https://p.example.com/me"
 
 
 @pytest.mark.integration

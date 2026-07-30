@@ -37,6 +37,7 @@ class GoogleClaims(BaseModel):
     email: EmailStr
     email_verified: bool = False
     name: str | None = None
+    picture: str | None = None
 
 
 def reset_jwks_cache() -> None:
