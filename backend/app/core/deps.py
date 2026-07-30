@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_db_session
-from app.modules.auth.exceptions import NotAuthenticatedError
+from app.modules.auth.exceptions import NotAuthenticatedError, NotAuthorizedError
 from app.modules.auth.service import AuthService
 from app.modules.users.schemas import UserRead
 
@@ -31,3 +31,12 @@ async def get_current_user(
         raise NotAuthenticatedError
     service = AuthService(session, settings)
     return await service.user_from_token(rtm_token)
+
+
+async def require_admin(
+    current_user: Annotated[UserRead, Depends(get_current_user)],
+) -> UserRead:
+    """Require an authenticated admin (backoffice authority flag)."""
+    if not current_user.is_admin:
+        raise NotAuthorizedError
+    return current_user

@@ -19,3 +19,7 @@ class GoogleAuthError(AuthError):
 
 class GoogleNotConfiguredError(AuthError):
     """Google OAuth settings are missing."""
+
+
+class NotAuthorizedError(AuthError):
+    """Raised when the authenticated user lacks permission."""

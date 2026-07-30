@@ -8,33 +8,10 @@ from app.core.config import get_settings
 from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-# FK-ordered: every table referencing users must be emptied first. Mirrors
-# test_auth_api.py::_clear_users — orphaned rows left by unrelated test
-# modules (LLM conversations, scraping jobs, …) otherwise block DELETE.
-_CLEAR_ORDER = (
-    "scraping_job_items",
-    "scraping_jobs",
-    "download_jobs",
-    "reading_progress",
-    "chapters",
-    "user_books",
-    "books",
-    "cost_records",
-    "llm_executions",
-    "tool_calls",
-    "conversation_messages",
-    "conversations",
-    "users",
-)
-
-
-async def _clear_users(sess: AsyncSession) -> None:
-    for table in _CLEAR_ORDER:
-        await sess.execute(text(f"DELETE FROM {table}"))  # noqa: S608 - fixed literal names
+from tests.dbcleanup import clear_users as _clear_users
 
 
 @pytest.fixture

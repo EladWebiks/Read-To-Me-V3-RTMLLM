@@ -8,7 +8,11 @@ from app.modules.audio.exceptions import (
     TextTooLongError,
     UnknownProviderError,
 )
-from app.modules.auth.exceptions import GoogleNotConfiguredError, NotAuthenticatedError
+from app.modules.auth.exceptions import (
+    GoogleNotConfiguredError,
+    NotAuthenticatedError,
+    NotAuthorizedError,
+)
 from app.modules.books.exceptions import BookNotFoundError
 from app.modules.chapters.exceptions import (
     ChapterNotFoundError,
@@ -65,6 +69,13 @@ def _register_auth_handlers(app: FastAPI) -> None:
         _exc: NotAuthenticatedError,
     ) -> JSONResponse:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    @app.exception_handler(NotAuthorizedError)
+    async def _not_authorized(
+        _request: Request,
+        _exc: NotAuthorizedError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": "Not authorized"})
 
     @app.exception_handler(UserNotFoundError)
     async def _user_not_found(
