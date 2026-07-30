@@ -15,9 +15,21 @@ export class ApiError extends Error {
   }
 }
 
+async function errorDetail(response: Response): Promise<string> {
+  const fallback = `Request failed: ${response.status}`
+  try {
+    const payload = (await response.json()) as { detail?: unknown }
+    return typeof payload.detail === 'string' && payload.detail
+      ? payload.detail
+      : fallback
+  } catch {
+    return fallback
+  }
+}
+
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new ApiError(response.status, `Request failed: ${response.status}`)
+    throw new ApiError(response.status, await errorDetail(response))
   }
   if (response.status === 204) {
     return undefined as T
@@ -45,6 +57,10 @@ export function apiPost<T>(path: string, body?: unknown): Promise<T> {
 
 export function apiPut<T>(path: string, body?: unknown): Promise<T> {
   return request<T>('PUT', path, body)
+}
+
+export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>('PATCH', path, body)
 }
 
 export function apiDelete<T = void>(path: string): Promise<T> {
