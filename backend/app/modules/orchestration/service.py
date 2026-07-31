@@ -6,6 +6,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -48,6 +49,9 @@ from app.modules.orchestration.ui_context import (
     client_action_for_tool,
     format_ui_context_block,
 )
+from app.modules.quotas.exceptions import QuotaExceededError
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaService
 from app.modules.tools.base import BaseTool, Mode, RiskLevel, ToolContext
 from app.modules.tools.catalog import build_default_registry
 from app.modules.tools.exceptions import (
@@ -172,6 +176,11 @@ class OrchestrationService:
     ) -> AsyncIterator[ChatSseEvent]:
         """Yield SSE events for one tool-using assistant turn."""
         policy = await PolicyService(self._session, self._settings).resolve(user)
+        try:
+            await self._check_llm_quota(user)
+        except QuotaExceededError as exc:
+            yield _quota_error_event(exc)
+            return
         ctx = self._make_ctx(user.id, conversation_id, uuid4())
         budget = RunBudget.from_policy(policy)
         context = await ConversationContextService(
@@ -525,6 +534,25 @@ class OrchestrationService:
             },
         )
 
+    async def _check_llm_quota(self, user: UserRead) -> None:
+        """Reject the turn BEFORE any provider call when a monthly LLM quota is hit.
+
+        Sits before conversation-context build on purpose: context building can
+        itself trigger a summarization provider call. Resume-confirm does not
+        re-check — it is the same turn (spec §3.5).
+        """
+        quotas = QuotaService(self._session)
+        limits = await quotas.limits_for(user)
+        if not limits.any_limited(QuotaKind.LLM_TOKENS, QuotaKind.LLM_COST_USD):
+            return
+        start, end = QuotaService.current_month_window(datetime.now(UTC))
+        summary = await self._llm.usage_summary(user.id, period_start=start, period_end=end)
+        tokens = summary.tokens_in + summary.tokens_out
+        QuotaService.enforce(QuotaKind.LLM_TOKENS, tokens, limits, resets_at=end, user_id=user.id)
+        QuotaService.enforce(
+            QuotaKind.LLM_COST_USD, summary.total_cost, limits, resets_at=end, user_id=user.id
+        )
+
     def _make_ctx(self, user_id: UUID, conversation_id: UUID, run_id: UUID) -> ToolContext:
         return ToolContext(
             user_id=user_id,
@@ -678,6 +706,19 @@ def _accumulate(
     return Usage(
         usage_total.tokens_in + resp.usage.tokens_in,
         usage_total.tokens_out + resp.usage.tokens_out,
+    )
+
+
+def _quota_error_event(exc: QuotaExceededError) -> ChatSseEvent:
+    """Structured SSE error the frontend maps to user copy (spec §6)."""
+    return ChatSseEvent(
+        "error",
+        {
+            "code": "quota_exceeded",
+            "kind": exc.kind.value,
+            "detail": str(exc),
+            "resets_at": exc.resets_at.isoformat() if exc.resets_at else None,
+        },
     )
 
 
