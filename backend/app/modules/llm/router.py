@@ -71,7 +71,7 @@ async def stream_chat(
 
     async def _events() -> AsyncIterator[str]:
         async for event in service.stream_chat(
-            user.id,
+            user,
             body.message,
             body.conversation_id,
             ui_context=body.ui_context.model_dump(mode="json") if body.ui_context else None,
@@ -92,7 +92,7 @@ async def stream_confirm(
 
     async def _events() -> AsyncIterator[str]:
         async for event in service.stream_confirm(
-            user.id,
+            user,
             conversation_id,
             body.call_id,
             approved=body.approved,

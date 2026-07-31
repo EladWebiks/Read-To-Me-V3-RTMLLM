@@ -143,7 +143,7 @@ async def test_hitl_pause_and_approve(
         stream_from_call(_fake_scrape_then_reply()),
     )
 
-    events = [e async for e in service.stream_chat(user.id, "scrape this", None)]
+    events = [e async for e in service.stream_chat(user, "scrape this", None)]
     assert "confirmation_request" in [e.event for e in events]
     assert events[-1].data.get("status") == "awaiting_confirmation"
     call_id = UUID(str(events[-1].data["call_id"]))
@@ -155,7 +155,7 @@ async def test_hitl_pause_and_approve(
     resume = [
         e
         async for e in service.stream_confirm(
-            user.id,
+            user,
             conv_id,
             call_id,
             approved=True,
@@ -181,14 +181,12 @@ async def test_hitl_reject(
         "stream_tools",
         stream_from_call(_fake_scrape_then_reply()),
     )
-    events = [e async for e in service.stream_chat(user.id, "scrape url", None)]
+    events = [e async for e in service.stream_chat(user, "scrape url", None)]
     call_id = UUID(str(events[-1].data["call_id"]))
     conv_id = UUID(str(events[0].data["conversation_id"]))
     resume = [
         e
-        async for e in service.stream_confirm(
-            user.id, conv_id, call_id, approved=False, values=None
-        )
+        async for e in service.stream_confirm(user, conv_id, call_id, approved=False, values=None)
     ]
     tool_event = next(e for e in resume if e.event == "tool_result")
     assert tool_event.data["ok"] is False

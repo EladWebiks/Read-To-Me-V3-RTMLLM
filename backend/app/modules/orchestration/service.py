@@ -40,6 +40,7 @@ from app.modules.orchestration.hitl_pause import (
     snapshot_conversation_id,
     snapshot_run_id,
 )
+from app.modules.orchestration.policy import PolicyService
 from app.modules.orchestration.prompts import SYSTEM_PROMPT
 from app.modules.orchestration.ui_context import (
     choice_request_for_tool,
@@ -57,6 +58,7 @@ from app.modules.tools.exceptions import (
 from app.modules.tools.executor import ExecuteOptions, execute_tool_call, prepare_gated_call
 from app.modules.tools.hitl import merge_confirmed_args
 from app.modules.tools.registry import ToolRegistry
+from app.modules.users.schemas import UserRead
 
 _MAX_TOOL_RESULT_CHARS = 6_000
 
@@ -163,18 +165,19 @@ class OrchestrationService:
 
     async def run(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         ui_context: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChatSseEvent]:
         """Yield SSE events for one tool-using assistant turn."""
-        ctx = self._make_ctx(user_id, conversation_id, uuid4())
-        budget = RunBudget.from_settings(self._settings)
+        policy = await PolicyService(self._session, self._settings).resolve(user)
+        ctx = self._make_ctx(user.id, conversation_id, uuid4())
+        budget = RunBudget.from_policy(policy)
         context = await ConversationContextService(
             self._repo,
             self._llm,
             self._settings,
-        ).build(user_id, conversation_id)
+        ).build(user.id, conversation_id)
         messages = _to_llm_messages(
             context.messages,
             summary=context.summary,
@@ -185,7 +188,7 @@ class OrchestrationService:
 
     async def resume_confirm(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         call_id: UUID,
         *,
@@ -195,7 +198,7 @@ class OrchestrationService:
         """Resume after POST /confirm — new SSE stream for the same turn."""
         try:
             async for event in self._resume_confirm(
-                user_id,
+                user,
                 conversation_id,
                 call_id,
                 approved=approved,
@@ -214,17 +217,19 @@ class OrchestrationService:
 
     async def _resume_confirm(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         call_id: UUID,
         *,
         approved: bool,
         values: dict[str, Any] | None,
     ) -> AsyncIterator[ChatSseEvent]:
-        row = await self._require_pending(user_id, conversation_id, call_id)
+        row = await self._require_pending(user.id, conversation_id, call_id)
         messages, usage, budget_raw, hitl_rounds, provider_call_id = restore_snapshot(row)
-        ctx = self._make_ctx(user_id, conversation_id, snapshot_run_id(row) or uuid4())
-        budget = RunBudget.from_settings(self._settings)
+        ctx = self._make_ctx(user.id, conversation_id, snapshot_run_id(row) or uuid4())
+        budget = RunBudget.from_policy(
+            await PolicyService(self._session, self._settings).resolve(user)
+        )
         apply_budget_snapshot(budget, budget_raw)
         tool = self._registry.resolve(row.tool_name)
         call = ToolCall(
@@ -432,7 +437,7 @@ class OrchestrationService:
             yield event
 
     async def _pause_for_confirm(self, pack: _PausePack) -> AsyncIterator[ChatSseEvent]:
-        if pack.hitl_rounds >= self._settings.llm_runtime.max_hitl_rounds:
+        if pack.hitl_rounds >= pack.budget.max_hitl_rounds:
             async for event in _fail_tool(
                 pack.messages, pack.call, "max confirmation rounds exceeded"
             ):

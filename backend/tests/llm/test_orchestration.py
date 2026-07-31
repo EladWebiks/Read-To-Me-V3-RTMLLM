@@ -101,7 +101,7 @@ async def test_orchestration_runs_search_user_books(
     service = ChatService(orch_session, settings)
     monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_fake_tools_llm()))
 
-    events = [e async for e in service.stream_chat(user.id, "what books?", None)]
+    events = [e async for e in service.stream_chat(user, "what books?", None)]
     kinds = [e.event for e in events]
     assert kinds[0] == "meta"
     assert "tool_result" in kinds
@@ -147,7 +147,7 @@ async def test_thinking_step_is_sent_before_llm_finishes(
         return ToolCallingResponse(text="Done.", usage=Usage(1, 1))
 
     monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_call))
-    stream = service.stream_chat(user.id, "hello", None)
+    stream = service.stream_chat(user, "hello", None)
     assert (await anext(stream)).event == "meta"
     step = await anext(stream)
     assert step.event == "step"
@@ -177,7 +177,7 @@ async def test_final_answer_is_not_discarded_when_usage_crosses_soft_limit(
         return ToolCallingResponse(text="Useful final answer.", usage=Usage(10, 1))
 
     monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_call))
-    events = [event async for event in service.stream_chat(user.id, "question", None)]
+    events = [event async for event in service.stream_chat(user, "question", None)]
 
     assert not any(event.event == "error" for event in events)
     assert (
@@ -208,7 +208,7 @@ async def test_text_delta_arrives_before_tool_stream_finishes(
         yield ToolCallingStreamChunk(done=True, response=response)
 
     monkeypatch.setattr(service._llm, "stream_tools", _stream)
-    events = service.stream_chat(user.id, "question", None)
+    events = service.stream_chat(user, "question", None)
     assert (await anext(events)).event == "meta"
     assert (await anext(events)).event == "step"
 

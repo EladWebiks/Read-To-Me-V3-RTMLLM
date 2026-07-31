@@ -91,7 +91,7 @@ async def test_stream_chat_persists_with_fake_llm(
     monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_fake_call_tools))
 
     events: list[ChatSseEvent] = []
-    async for event in service.stream_chat(user.id, "Say hi", None):
+    async for event in service.stream_chat(user, "Say hi", None):
         events.append(event)
 
     kinds = [e.event for e in events]
