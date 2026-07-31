@@ -14,6 +14,8 @@ import { ChapterEditorPage, ChapterNewPage, LibraryPage } from '@/features/libra
 import { libraryBookHref } from '@/features/library/logic/libraryPaths'
 import { ReaderHubPage, ReaderPage, ResumeReadingPage } from '@/features/reader'
 import { ScraperPage } from '@/features/scraping'
+// Aliased: `UsagePage` above is the admin-only backoffice page.
+import { UsagePage as MeUsagePage } from '@/features/usage'
 import { AppShell } from '@/layout/AppShell'
 
 function LegacyBookDetailRedirect() {
@@ -45,6 +47,7 @@ export function App() {
             <Route path="/read/:bookId" element={<ResumeReadingPage />} />
             <Route path="/read/:bookId/:chapterId" element={<ReaderPage />} />
             <Route path="/scraper" element={<ScraperPage />} />
+            <Route path="/usage" element={<MeUsagePage />} />
             <Route element={<RequireAdmin />}>
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/admin/users" replace />} />
