@@ -1,6 +1,7 @@
 import { Send, Square } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent } from 'react'
 import { cn } from '@/shared/lib/cn'
+import { composerPlaceholder } from '../logic/composerPlaceholder'
 
 type Props = {
   draft: string
@@ -8,6 +9,7 @@ type Props = {
   sending: boolean
   status?: string | null
   blocked?: boolean
+  quotaNotice?: string | null
   onSend: () => void
   onCancel?: () => void
 }
@@ -19,10 +21,11 @@ export function AssistantComposer({
   sending,
   status = null,
   blocked = false,
+  quotaNotice = null,
   onSend,
   onCancel,
 }: Props) {
-  const disabled = sending || blocked
+  const disabled = sending || blocked || Boolean(quotaNotice)
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!disabled) onSend()
@@ -37,9 +40,9 @@ export function AssistantComposer({
 
   return (
     <form onSubmit={submit} className="shrink-0 border-t border-border p-3 sm:p-4">
-      {blocked ? (
+      {blocked || quotaNotice ? (
         <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">
-          Confirm or cancel the pending action above to continue.
+          {quotaNotice ?? 'Confirm or cancel the pending action above to continue.'}
         </p>
       ) : null}
       <div
@@ -54,7 +57,7 @@ export function AssistantComposer({
           onKeyDown={onKeyDown}
           rows={1}
           disabled={disabled}
-          placeholder={composerPlaceholder(blocked, sending, status)}
+          placeholder={composerPlaceholder(quotaNotice, blocked, sending, status)}
           className="min-h-9 max-h-28 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none disabled:opacity-70"
           aria-label="Message"
         />
@@ -95,14 +98,4 @@ function ComposerButton(props: {
       <Send className="size-4" />
     </button>
   )
-}
-
-function composerPlaceholder(
-  blocked: boolean,
-  sending: boolean,
-  status: string | null,
-): string {
-  if (blocked) return 'Waiting for confirmation…'
-  if (sending) return status || 'Assistant is working…'
-  return 'Ask anything…'
 }

@@ -17,6 +17,7 @@ export type ChatRole =
   | 'confirmation'
   | 'choice'
   | 'cancelled'
+  | 'quota_refusal'
 
 export type ConfirmationFormField = {
   name: string

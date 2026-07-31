@@ -21,6 +21,7 @@ export type StreamArgs = {
   setConversationId: (id: string | null) => void
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>
   setError: (detail: string | null) => void
+  setQuotaResetsAt: (resetsAt: string | null) => void
   setLiveStatus: (label: string | null) => void
   setSending?: (sending: boolean) => void
   abortRef: MutableRefObject<AbortController | null>
@@ -36,7 +37,6 @@ export function buildStreamHandlers(
     assistantId,
     setConversationId,
     setMessages,
-    setError,
     setLiveStatus,
     setSending,
     onClientAction,
@@ -74,9 +74,25 @@ export function buildStreamHandlers(
         prev.map((m) => (m.id === assistantId ? { ...m, id: messageId } : m)),
       )
     },
-    onError: (detail, code, resetsAt) => {
-      setLiveStatus(null)
-      setError(chatErrorMessage(detail, code, resetsAt))
-    },
+    onError: buildErrorHandler(args),
+  }
+}
+
+/** Quota refusals become an inline marker + composer lock; the rest banner. */
+function buildErrorHandler(args: StreamArgs): ChatStreamHandlers['onError'] {
+  const { setMessages, setError, setQuotaResetsAt, setLiveStatus } = args
+  return (detail, code, resetsAt) => {
+    setLiveStatus(null)
+    if (code === 'quota_exceeded') {
+      // Mirror the server-persisted marker (Task 2) instead of the banner,
+      // and arm the composer lock for this session.
+      setMessages((prev) => [
+        ...prev,
+        { id: `quota-${crypto.randomUUID()}`, role: 'quota_refusal', content: detail },
+      ])
+      setQuotaResetsAt(resetsAt ?? null)
+      return
+    }
+    setError(chatErrorMessage(detail, code, resetsAt))
   }
 }
