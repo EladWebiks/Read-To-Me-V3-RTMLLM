@@ -19,6 +19,7 @@ def import_all_models() -> None:
     from app.modules.runtime_config import models as runtime_config_models
     from app.modules.scraping import models as scraping_models
     from app.modules.summaries import models as summaries_models
+    from app.modules.usage import models as usage_models
     from app.modules.users import models as users_models
 
     _ = (
@@ -35,5 +36,6 @@ def import_all_models() -> None:
         runtime_config_models,
         scraping_models,
         summaries_models,
+        usage_models,
         users_models,
     )

@@ -176,6 +176,14 @@ class LlmRuntimeSettings(_GroupSettings):
     max_hitl_rounds: int = Field(default=3, ge=0, validation_alias="llm_max_hitl_rounds")
 
 
+class UsageSettings(_GroupSettings):
+    """Usage rollup knobs (Part D)."""
+
+    # Nightly re-roll horizon: late-arriving facts (running scrape jobs,
+    # next-day EPUB completions) converge within this many days.
+    rollup_window_days: int = Field(default=7, ge=1, validation_alias="usage_rollup_window_days")
+
+
 class Settings(BaseSettings):
     """Runtime configuration, composed of env-loaded groups."""
 
@@ -191,6 +199,7 @@ class Settings(BaseSettings):
     audio: AudioSettings = Field(default_factory=AudioSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     llm_runtime: LlmRuntimeSettings = Field(default_factory=LlmRuntimeSettings)
+    usage: UsageSettings = Field(default_factory=UsageSettings)
 
 
 @lru_cache

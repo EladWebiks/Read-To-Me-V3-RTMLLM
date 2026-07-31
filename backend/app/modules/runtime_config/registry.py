@@ -19,12 +19,14 @@ from app.core.config import (
     LlmRuntimeSettings,
     ScrapeSettings,
     StorageSettings,
+    UsageSettings,
 )
 
 # Sections where EVERY field is tunable (derived by introspection, so a new
 # field in the group is automatically overridable and validated).
 _FULL_SECTIONS: dict[str, type[BaseSettings]] = {
     "llm_runtime": LlmRuntimeSettings,
+    "usage": UsageSettings,
 }
 
 # Sections where only the listed fields are tunable. An unknown field name

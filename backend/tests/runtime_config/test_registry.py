@@ -1,11 +1,13 @@
 """The whitelist registry: coverage, exclusions, and typed validation."""
 
 import pytest
-from app.core.config import LlmRuntimeSettings, ScrapeSettings, Settings
+from app.core.config import LlmRuntimeSettings, ScrapeSettings, Settings, UsageSettings
 from app.modules.runtime_config.registry import TUNABLE_FIELDS, section_of
 from pydantic import ValidationError
 
 FORBIDDEN_PREFIXES = ("database.", "redis.", "auth.", "google.", "llm.", "app.")
+# Sections registered wholesale; every other key must come from the pin below.
+FULL_SECTION_PREFIXES = ("llm_runtime.", "usage.")
 FORBIDDEN_KEYS = {
     "storage.endpoint",
     "storage.access_key",
@@ -24,8 +26,15 @@ def test_every_llm_runtime_field_is_tunable() -> None:
 
 
 @pytest.mark.unit
+def test_every_usage_field_is_tunable() -> None:
+    expected = {f"usage.{name}" for name in UsageSettings.model_fields}
+    actual = {key for key in TUNABLE_FIELDS if key.startswith("usage.")}
+    assert actual == expected  # a new UsageSettings field auto-registers
+
+
+@pytest.mark.unit
 def test_partial_sections_pin_exact_contents() -> None:
-    non_llm = {key for key in TUNABLE_FIELDS if not key.startswith("llm_runtime.")}
+    non_llm = {key for key in TUNABLE_FIELDS if not key.startswith(FULL_SECTION_PREFIXES)}
     assert non_llm == {
         "scrape.timeout_seconds",
         "scrape.max_bytes",
