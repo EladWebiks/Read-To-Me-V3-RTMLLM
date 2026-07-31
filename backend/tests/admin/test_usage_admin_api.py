@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 
-from tests.admin.helpers import create_user, login, seed_execution
+from tests.admin.helpers import create_user, login, roll_days, seed_execution
 
 FROM = datetime(2026, 7, 1, tzinfo=UTC)
 TO = datetime(2026, 8, 1, tzinfo=UTC)
@@ -54,6 +54,9 @@ async def seeded(admin: UUID) -> tuple[UUID, UUID]:
     await seed_execution(
         bob, created_at=TO, model="m1", task="chat", tokens_in=999, tokens_out=999, cost=9.9
     )
+    # Closed days are served from the rollup (usage spec §7) — roll them as
+    # the nightly cron would, so the aggregates below see the seeded rows.
+    await roll_days(FROM.date(), date(2026, 7, 20), date(2026, 7, 30), TO.date())
     return alice, bob
 
 

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from app.core.config import get_settings
 from app.core.deps import COOKIE_NAME
 from app.core.security import create_access_token
 from app.modules.llm.models import LlmExecution
+from app.modules.usage.rollup import roll_day
 from app.modules.users.models import User
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -80,6 +81,19 @@ async def seed_execution(  # noqa: PLR0913 — test seeding needs the full colum
                 created_at=created_at,
             )
         )
+
+
+async def roll_days(*days: date) -> None:
+    """Run the nightly rollup for the given UTC days.
+
+    Admin usage aggregates read CLOSED days from usage_daily (usage spec §7),
+    so a test seeding raw rows on past dates must also roll them — this is
+    what the arq cron does in production, and what the deploy backfill does
+    for history that predates the rollup.
+    """
+    async with seed_session() as session:
+        for day in days:
+            await roll_day(session, day)
 
 
 def login(client: AsyncClient, user_id: UUID, username: str) -> None:
