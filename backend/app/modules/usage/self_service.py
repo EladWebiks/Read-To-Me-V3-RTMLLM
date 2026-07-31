@@ -50,7 +50,7 @@ class SelfUsageService:
             for kind, meta in KIND_REGISTRY.items()
         ]
         return MeUsageResponse(
-            membership=user.membership.value,
+            membership=user.membership,
             exempt=limits.exempt,
             as_of=now,
             resets_at=month_end,

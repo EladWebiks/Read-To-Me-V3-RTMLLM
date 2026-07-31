@@ -17,7 +17,6 @@ from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
 from app.modules.quotas.service import QuotaService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, select
@@ -76,7 +75,7 @@ async def test_over_cap_blocks_before_validation(session: AsyncSession) -> None:
     user = await _user(session)
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.EPUB_IMPORTS.value,
             limit_value=2.0,
         )
@@ -134,7 +133,7 @@ async def test_under_cap_reaches_validation(session: AsyncSession) -> None:
     user = await _user(session)
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.EPUB_IMPORTS.value,
             limit_value=10.0,
         )

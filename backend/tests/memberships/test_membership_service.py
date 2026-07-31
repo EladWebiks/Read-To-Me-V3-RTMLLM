@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from uuid import uuid4
 
 import pytest
@@ -32,7 +32,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     reg.invalidate()
     yield
     reg.invalidate()

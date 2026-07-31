@@ -19,7 +19,6 @@ from app.modules.quotas.service import QuotaService
 from app.modules.usage.kinds import UsageFact, UsageMetric
 from app.modules.usage.models import UsageDaily
 from app.modules.usage.repository import UsageRepository
-from app.modules.users.membership import Membership
 from app.modules.users.models import User
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete
@@ -122,7 +121,7 @@ async def _seed_llm_usage(user_id: UUID, *, rolled: float, today_tokens: int) ->
         )
         session.add(
             MembershipQuota(
-                membership=Membership.FREE.value,
+                membership="free",
                 quota_kind=QuotaKind.LLM_TOKENS.value,
                 limit_value=5000.0,
             )

@@ -20,7 +20,6 @@ from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
 from app.modules.quotas.service import QuotaService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete
@@ -65,7 +64,7 @@ async def _user_with_book(session: AsyncSession) -> tuple[UserRead, UUID]:
 async def _set_audio_quota(session: AsyncSession, limit: float) -> None:
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.AUDIO_CHAPTERS.value,
             limit_value=limit,
         )

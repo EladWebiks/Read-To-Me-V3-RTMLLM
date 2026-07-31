@@ -51,7 +51,6 @@ class User(Base):
     membership: Mapped[str] = mapped_column(
         String(32),
         ForeignKey("memberships.slug"),
-        default="free",
         server_default="free",
     )
     created_at: Mapped[datetime] = mapped_column(

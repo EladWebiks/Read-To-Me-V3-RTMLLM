@@ -95,7 +95,7 @@ async def test_membership_change_valid_and_invalid(client: AsyncClient, admin: U
     assert ok.status_code == 200
     assert ok.json()["membership"] == "free"
     bad = await client.patch(f"{BASE}/{target}", json={"membership": "platinum"})
-    assert bad.status_code == 422
+    assert bad.status_code == 404  # tier is not in the registry
 
 
 @pytest.mark.integration

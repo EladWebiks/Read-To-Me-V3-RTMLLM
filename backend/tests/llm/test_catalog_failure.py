@@ -15,7 +15,6 @@ from app.core.db import SessionLocal
 from app.modules.llm import catalog
 from app.modules.llm.chat_service import ChatService
 from app.modules.llm.exceptions import LlmDisabledError, NoCandidateModelError
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 from sqlalchemy import text
 
@@ -29,7 +28,7 @@ def _user() -> UserRead:
         username="catalog-test",
         email=None,
         is_admin=False,
-        membership=Membership.FREE,
+        membership="free",
         created_at=datetime.now(UTC),
     )
 

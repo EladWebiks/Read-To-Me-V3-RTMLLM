@@ -7,15 +7,13 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.users.membership import Membership
-
 
 class MembershipPolicyRead(BaseModel):
     """One tier row of per-turn cap overrides. None = inherit."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    membership: Membership
+    membership: str
     max_tool_iters: int | None
     max_external_calls: int | None
     max_turn_tokens_in: int | None

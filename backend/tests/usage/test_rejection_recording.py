@@ -16,7 +16,6 @@ from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
 from app.modules.usage.models import QuotaRejection
 from app.modules.usage.read_service import record_rejection_detached
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, select
@@ -67,7 +66,7 @@ async def test_chat_rejection_writes_row(
     user = await _user(session)
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.LLM_TOKENS.value,
             limit_value=10.0,
         )

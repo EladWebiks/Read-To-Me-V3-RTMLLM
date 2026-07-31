@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from app.modules.users import membership_registry as reg
 from app.modules.users.membership import meets_minimum
@@ -9,7 +11,7 @@ from app.modules.users.membership_registry import TierSpec
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry() -> Iterator[None]:
     reg.invalidate()
     yield
     reg.invalidate()

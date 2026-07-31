@@ -4,7 +4,6 @@ from collections.abc import AsyncIterator
 
 import pytest
 from app.core.config import get_settings
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from sqlalchemy import text
@@ -36,7 +35,7 @@ async def test_create_from_google_sets_identity(session: AsyncSession) -> None:
     assert user.username == "casual.reader"
     assert user.password_hash is None
     assert user.is_admin is False
-    assert user.membership == Membership.FREE
+    assert user.membership == "free"
 
 
 @pytest.mark.integration

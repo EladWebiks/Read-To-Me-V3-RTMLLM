@@ -35,12 +35,16 @@ from app.modules.runtime_config.router import router as runtime_config_router
 from app.modules.scraping.router import router as scraping_router
 from app.modules.scraping.seed import seed_scraping_sources
 from app.modules.usage.router import router as usage_router
+from app.modules.users.seed import seed_default_membership
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan hook (startup/shutdown)."""
     import_all_models()
+    # Tiers first: user creation FKs to memberships.slug and the policy seed
+    # reads the registry to know which tiers exist.
+    await seed_default_membership()
     await seed_admin_user()
     await seed_scraping_sources()
     await seed_llm_models()

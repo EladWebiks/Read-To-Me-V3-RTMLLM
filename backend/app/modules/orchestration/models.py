@@ -13,7 +13,7 @@ from app.core.db import Base
 
 
 class MembershipPolicy(Base):
-    """Per-tier PER-TURN cap overrides — one row per Membership enum value.
+    """Per-tier PER-TURN cap overrides — one row per memberships registry row.
 
     NULL = inherit the effective runtime setting (there is always a global
     fallback; per-turn caps are safety rails that can never be absent).

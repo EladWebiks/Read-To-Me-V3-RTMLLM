@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select, update
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import MembershipTier, User
@@ -49,7 +51,12 @@ class MembershipRepository:
 
     async def reassign_users(self, from_slug: str, to_slug: str) -> int:
         """Move every user off a tier (deactivation migration). Returns count."""
-        result = await self._session.execute(
-            update(User).where(User.membership == from_slug).values(membership=to_slug)
+        # execute() is typed as Result[Any]; an UPDATE always yields a
+        # CursorResult, which is the only shape carrying rowcount.
+        result = cast(
+            "CursorResult[Any]",
+            await self._session.execute(
+                update(User).where(User.membership == from_slug).values(membership=to_slug)
+            ),
         )
         return int(result.rowcount or 0)

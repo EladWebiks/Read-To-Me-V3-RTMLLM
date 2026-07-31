@@ -1,6 +1,6 @@
 """Admin CRUD for membership AI policies. HTTP only; logic in PolicyService.
 
-PATCH-only by design: rows mirror the Membership enum (no create/delete).
+PATCH-only by design: rows mirror the memberships registry (no create/delete).
 Follows the runtime_config admin router pattern.
 """
 
@@ -19,7 +19,6 @@ from app.modules.orchestration.schemas import (
     MembershipPolicyPatch,
     MembershipPolicyRead,
 )
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 
 router = APIRouter(prefix="/admin/membership-policies", tags=["admin"])
@@ -47,7 +46,7 @@ async def list_policies(
 
 @router.patch("/{membership}")
 async def patch_policy(
-    membership: Membership,
+    membership: str,
     body: MembershipPolicyPatch,
     admin: Annotated[UserRead, Depends(require_admin)],
     service: Annotated[PolicyService, Depends(_service)],

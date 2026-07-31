@@ -20,7 +20,6 @@ from app.modules.llm.models import LlmExecution
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
 from app.modules.scraping.models import ScrapingJob, ScrapingSource
-from app.modules.users.membership import Membership
 from app.modules.users.models import User
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
@@ -110,7 +109,7 @@ async def _seed() -> UUID:
         )
         session.add(
             MembershipQuota(
-                membership=Membership.FREE.value,
+                membership="free",
                 quota_kind=QuotaKind.LLM_TOKENS.value,
                 limit_value=5000.0,
             )

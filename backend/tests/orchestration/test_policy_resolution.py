@@ -13,7 +13,6 @@ from app.modules.orchestration.policy import PolicyService
 from app.modules.orchestration.seed import seed_membership_policies
 from app.modules.runtime_config import cache
 from app.modules.runtime_config.service import RuntimeConfigService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, select
@@ -34,7 +33,7 @@ async def session() -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
-def _user(membership: Membership = Membership.FREE, *, is_admin: bool = False) -> UserRead:
+def _user(membership: str = "free", *, is_admin: bool = False) -> UserRead:
     """resolve() only reads membership/is_admin — no DB user needed."""
     return UserRead(
         id=uuid4(),
@@ -52,7 +51,7 @@ async def _set_free_tier(session: AsyncSession, **values: int | float | None) ->
     await seed_membership_policies(session)
     row = (
         await session.execute(
-            select(MembershipPolicy).where(MembershipPolicy.membership == Membership.FREE.value)
+            select(MembershipPolicy).where(MembershipPolicy.membership == "free")
         )
     ).scalar_one()
     for field, value in values.items():

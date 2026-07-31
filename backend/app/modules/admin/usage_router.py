@@ -34,7 +34,6 @@ from app.modules.quotas.service import QuotaService
 from app.modules.scraping.service import ScrapingService
 from app.modules.usage.kinds import UsageMetric
 from app.modules.usage.read_service import UsageReadService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 from app.modules.users.service import UserService
 
@@ -261,7 +260,7 @@ class _RowContext:
     """Per-request lookup tables for decorating by-user rows."""
 
     names: dict[UUID, str]
-    tiers: dict[UUID, Membership]
+    tiers: dict[UUID, str]
     quotas: dict[tuple[str, str], float]
     months: _MonthLookups
     rejections: dict[UUID, int]
@@ -339,8 +338,7 @@ async def _decorate_rows(
 
 
 def _decorated_row(row: UserUsageRead, ctx: _RowContext) -> AdminUserUsageRead:
-    tier = ctx.tiers.get(row.user_id)
-    tier_value = tier.value if tier is not None else None
+    tier_value = ctx.tiers.get(row.user_id)
     uid = row.user_id
     months = ctx.months
     return AdminUserUsageRead(

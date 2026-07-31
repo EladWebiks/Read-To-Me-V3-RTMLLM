@@ -12,7 +12,6 @@ from app.core.security import create_access_token
 from app.main import app
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota, UserQuotaOverride
-from app.modules.users.membership import Membership
 from app.modules.users.models import User
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete
@@ -86,7 +85,7 @@ async def _seed_users() -> tuple[UUID, UUID]:
         await session.flush()
         session.add(
             MembershipQuota(
-                membership=Membership.FREE.value,
+                membership="free",
                 quota_kind=QuotaKind.LLM_TOKENS.value,
                 limit_value=1000.0,
             )

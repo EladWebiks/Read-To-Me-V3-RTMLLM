@@ -61,6 +61,7 @@ from app.modules.usage.read_service import record_rejection_detached
 from app.modules.users.exceptions import (
     AdminSelfActionError,
     LastAdminError,
+    UnknownMembershipError,
     UserAccountDisabledError,
     UserAlreadyExistsError,
     UserNotFoundError,
@@ -172,6 +173,13 @@ def _register_admin_user_handlers(app: FastAPI) -> None:
             status_code=409,
             content={"detail": "At least one active admin must remain"},
         )
+
+    @app.exception_handler(UnknownMembershipError)
+    async def _unknown_membership(
+        _request: Request,
+        _exc: UnknownMembershipError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Membership tier not found"})
 
 
 def _register_library_handlers(app: FastAPI) -> None:

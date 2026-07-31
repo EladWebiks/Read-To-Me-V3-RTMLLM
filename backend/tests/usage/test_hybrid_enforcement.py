@@ -24,7 +24,6 @@ from app.modules.quotas.service import QuotaService
 from app.modules.usage.kinds import UsageFact, UsageMetric
 from app.modules.usage.models import UsageDaily
 from app.modules.usage.repository import UsageRepository
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete
@@ -59,9 +58,7 @@ async def _user(session: AsyncSession) -> UserRead:
 
 
 async def _set_quota(session: AsyncSession, kind: QuotaKind, limit: float) -> None:
-    session.add(
-        MembershipQuota(membership=Membership.FREE.value, quota_kind=kind.value, limit_value=limit)
-    )
+    session.add(MembershipQuota(membership="free", quota_kind=kind.value, limit_value=limit))
     await session.commit()
 
 

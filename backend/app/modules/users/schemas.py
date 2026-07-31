@@ -8,8 +8,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.modules.users.membership import Membership
-
 if TYPE_CHECKING:
     from app.modules.users.models import MembershipTier, User
 
@@ -33,7 +31,7 @@ class UserRead(BaseModel):
     email: str | None
     picture_url: str | None = None
     is_admin: bool
-    membership: Membership
+    membership: str
     created_at: datetime
 
 
@@ -44,7 +42,7 @@ class UserAdminRead(BaseModel):
     username: str
     email: str | None
     is_admin: bool
-    membership: Membership
+    membership: str
     google_linked: bool
     created_at: datetime
     deleted_at: datetime | None
@@ -57,7 +55,7 @@ class UserAdminRead(BaseModel):
             username=user.username,
             email=user.email,
             is_admin=user.is_admin,
-            membership=Membership(user.membership),
+            membership=user.membership,
             google_linked=user.google_sub is not None,
             created_at=user.created_at,
             deleted_at=user.deleted_at,
@@ -68,7 +66,7 @@ class UserAdminPatch(BaseModel):
     """PATCH /api/admin/users/{id} body — only supplied fields change."""
 
     is_admin: bool | None = None
-    membership: Membership | None = None
+    membership: str | None = None
 
 
 class MembershipCreate(BaseModel):

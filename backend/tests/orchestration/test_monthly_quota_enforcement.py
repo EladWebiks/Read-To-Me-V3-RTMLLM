@@ -15,7 +15,6 @@ from app.modules.orchestration.models import MembershipPolicy
 from app.modules.orchestration.seed import seed_membership_policies
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete
@@ -79,16 +78,12 @@ async def _seed_usage(
 async def _set_quota(session: AsyncSession, kind: QuotaKind, limit: float | None) -> None:
     await session.execute(
         delete(MembershipQuota).where(
-            MembershipQuota.membership == Membership.FREE.value,
+            MembershipQuota.membership == "free",
             MembershipQuota.quota_kind == kind.value,
         )
     )
     if limit is not None:
-        session.add(
-            MembershipQuota(
-                membership=Membership.FREE.value, quota_kind=kind.value, limit_value=limit
-            )
-        )
+        session.add(MembershipQuota(membership="free", quota_kind=kind.value, limit_value=limit))
     await session.commit()
 
 
@@ -182,8 +177,8 @@ async def test_raising_or_removing_the_rule_unblocks_immediately(
 ) -> None:
     """Limits are read fresh per turn: no cache, no restart.
 
-    (Only one Membership value exists today, so a 'tier upgrade' is simulated
-    by removing the tier's rule — the freshness property is identical.)
+    (Only the 'free' tier is registered in this suite, so a 'tier upgrade' is
+    simulated by removing the tier's rule — the freshness property is identical.)
     """
     await _set_quota(session, QuotaKind.LLM_TOKENS, 100)
     user = await _user(session)

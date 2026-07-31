@@ -16,7 +16,6 @@ from app.modules.scraping.models import ScrapingJob, ScrapingSource
 from app.modules.scraping.repository import ScrapingRepository
 from app.modules.scraping.schemas import ScrapeJobCreate
 from app.modules.scraping.service import ScrapingService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, select
@@ -70,7 +69,7 @@ async def _seed_scraped(session: AsyncSession, user_id: UUID, chapters: int) -> 
 async def _set_scrape_quota(session: AsyncSession, limit: float) -> None:
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.SCRAPE_CHAPTERS.value,
             limit_value=limit,
         )

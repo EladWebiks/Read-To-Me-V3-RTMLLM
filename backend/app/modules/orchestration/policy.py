@@ -19,7 +19,7 @@ from app.core.config import Settings
 from app.modules.orchestration.models import MembershipPolicy
 from app.modules.orchestration.repository import MembershipPolicyRepository
 from app.modules.orchestration.schemas import MembershipPolicyPatch
-from app.modules.users.membership import Membership
+from app.modules.users.membership_service import MembershipService
 from app.modules.users.schemas import UserRead
 
 logger = logging.getLogger(__name__)
@@ -67,15 +67,15 @@ class PolicyService:
 
     async def resolve(self, user: UserRead) -> ResolvedPolicy:
         """Frozen policy for this user's tier. Missing row = inherit all."""
-        row = await self._repo.get_by_membership(user.membership.value)
+        row = await self._repo.get_by_membership(user.membership)
         if row is None:
             logger.warning(
                 "no membership_policies row; inheriting all defaults",
-                extra={"membership": user.membership.value},
+                extra={"membership": user.membership},
             )
         caps, overridden = self._per_turn_caps(row)
         policy = ResolvedPolicy(
-            membership=user.membership.value,
+            membership=user.membership,
             is_admin=user.is_admin,
             tier_overridden=tuple(overridden),
             **caps,
@@ -102,15 +102,16 @@ class PolicyService:
 
     async def patch_policy(
         self,
-        membership: Membership,
+        membership: str,
         patch: MembershipPolicyPatch,
         *,
         actor_id: UUID,
     ) -> MembershipPolicy:
         """Apply supplied fields (explicit null clears). Self-heals a missing row."""
-        row = await self._repo.get_by_membership(membership.value)
+        await MembershipService(self._session).require_tier(membership)
+        row = await self._repo.get_by_membership(membership)
         if row is None:
-            row = MembershipPolicy(membership=membership.value)
+            row = MembershipPolicy(membership=membership)
             self._repo.add(row)
         changes = patch.model_dump(exclude_unset=True)
         for field, value in changes.items():
@@ -119,7 +120,7 @@ class PolicyService:
         logger.info(
             "membership policy updated",
             extra={
-                "membership": membership.value,
+                "membership": membership,
                 "actor": str(actor_id),
                 "changes": changes,
             },

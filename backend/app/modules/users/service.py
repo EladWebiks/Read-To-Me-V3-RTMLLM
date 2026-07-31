@@ -18,7 +18,7 @@ from app.modules.users.exceptions import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
-from app.modules.users.membership import Membership
+from app.modules.users.membership_service import MembershipService
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import UserAdminPatch, UserAdminRead, UserCreate, UserRead
@@ -40,6 +40,7 @@ class UserService:
     """
 
     def __init__(self, session: AsyncSession) -> None:
+        self._session = session
         self._repo = UserRepository(session)
 
     async def get_by_id(self, user_id: UUID) -> UserRead:
@@ -72,6 +73,7 @@ class UserService:
             email=str(data.email) if data.email else None,
             password_hash=hash_password(data.password),
             is_admin=data.is_admin,
+            membership=await MembershipService(self._session).default_slug(),
         )
         created = await self._repo.add(user)
         return UserRead.model_validate(created)
@@ -209,6 +211,7 @@ class UserService:
             password_hash=None,
             google_sub=google_sub,
             picture_url=picture_url,
+            membership=await MembershipService(self._session).default_slug(),
         )
         return await self._repo.add(user)
 
@@ -237,7 +240,7 @@ class UserService:
         """Backoffice attribution: ids → usernames, soft-deleted included."""
         return await self._repo.usernames_for_ids(user_ids)
 
-    async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, Membership]:
+    async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """Backoffice attribution: ids → membership tiers."""
         return await self._repo.memberships_for_ids(user_ids)
 
@@ -252,8 +255,9 @@ class UserService:
             user.is_admin = patch.is_admin
             changed["is_admin"] = patch.is_admin
         if patch.membership is not None and patch.membership != user.membership:
+            await MembershipService(self._session).require_assignable(patch.membership)
             user.membership = patch.membership
-            changed["membership"] = patch.membership.value
+            changed["membership"] = patch.membership
         row = UserAdminRead.from_user(await self._repo.save(user))
         if changed:
             self._audit("admin changed user", actor_id, user_id, **changed)

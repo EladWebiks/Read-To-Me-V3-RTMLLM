@@ -17,7 +17,6 @@ from app.modules.llm.types import (
 )
 from app.modules.orchestration.models import MembershipPolicy
 from app.modules.orchestration.seed import seed_membership_policies
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, select
@@ -60,7 +59,7 @@ async def _user(session: AsyncSession) -> UserRead:
 async def _tighten_free_tier(session: AsyncSession, **values: int | float) -> None:
     row = (
         await session.execute(
-            select(MembershipPolicy).where(MembershipPolicy.membership == Membership.FREE.value)
+            select(MembershipPolicy).where(MembershipPolicy.membership == "free")
         )
     ).scalar_one()
     for field, value in values.items():

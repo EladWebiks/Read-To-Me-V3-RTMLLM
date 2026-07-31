@@ -17,7 +17,6 @@ from app.modules.orchestration.seed import seed_membership_policies
 from app.modules.orchestration.service import QUOTA_REFUSAL_ROLE, _to_llm_messages
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, select
@@ -63,7 +62,7 @@ async def _block_user(session: AsyncSession, user_id: UUID) -> None:
     """Tiny token quota + existing usage puts the user at/over the cap."""
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.LLM_TOKENS.value,
             limit_value=10.0,
         )

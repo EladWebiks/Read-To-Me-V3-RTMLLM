@@ -19,7 +19,6 @@ from app.modules.library.service import LibraryService
 from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete
@@ -107,7 +106,7 @@ async def test_standing_cap_blocks_new_job(session: AsyncSession) -> None:
     session.add(_stored_job(user.id, book_id, size=5000, expired=False))
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.STORAGE_BYTES.value,
             limit_value=5000.0,
         )

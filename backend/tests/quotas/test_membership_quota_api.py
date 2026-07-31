@@ -126,4 +126,4 @@ async def test_validation_rejects_bad_inputs(admin_client: AsyncClient) -> None:
     ).status_code == 422
     assert (
         await admin_client.put(f"{BASE}/platinum/llm_tokens", json={"limit_value": 5})
-    ).status_code == 422
+    ).status_code == 404  # tier is not in the registry

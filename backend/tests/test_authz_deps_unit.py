@@ -1,6 +1,7 @@
 """Unit tests for the authorization dependencies (no DB, no HTTP)."""
 
 from datetime import UTC, datetime
+from typing import cast
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -8,6 +9,11 @@ import pytest
 from app.core.deps import require_admin, require_membership
 from app.modules.auth.exceptions import NotAuthorizedError
 from app.modules.users.schemas import UserRead
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# The dependency only forwards the session to ensure_loaded, which every test
+# here replaces with an AsyncMock — so no real session is ever touched.
+_NO_SESSION = cast("AsyncSession", None)
 
 
 def _user(*, is_admin: bool = False, membership: str = "free") -> UserRead:
@@ -44,7 +50,7 @@ async def test_require_membership_passes_sufficient_tier(
     monkeypatch.setattr("app.core.deps.meets_minimum", lambda actual, minimum: True)
     dep = require_membership("free")
     user = _user()
-    assert await dep(user, None) is user
+    assert await dep(user, _NO_SESSION) is user
 
 
 @pytest.mark.unit
@@ -56,4 +62,4 @@ async def test_require_membership_rejects_insufficient_tier(
     monkeypatch.setattr("app.core.deps.meets_minimum", lambda actual, minimum: False)
     dep = require_membership("free")
     with pytest.raises(NotAuthorizedError):
-        await dep(_user(), None)
+        await dep(_user(), _NO_SESSION)

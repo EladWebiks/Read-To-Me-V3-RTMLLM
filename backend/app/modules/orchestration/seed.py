@@ -9,18 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import SessionLocal
 from app.modules.orchestration.models import MembershipPolicy
-from app.modules.users.membership import Membership
+from app.modules.users.membership_registry import ensure_loaded
 
 logger = logging.getLogger(__name__)
 
 
 async def seed_membership_policies(session: AsyncSession | None = None) -> None:
-    """Ensure one all-NULL policy row exists per Membership value.
+    """Ensure one all-NULL policy row exists per memberships row.
 
     Idempotent, insert-if-missing: a restart never reverts admin edits
-    (same contract as the LLM catalog seed). New enum values get their row
-    on the next startup even if the migration predates them. All per-turn
-    columns stay NULL, which means "inherit" — never "unlimited".
+    (same contract as the LLM catalog seed). Newly registered tiers get their
+    row on the next startup. All per-turn columns stay NULL, which means
+    "inherit" — never "unlimited".
     """
     if session is not None:
         await _seed(session)
@@ -33,7 +33,8 @@ async def seed_membership_policies(session: AsyncSession | None = None) -> None:
 
 async def _seed(session: AsyncSession) -> None:
     existing = set((await session.execute(select(MembershipPolicy.membership))).scalars().all())
-    missing = [m.value for m in Membership if m.value not in existing]
+    tiers = await ensure_loaded(session)
+    missing = [t.slug for t in tiers if t.slug not in existing]
     for value in missing:
         session.add(MembershipPolicy(membership=value))
     if missing:

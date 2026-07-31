@@ -8,7 +8,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.quotas.kinds import QuotaKind
-from app.modules.users.membership import Membership
 
 
 class QuotaKindInfo(BaseModel):
@@ -25,7 +24,7 @@ class MembershipQuotaRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    membership: Membership
+    membership: str
     quota_kind: QuotaKind
     limit_value: float
     updated_at: datetime
@@ -51,7 +50,7 @@ class UserQuotaOverrideRead(BaseModel):
 class UserQuotasResponse(BaseModel):
     """Registry + the user's tier limits (sparse) + their override rows."""
 
-    membership: Membership
+    membership: str
     kinds: list[QuotaKindInfo]
     tier_limits: dict[str, float]
     overrides: list[UserQuotaOverrideRead]

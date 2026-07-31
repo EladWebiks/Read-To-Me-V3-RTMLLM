@@ -22,7 +22,7 @@ from app.modules.quotas.exceptions import QuotaExceededError, QuotaRuleNotFoundE
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota, UserQuotaOverride
 from app.modules.quotas.repository import MembershipQuotaRepository
-from app.modules.users.membership import Membership
+from app.modules.users.membership_service import MembershipService
 from app.modules.users.schemas import UserRead
 from app.modules.users.service import UserService
 
@@ -74,7 +74,7 @@ class QuotaService:
         """
         if user.is_admin:
             return QuotaLimits(exempt=True, values={})
-        values = _values_from_rows(await self._repo.list_for_membership(user.membership.value))
+        values = _values_from_rows(await self._repo.list_for_membership(user.membership))
         values |= _values_from_rows(await self._repo.list_overrides_for_user(user.id))
         return QuotaLimits(exempt=False, values=values)
 
@@ -128,17 +128,18 @@ class QuotaService:
 
     async def set_quota(
         self,
-        membership: Membership,
+        membership: str,
         kind: QuotaKind,
         limit_value: float,
         *,
         actor_id: UUID,
     ) -> MembershipQuota:
         """Set or replace one rule for (membership, kind)."""
-        row = await self._repo.get(membership.value, kind.value)
+        await MembershipService(self._session).require_tier(membership)
+        row = await self._repo.get(membership, kind.value)
         if row is None:
             row = MembershipQuota(
-                membership=membership.value, quota_kind=kind.value, limit_value=limit_value
+                membership=membership, quota_kind=kind.value, limit_value=limit_value
             )
             self._repo.add(row)
         else:
@@ -147,7 +148,7 @@ class QuotaService:
         logger.info(
             "membership quota set",
             extra={
-                "membership": membership.value,
+                "membership": membership,
                 "kind": kind.value,
                 "limit": limit_value,
                 "actor": str(actor_id),
@@ -157,10 +158,10 @@ class QuotaService:
 
     async def user_quotas(
         self, user_id: UUID
-    ) -> tuple[Membership, dict[str, float], list[UserQuotaOverride]]:
+    ) -> tuple[str, dict[str, float], list[UserQuotaOverride]]:
         """(membership, sparse tier limits, override rows) for the admin dialog."""
         user = await UserService(self._session).get_by_id(user_id)  # 404s unknown ids
-        tier_rows = await self._repo.list_for_membership(user.membership.value)
+        tier_rows = await self._repo.list_for_membership(user.membership)
         tier_limits = {row.quota_kind: row.limit_value for row in tier_rows}
         overrides = await self._repo.list_overrides_for_user(user_id)
         return user.membership, tier_limits, overrides
@@ -201,18 +202,17 @@ class QuotaService:
             extra={"user_id": str(user_id), "kind": kind.value, "actor": str(actor_id)},
         )
 
-    async def clear_quota(
-        self, membership: Membership, kind: QuotaKind, *, actor_id: UUID
-    ) -> None:
+    async def clear_quota(self, membership: str, kind: QuotaKind, *, actor_id: UUID) -> None:
         """Drop one rule; that (membership, kind) becomes unlimited again."""
-        row = await self._repo.get(membership.value, kind.value)
+        await MembershipService(self._session).require_tier(membership)
+        row = await self._repo.get(membership, kind.value)
         if row is None:
-            raise QuotaRuleNotFoundError(membership.value, kind.value)
+            raise QuotaRuleNotFoundError(membership, kind.value)
         await self._repo.delete(row)
         logger.info(
             "membership quota cleared",
             extra={
-                "membership": membership.value,
+                "membership": membership,
                 "kind": kind.value,
                 "actor": str(actor_id),
             },

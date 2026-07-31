@@ -12,7 +12,6 @@ from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import KIND_REGISTRY, QuotaKind
 from app.modules.quotas.models import MembershipQuota
 from app.modules.quotas.service import QuotaLimits, QuotaService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -38,7 +37,7 @@ def _user(*, is_admin: bool = False) -> UserRead:
         username="quota-test",
         email=None,
         is_admin=is_admin,
-        membership=Membership.FREE,
+        membership="free",
         created_at=datetime.now(UTC),
     )
 
@@ -101,7 +100,7 @@ def test_standing_kind_copy_has_no_reset_date() -> None:
 async def test_limits_for_reads_rows_and_exempts_admins(session: AsyncSession) -> None:
     session.add(
         MembershipQuota(
-            membership=Membership.FREE.value,
+            membership="free",
             quota_kind=QuotaKind.LLM_TOKENS.value,
             limit_value=5000.0,
         )
@@ -123,11 +122,7 @@ async def test_limits_for_reads_rows_and_exempts_admins(session: AsyncSession) -
 @pytest.mark.asyncio
 async def test_unknown_kind_rows_are_skipped(session: AsyncSession) -> None:
     """A row for a since-removed kind must not break resolution (fail-open)."""
-    session.add(
-        MembershipQuota(
-            membership=Membership.FREE.value, quota_kind="retired_kind", limit_value=1.0
-        )
-    )
+    session.add(MembershipQuota(membership="free", quota_kind="retired_kind", limit_value=1.0))
     await session.commit()
     limits = await QuotaService(session).limits_for(_user())
     assert limits.values == {}

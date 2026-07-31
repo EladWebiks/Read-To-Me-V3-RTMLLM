@@ -9,7 +9,6 @@ from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleClaims, GoogleOAuthClient
 from app.modules.auth.service import AuthService
 from app.modules.users.exceptions import GoogleIdentityConflictError
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from sqlalchemy import text
@@ -70,7 +69,7 @@ async def test_first_google_login_claims_admin(
     assert user.username == settings.auth.admin_username
     assert user.email == "owner@example.com"
     assert user.is_admin is True
-    assert user.membership == Membership.FREE
+    assert user.membership == "free"
     assert token
 
 

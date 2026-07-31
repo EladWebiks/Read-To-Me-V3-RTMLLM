@@ -18,7 +18,6 @@ from app.modules.llm.types import (
 from app.modules.orchestration.hitl_pause import budget_from_snapshot
 from app.modules.orchestration.models import MembershipPolicy
 from app.modules.orchestration.seed import seed_membership_policies
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy import delete, update
@@ -114,7 +113,7 @@ async def test_resume_uses_caps_frozen_at_turn_start(
     # Mid-pause tier change: 1 iteration would already be exhausted.
     await session.execute(
         update(MembershipPolicy)
-        .where(MembershipPolicy.membership == Membership.FREE.value)
+        .where(MembershipPolicy.membership == "free")
         .values(max_tool_iters=1)
     )
     await session.commit()

@@ -24,7 +24,6 @@ from app.modules.quotas.schemas import (
     UserQuotasResponse,
 )
 from app.modules.quotas.service import QuotaService
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 
 router = APIRouter(prefix="/admin/membership-quotas", tags=["admin"])
@@ -52,7 +51,7 @@ async def list_quotas(
 
 @router.put("/{membership}/{kind}")
 async def put_quota(
-    membership: Membership,
+    membership: str,
     kind: QuotaKind,
     body: QuotaLimitWrite,
     admin: Annotated[UserRead, Depends(require_admin)],
@@ -65,7 +64,7 @@ async def put_quota(
 
 @router.delete("/{membership}/{kind}", status_code=204)
 async def delete_quota(
-    membership: Membership,
+    membership: str,
     kind: QuotaKind,
     admin: Annotated[UserRead, Depends(require_admin)],
     service: Annotated[QuotaService, Depends(_service)],
