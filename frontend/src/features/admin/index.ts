@@ -1,6 +1,7 @@
 export { AdminLayout } from './components/AdminLayout'
 export { AdminPlaceholder } from './components/AdminPlaceholder'
 export { CatalogPage } from './components/catalog/CatalogPage'
+export { JobsPage } from './components/jobs/JobsPage'
 export { SettingsPage } from './components/settings/SettingsPage'
 export { ToolCallsPage } from './components/toolcalls/ToolCallsPage'
 export { UsagePage } from './components/usage/UsagePage'

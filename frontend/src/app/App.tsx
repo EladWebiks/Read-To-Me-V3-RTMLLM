@@ -1,8 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import {
   AdminLayout,
-  AdminPlaceholder,
   CatalogPage,
+  JobsPage,
   SettingsPage,
   ToolCallsPage,
   UsagePage,
@@ -52,7 +52,7 @@ export function App() {
                 <Route path="usage" element={<UsagePage />} />
                 <Route path="catalog" element={<CatalogPage />} />
                 <Route path="tool-calls" element={<ToolCallsPage />} />
-                <Route path="jobs" element={<AdminPlaceholder />} />
+                <Route path="jobs" element={<JobsPage />} />
               </Route>
             </Route>
           </Route>
