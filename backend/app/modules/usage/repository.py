@@ -179,6 +179,26 @@ class UsageRepository:
         """Queue a rejection event on the caller's session (caller commits)."""
         self._session.add(QuotaRejection(user_id=user_id, quota_kind=kind.value, source=source))
 
+    async def rejection_counts(self, *, start: datetime, end: datetime) -> dict[str, int]:
+        """Raw quota_rejections per kind for [start, end) — the today-tail."""
+        stmt = (
+            select(QuotaRejection.quota_kind, func.count())
+            .where(QuotaRejection.created_at >= start, QuotaRejection.created_at < end)
+            .group_by(QuotaRejection.quota_kind)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {str(row[0]): int(row[1]) for row in rows}
+
+    async def rejection_counts_by_user(self, *, start: datetime, end: datetime) -> dict[UUID, int]:
+        """Raw quota_rejections per user for [start, end) — the today-tail."""
+        stmt = (
+            select(QuotaRejection.user_id, func.count())
+            .where(QuotaRejection.created_at >= start, QuotaRejection.created_at < end)
+            .group_by(QuotaRejection.user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: int(row[1]) for row in rows}
+
     async def rejection_facts(self, day: date) -> list[UsageFact]:
         """Roll this module's own raw events into rejected_* facts."""
         start, end = day_window(day)

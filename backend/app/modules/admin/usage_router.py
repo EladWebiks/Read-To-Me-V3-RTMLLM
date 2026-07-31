@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.deps import get_db, require_admin
 from app.modules.admin.params import PageParams, PeriodParams
-from app.modules.admin.schemas import AdminUserUsageRead, Page
+from app.modules.admin.schemas import AdminUsageSummary, AdminUserUsageRead, Page
 from app.modules.downloads.service import DownloadService
 from app.modules.imports.service import ImportService
 from app.modules.llm.schemas import (
@@ -140,7 +140,7 @@ async def _merged_tasks(
 
 async def _merged_overview(
     session: AsyncSession, service: LlmService, period: PeriodParams
-) -> AdminUsageOverview:
+) -> AdminUsageSummary:
     """Rolled closed-day totals + the live today tail, in the response shape."""
     rolled_start, rolled_end, tail_start, tail_end = _split_range(period)
     usage = UsageReadService(session)
@@ -152,8 +152,13 @@ async def _merged_overview(
         if tail_start is not None
         else None
     )
+    rejections, by_kind = await usage.period_rejections(
+        period_start=period.period_start,
+        period_end=period.period_end,
+        now=datetime.now(UTC),
+    )
     days = {"start_day": rolled_start, "end_day": rolled_end}
-    return AdminUsageOverview(
+    return AdminUsageSummary(
         period_start=period.period_start,
         period_end=period.period_end,
         tokens_in=int(totals.get(UsageMetric.LLM_TOKENS_IN, 0.0))
@@ -165,6 +170,8 @@ async def _merged_overview(
         + (tail.execution_count if tail else 0),
         by_model=await _merged_models(usage, tail, **days),
         by_task=await _merged_tasks(usage, tail, **days),
+        rejections=rejections,
+        rejections_by_kind=by_kind,
     )
 
 
@@ -213,8 +220,8 @@ async def usage_summary(
     _admin: Annotated[UserRead, Depends(require_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
     service: Annotated[LlmService, Depends(_llm)],
-) -> AdminUsageOverview:
-    """Global tokens/cost/executions with model and task breakdowns."""
+) -> AdminUsageSummary:
+    """Global tokens/cost/executions with model, task and rejection breakdowns."""
     return await _merged_overview(session, service, period)
 
 
@@ -234,7 +241,7 @@ async def usage_by_user(
     rows = await _merged_user_rows(session, service, period)
     total = len(rows)
     page_rows = rows[page.offset : page.offset + page.limit]
-    items = await _decorate_rows(session, service, page_rows)
+    items = await _decorate_rows(session, service, page_rows, period)
     return Page(items=items, total=total, limit=page.limit, offset=page.offset)
 
 
@@ -249,17 +256,20 @@ class _RowContext:
     audio: dict[UUID, int]
     scrape: dict[UUID, int]
     imports: dict[UUID, int]
+    rejections: dict[UUID, int]
 
 
 async def _decorate_rows(
     session: AsyncSession,
     service: LlmService,
     rows: list[UserUsageRead],
+    period: PeriodParams,
 ) -> list[AdminUserUsageRead]:
     """Join usernames, tiers, current-month usage, job counts, and quota rules."""
     users = UserService(session)
     ids = [row.user_id for row in rows]
-    month_start, month_end = QuotaService.current_month_window(datetime.now(UTC))
+    now = datetime.now(UTC)
+    month_start, month_end = QuotaService.current_month_window(now)
     window = {"period_start": month_start, "period_end": month_end}
     ctx = _RowContext(
         names=await users.usernames_for_ids(ids),
@@ -272,6 +282,9 @@ async def _decorate_rows(
         audio=await DownloadService(session).month_chapters_for_users(ids, **window),
         scrape=await ScrapingService(session).month_chapters_for_users(ids, **window),
         imports=await ImportService(session).month_imports_for_users(ids, **window),
+        rejections=await UsageReadService(session).period_rejections_by_user(
+            period_start=period.period_start, period_end=period.period_end, now=now
+        ),
     )
     return [_decorated_row(row, ctx) for row in rows]
 
@@ -290,6 +303,7 @@ def _decorated_row(row: UserUsageRead, ctx: _RowContext) -> AdminUserUsageRead:
         month_audio_chapters=ctx.audio.get(row.user_id, 0),
         month_scrape_chapters=ctx.scrape.get(row.user_id, 0),
         month_epub_imports=ctx.imports.get(row.user_id, 0),
+        period_rejections=ctx.rejections.get(row.user_id, 0),
         **row.model_dump(),
     )
 

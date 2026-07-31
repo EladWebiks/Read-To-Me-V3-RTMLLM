@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.modules.llm.schemas import UserUsageRead
+from app.modules.llm.schemas import AdminUsageOverview, UserUsageRead
 
 
 class Page[ItemT](BaseModel):
@@ -14,6 +14,17 @@ class Page[ItemT](BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class AdminUsageSummary(AdminUsageOverview):
+    """LLM overview + quota-rejection aggregates over the SELECTED period.
+
+    Rejection counts are hybrid like every other aggregate: rolled rejected_*
+    metrics for closed days plus today's raw quota_rejections rows.
+    """
+
+    rejections: int = 0
+    rejections_by_kind: dict[str, int] = Field(default_factory=dict)
 
 
 class AdminUserUsageRead(UserUsageRead):
@@ -32,3 +43,4 @@ class AdminUserUsageRead(UserUsageRead):
     month_audio_chapters: int = 0
     month_scrape_chapters: int = 0
     month_epub_imports: int = 0
+    period_rejections: int = 0

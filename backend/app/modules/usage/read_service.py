@@ -19,6 +19,7 @@ from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaService
 from app.modules.usage.kinds import (
     KIND_METRICS,
+    REJECTION_METRICS,
     LlmModelFact,
     LlmTaskFact,
     UsageMetric,
@@ -81,6 +82,55 @@ class UsageReadService:
     async def rolled_task_rows(self, *, start_day: date, end_day: date) -> list[LlmTaskFact]:
         """Rolled per-task aggregates over [start_day, end_day)."""
         return await self._repo.rolled_task_rows(start_day=start_day, end_day=end_day)
+
+    async def period_rejections(
+        self, *, period_start: datetime, period_end: datetime, now: datetime
+    ) -> tuple[int, dict[str, int]]:
+        """Hybrid rejection counts for an arbitrary [from, to) period.
+
+        Rolled rejected_* rows cover [start_day, min(end_day, today));
+        raw quota_rejections cover [max(period_start, today_start), period_end).
+        Same range split as the admin aggregates.
+        """
+        today, today_start = self.hybrid_split(now)
+        by_kind: dict[str, int] = {}
+        rolled_end = min(period_end.astimezone(UTC).date(), today)
+        start_day = period_start.astimezone(UTC).date()
+        if start_day < rolled_end:
+            metric_to_kind = {m: k for k, m in REJECTION_METRICS.items()}
+            totals = await self._repo.rolled_totals(
+                tuple(REJECTION_METRICS.values()), start_day=start_day, end_day=rolled_end
+            )
+            for metric, amount in totals.items():
+                by_kind[metric_to_kind[metric].value] = int(amount)
+        raw_start = max(period_start, today_start)
+        if raw_start < period_end:
+            counts = await self._repo.rejection_counts(start=raw_start, end=period_end)
+            for kind, count in counts.items():
+                by_kind[kind] = by_kind.get(kind, 0) + count
+        return sum(by_kind.values()), by_kind
+
+    async def period_rejections_by_user(
+        self, *, period_start: datetime, period_end: datetime, now: datetime
+    ) -> dict[UUID, int]:
+        """Per-user hybrid rejection totals for an arbitrary [from, to) period."""
+        today, today_start = self.hybrid_split(now)
+        result: dict[UUID, int] = {}
+        rolled_end = min(period_end.astimezone(UTC).date(), today)
+        start_day = period_start.astimezone(UTC).date()
+        if start_day < rolled_end:
+            rejection_metrics = set(REJECTION_METRICS.values())
+            table = await self._repo.rolled_user_table(start_day=start_day, end_day=rolled_end)
+            for user_id, metrics in table.items():
+                amount = sum(v for m, v in metrics.items() if m in rejection_metrics)
+                if amount:
+                    result[user_id] = int(amount)
+        raw_start = max(period_start, today_start)
+        if raw_start < period_end:
+            counts = await self._repo.rejection_counts_by_user(start=raw_start, end=period_end)
+            for user_id, count in counts.items():
+                result[user_id] = result.get(user_id, 0) + count
+        return result
 
     async def record_rejection(self, user_id: UUID, kind: QuotaKind, source: str) -> None:
         """Queue a rejection event on the caller's session (caller commits)."""
