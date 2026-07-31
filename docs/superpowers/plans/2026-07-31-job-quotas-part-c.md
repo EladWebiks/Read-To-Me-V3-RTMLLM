@@ -4,7 +4,7 @@
 
 **Goal:** Enforce the non-LLM quota kinds — `audio_chapters` (MP3 generation), `storage_bytes` (retained MP3 bytes, standing), `scrape_chapters`, `epub_imports` — at each domain's job-creation choke point, surface them in the backoffice, and make sure users see friendly 429 messages.
 
-**Architecture:** The kinds already exist in Part B's registry and admin UI — this plan only adds **meters and enforcement**. Each domain service measures its own usage via its own repository and calls `QuotaService.limits_for_user_id` + `enforce` (caller-metered; domain code never imports the orchestrator). `DownloadsService.create` covers the REST route *and* the `create_audio_download` LLM tool; `ScrapingService.create_job` covers REST *and* the HITL scrape tool; `ImportService.start` covers both import entrypoints. Three small migrations: `download_jobs.deleted_at` (downloads switch to **soft delete** — today delete/"clean book"/TTL purge hard-delete rows, which would let the monthly audio meter erode and let users reclaim spent quota by deleting jobs; this also aligns downloads with golden rule 6), `download_jobs.size_bytes` (filled by the arq worker at completion), and a new durable `epub_imports` log table (imports jobs are in-memory today — this also fixes the golden-rule-7 deviation and gives the meter something to count). `QuotaExceededError` already maps to HTTP 429 with user-facing detail; the tool executor already converts any exception into a failed tool result.
+**Architecture:** The kinds already exist in Part B's registry and admin UI — this plan only adds **meters and enforcement**. Each domain service measures its own usage via its own repository and calls `QuotaService.limits_for_user_id` + `enforce` (caller-metered; domain code never imports the orchestrator). `DownloadService.create` covers the REST route *and* the `create_audio_download` LLM tool; `ScrapingService.create_job` covers REST *and* the HITL scrape tool; `ImportService.start` covers both import entrypoints. Three small migrations: `download_jobs.deleted_at` (downloads switch to **soft delete** — today delete/"clean book"/TTL purge hard-delete rows, which would let the monthly audio meter erode and let users reclaim spent quota by deleting jobs; this also aligns downloads with golden rule 6), `download_jobs.size_bytes` (filled by the arq worker at completion), and a new durable `epub_imports` log table (imports jobs are in-memory today — this also fixes the golden-rule-7 deviation and gives the meter something to count). `QuotaExceededError` already maps to HTTP 429 with user-facing detail; the tool executor already converts any exception into a failed tool result.
 
 **Tech Stack:** FastAPI, SQLAlchemy async, Alembic, arq, React 19, react-query, vitest.
 
@@ -40,7 +40,7 @@
 - Produces (Task 2 extends, Task 5 reuses):
   - `DownloadJob.deleted_at: datetime | None`; `DownloadRepository.delete()` now **stamps** it instead of removing the row (MinIO assets are still purged via `_delete_assets` — only the row survives). All repository reads filter `deleted_at IS NULL` **except** the meter (deliberate) and `get_by_id` (worker-internal).
   - `DownloadRepository.chapters_in_period(user_id, *, period_start, period_end) -> int` — `SUM(total_count)` of ALL jobs created in the window, soft-deleted included (`total_count` is set at creation from the selected range, `service.py:66`; deletion never reclaims spent quota)
-  - `DownloadsService._enforce_quotas(user_id) -> None` called first in `create` — single choke point for the REST route, `create_single_chapter`, and the `create_audio_download` LLM tool
+  - `DownloadService._enforce_quotas(user_id) -> None` called first in `create` — single choke point for the REST route, `create_single_chapter`, and the `create_audio_download` LLM tool
 
 - [ ] **Step 1: Model + migration (`deleted_at`)**
 
@@ -93,7 +93,7 @@ from app.modules.chapters.service import ChapterService
 from app.modules.downloads.models import DownloadJob
 from app.modules.downloads.repository import DownloadRepository
 from app.modules.downloads.schemas import DownloadCreate
-from app.modules.downloads.service import DownloadsService
+from app.modules.downloads.service import DownloadService
 from app.modules.library.service import LibraryService
 from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
@@ -181,7 +181,7 @@ async def test_over_cap_blocks_new_audio_job(session: AsyncSession) -> None:
     await _set_audio_quota(session, 10)
     await _seed_prior_job(session, user.id, book_id, 10)  # 10 >= 10
     with pytest.raises(QuotaExceededError) as excinfo:
-        await DownloadsService(session).create(
+        await DownloadService(session).create(
             user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=3)
         )
     assert excinfo.value.kind is QuotaKind.AUDIO_CHAPTERS
@@ -194,7 +194,7 @@ async def test_under_cap_creates_job(session: AsyncSession) -> None:
     user, book_id = await _user_with_book(session)
     await _set_audio_quota(session, 10)
     await _seed_prior_job(session, user.id, book_id, 5)  # 5 < 10
-    job = await DownloadsService(session).create(
+    job = await DownloadService(session).create(
         user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=2)
     )
     assert job.status == "pending"
@@ -205,7 +205,7 @@ async def test_under_cap_creates_job(session: AsyncSession) -> None:
 async def test_admin_and_unlimited_are_not_metered(session: AsyncSession) -> None:
     # No quota row at all: create succeeds without a meter query.
     user, book_id = await _user_with_book(session)
-    job = await DownloadsService(session).create(
+    job = await DownloadService(session).create(
         user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=1)
     )
     assert job.status == "pending"
@@ -219,7 +219,7 @@ async def test_deleting_a_job_hides_it_but_keeps_the_quota_charge(
     """Soft delete: the row leaves listings but the month's usage stands."""
     user, book_id = await _user_with_book(session)
     await _set_audio_quota(session, 3)
-    service = DownloadsService(session)
+    service = DownloadService(session)
     job = await service.create(
         user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=3)
     )
@@ -242,11 +242,11 @@ async def test_ttl_purge_does_not_reclaim_quota(session: AsyncSession) -> None:
     user, book_id = await _user_with_book(session)
     await _set_audio_quota(session, 4)
     await _seed_prior_job(session, user.id, book_id, 4, expired=True)
-    await DownloadsService(session).purge_all_expired()
+    await DownloadService(session).purge_all_expired()
 
     assert await _month_used(session, user.id) == 4
     with pytest.raises(QuotaExceededError):
-        await DownloadsService(session).create(
+        await DownloadService(session).create(
             user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=1)
         )
 ```
@@ -422,7 +422,7 @@ from app.modules.chapters.service import ChapterService
 from app.modules.downloads.models import DownloadJob
 from app.modules.downloads.repository import DownloadRepository
 from app.modules.downloads.schemas import DownloadCreate
-from app.modules.downloads.service import DownloadsService
+from app.modules.downloads.service import DownloadService
 from app.modules.library.service import LibraryService
 from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
@@ -524,7 +524,7 @@ async def test_standing_cap_blocks_new_job(session: AsyncSession) -> None:
     )
     await session.commit()
     with pytest.raises(QuotaExceededError) as excinfo:
-        await DownloadsService(session).create(
+        await DownloadService(session).create(
             user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=1)
         )
     assert excinfo.value.kind is QuotaKind.STORAGE_BYTES
@@ -568,7 +568,7 @@ Append to `DownloadRepository` (import `or_` from sqlalchemy):
         return int((await self._session.execute(stmt)).scalar_one())
 ```
 
-(add `from datetime import UTC, datetime` to the repository imports if missing). In `DownloadsService._enforce_quotas`, extend to both kinds:
+(add `from datetime import UTC, datetime` to the repository imports if missing). In `DownloadService._enforce_quotas`, extend to both kinds:
 
 ```python
     async def _enforce_quotas(self, user_id: UUID) -> None:
@@ -1199,7 +1199,7 @@ Each repository gains a grouped variant of its Task 1/3/4 meter, same filters, `
         return {row[0]: int(row[1]) for row in rows}
 ```
 
-Expose each through its service (`DownloadsService.month_chapters_for_users(...)`, `ScrapingService.month_chapters_for_users(...)`, and an `ImportService.month_imports_for_users(...)`), one-line pass-throughs to the repo method — the admin router composes services, never repositories.
+Expose each through its service (`DownloadService.month_chapters_for_users(...)`, `ScrapingService.month_chapters_for_users(...)`, and an `ImportService.month_imports_for_users(...)`), one-line pass-throughs to the repo method — the admin router composes services, never repositories.
 
 - [ ] **Step 2: Extend the DTO and composition**
 
