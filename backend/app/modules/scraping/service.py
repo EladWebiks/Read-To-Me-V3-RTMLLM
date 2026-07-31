@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.fetcher import FetchError, fetch_html
 from app.modules.books.schemas import BookCreate
 from app.modules.library.service import LibraryService
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaService
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
@@ -57,6 +60,7 @@ class ScrapingService:
 
     async def create_job(self, user_id: UUID, data: ScrapeJobCreate) -> ScrapeJobRead:
         """Create a pending scrape job and enqueue it."""
+        await self._enforce_quota(user_id)
         adapter = get_adapter(data.url)
         source = await self._repo.get_source_by_name(adapter.name)
         if source is None or not source.enabled:
@@ -89,6 +93,21 @@ class ScrapingService:
         await _enqueue(created.id)
         title = (meta.title or book_url or "Untitled").strip() or "Untitled"
         return _to_read(created, title)
+
+    async def _enforce_quota(self, user_id: UUID) -> None:
+        """Tier quota gate for new scrape work. Runs before any network fetch.
+
+        Enforced at creation only: a running job may finish past the line
+        (bounded by its own chapter range) — accepted, spec §3.5.
+        """
+        limits = await QuotaService(self._session).limits_for_user_id(user_id)
+        if not limits.any_limited(QuotaKind.SCRAPE_CHAPTERS):
+            return
+        start, end = QuotaService.current_month_window(datetime.now(UTC))
+        used = await self._repo.chapters_in_period(user_id, period_start=start, period_end=end)
+        QuotaService.enforce(
+            QuotaKind.SCRAPE_CHAPTERS, used, limits, resets_at=end, user_id=user_id
+        )
 
     async def get_job(self, user_id: UUID, job_id: UUID) -> ScrapeJobRead:
         job = await self._require(user_id, job_id)

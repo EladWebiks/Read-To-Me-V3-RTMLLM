@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
@@ -46,6 +47,21 @@ class ScrapingRepository:
         await self._session.flush()
         await self._session.refresh(job)
         return job
+
+    async def chapters_in_period(
+        self,
+        user_id: UUID,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> int:
+        """Chapters fetched by this user's jobs created in the window."""
+        stmt = select(func.coalesce(func.sum(ScrapingJob.chapters_done), 0)).where(
+            ScrapingJob.user_id == user_id,
+            ScrapingJob.created_at >= period_start,
+            ScrapingJob.created_at < period_end,
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def get_job(self, job_id: UUID) -> ScrapingJob | None:
         stmt = select(ScrapingJob).where(ScrapingJob.id == job_id)
