@@ -543,18 +543,30 @@ class OrchestrationService:
         Sits before conversation-context build on purpose: context building can
         itself trigger a summarization provider call. Resume-confirm does not
         re-check — it is the same turn (spec §3.5).
+
+        Hybrid read (usage spec §7): closed days come from usage_daily, today
+        live from llm_executions — so the raw scan is one day, not one month.
         """
         quotas = QuotaService(self._session)
         limits = await quotas.limits_for(user)
         if not limits.any_limited(QuotaKind.LLM_TOKENS, QuotaKind.LLM_COST_USD):
             return
-        start, end = QuotaService.current_month_window(datetime.now(UTC))
-        summary = await self._llm.usage_summary(user.id, period_start=start, period_end=end)
-        tokens = summary.tokens_in + summary.tokens_out
-        QuotaService.enforce(QuotaKind.LLM_TOKENS, tokens, limits, resets_at=end, user_id=user.id)
-        QuotaService.enforce(
-            QuotaKind.LLM_COST_USD, summary.total_cost, limits, resets_at=end, user_id=user.id
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        usage = UsageReadService(self._session)
+        summary = await self._llm.usage_summary(user.id, period_start=today_start, period_end=end)
+        tokens = (
+            await usage.rolled_month_amount(user.id, QuotaKind.LLM_TOKENS, now)
+            + summary.tokens_in
+            + summary.tokens_out
         )
+        QuotaService.enforce(QuotaKind.LLM_TOKENS, tokens, limits, resets_at=end, user_id=user.id)
+        cost = (
+            await usage.rolled_month_amount(user.id, QuotaKind.LLM_COST_USD, now)
+            + summary.total_cost
+        )
+        QuotaService.enforce(QuotaKind.LLM_COST_USD, cost, limits, resets_at=end, user_id=user.id)
 
     def _make_ctx(self, user_id: UUID, conversation_id: UUID, run_id: UUID) -> ToolContext:
         return ToolContext(

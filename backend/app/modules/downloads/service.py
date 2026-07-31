@@ -30,6 +30,7 @@ from app.modules.library.service import LibraryService
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaLimits, QuotaService
 from app.modules.usage.kinds import UsageFact
+from app.modules.usage.read_service import UsageReadService
 
 
 class DownloadService:
@@ -87,10 +88,18 @@ class DownloadService:
             )
 
     async def _enforce_audio_chapters(self, user_id: UUID, limits: QuotaLimits) -> None:
-        start, end = QuotaService.current_month_window(datetime.now(UTC))
-        used = await self._repo.chapters_in_period(user_id, period_start=start, period_end=end)
+        """Hybrid read (usage spec §7): rolled closed days + today live."""
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        rolled = await UsageReadService(self._session).rolled_month_amount(
+            user_id, QuotaKind.AUDIO_CHAPTERS, now
+        )
+        tail = await self._repo.chapters_in_period(
+            user_id, period_start=today_start, period_end=end
+        )
         QuotaService.enforce(
-            QuotaKind.AUDIO_CHAPTERS, used, limits, resets_at=end, user_id=user_id
+            QuotaKind.AUDIO_CHAPTERS, rolled + tail, limits, resets_at=end, user_id=user_id
         )
 
     async def month_chapters_for_users(

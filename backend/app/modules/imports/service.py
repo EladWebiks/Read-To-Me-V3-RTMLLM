@@ -22,6 +22,7 @@ from app.modules.imports.schemas import (
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaService
 from app.modules.usage.kinds import UsageFact
+from app.modules.usage.read_service import UsageReadService
 
 _MAX_FILES = 20
 _MAX_BYTES_PER_FILE = 80 * 1024 * 1024
@@ -122,13 +123,25 @@ class ImportService:
         )
 
     async def _enforce_quota(self, user_id: UUID) -> None:
-        """Tier quota gate for new imports; completed imports count (spec §3.5)."""
+        """Tier quota gate for new imports; completed imports count (spec §3.5).
+
+        Hybrid read (usage spec §7): rolled closed days + today live.
+        """
         limits = await QuotaService(self._session).limits_for_user_id(user_id)
         if not limits.any_limited(QuotaKind.EPUB_IMPORTS):
             return
-        start, end = QuotaService.current_month_window(datetime.now(UTC))
-        used = await self._repo.completed_in_period(user_id, period_start=start, period_end=end)
-        QuotaService.enforce(QuotaKind.EPUB_IMPORTS, used, limits, resets_at=end, user_id=user_id)
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        rolled = await UsageReadService(self._session).rolled_month_amount(
+            user_id, QuotaKind.EPUB_IMPORTS, now
+        )
+        tail = await self._repo.completed_in_period(
+            user_id, period_start=today_start, period_end=end
+        )
+        QuotaService.enforce(
+            QuotaKind.EPUB_IMPORTS, rolled + tail, limits, resets_at=end, user_id=user_id
+        )
 
     def get(self, user_id: UUID, job_id: str) -> ImportProgress:
         """Poll job progress."""

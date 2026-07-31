@@ -31,6 +31,7 @@ from app.modules.scraping.schemas import (
 )
 from app.modules.scraping.types import BookMetadata
 from app.modules.usage.kinds import UsageFact
+from app.modules.usage.read_service import UsageReadService
 
 _TERMINAL = {"complete", "failed", "cancelled"}
 
@@ -100,14 +101,23 @@ class ScrapingService:
 
         Enforced at creation only: a running job may finish past the line
         (bounded by its own chapter range) — accepted, spec §3.5.
+
+        Hybrid read (usage spec §7): rolled closed days + today live.
         """
         limits = await QuotaService(self._session).limits_for_user_id(user_id)
         if not limits.any_limited(QuotaKind.SCRAPE_CHAPTERS):
             return
-        start, end = QuotaService.current_month_window(datetime.now(UTC))
-        used = await self._repo.chapters_in_period(user_id, period_start=start, period_end=end)
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        rolled = await UsageReadService(self._session).rolled_month_amount(
+            user_id, QuotaKind.SCRAPE_CHAPTERS, now
+        )
+        tail = await self._repo.chapters_in_period(
+            user_id, period_start=today_start, period_end=end
+        )
         QuotaService.enforce(
-            QuotaKind.SCRAPE_CHAPTERS, used, limits, resets_at=end, user_id=user_id
+            QuotaKind.SCRAPE_CHAPTERS, rolled + tail, limits, resets_at=end, user_id=user_id
         )
 
     async def month_chapters_for_users(
