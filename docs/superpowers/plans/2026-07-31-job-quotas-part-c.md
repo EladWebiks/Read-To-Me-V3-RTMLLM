@@ -4,7 +4,7 @@
 
 **Goal:** Enforce the non-LLM quota kinds — `audio_chapters` (MP3 generation), `storage_bytes` (retained MP3 bytes, standing), `scrape_chapters`, `epub_imports` — at each domain's job-creation choke point, surface them in the backoffice, and make sure users see friendly 429 messages.
 
-**Architecture:** The kinds already exist in Part B's registry and admin UI — this plan only adds **meters and enforcement**. Each domain service measures its own usage via its own repository and calls `QuotaService.limits_for_user_id` + `enforce` (caller-metered; domain code never imports the orchestrator). `DownloadsService.create` covers the REST route *and* the `create_audio_download` LLM tool; `ScrapingService.create_job` covers REST *and* the HITL scrape tool; `ImportService.start` covers both import entrypoints. Two small migrations: `download_jobs.size_bytes` (filled by the arq worker at completion) and a new durable `epub_imports` log table (imports jobs are in-memory today — this also fixes the golden-rule-7 deviation and gives the meter something to count). `QuotaExceededError` already maps to HTTP 429 with user-facing detail; the tool executor already converts any exception into a failed tool result.
+**Architecture:** The kinds already exist in Part B's registry and admin UI — this plan only adds **meters and enforcement**. Each domain service measures its own usage via its own repository and calls `QuotaService.limits_for_user_id` + `enforce` (caller-metered; domain code never imports the orchestrator). `DownloadsService.create` covers the REST route *and* the `create_audio_download` LLM tool; `ScrapingService.create_job` covers REST *and* the HITL scrape tool; `ImportService.start` covers both import entrypoints. Three small migrations: `download_jobs.deleted_at` (downloads switch to **soft delete** — today delete/"clean book"/TTL purge hard-delete rows, which would let the monthly audio meter erode and let users reclaim spent quota by deleting jobs; this also aligns downloads with golden rule 6), `download_jobs.size_bytes` (filled by the arq worker at completion), and a new durable `epub_imports` log table (imports jobs are in-memory today — this also fixes the golden-rule-7 deviation and gives the meter something to count). `QuotaExceededError` already maps to HTTP 429 with user-facing detail; the tool executor already converts any exception into a failed tool result.
 
 **Tech Stack:** FastAPI, SQLAlchemy async, Alembic, arq, React 19, react-query, vitest.
 
@@ -24,28 +24,66 @@
 
 ---
 
-### Task 1: `audio_chapters` quota at MP3 job creation
+### Task 1: Soft-delete download jobs + `audio_chapters` quota
+
+**Why soft delete is part of this task:** `download_jobs` rows are hard-deleted today by user delete, `clean_book`, and the TTL purge that runs on every create (`service.py:129-190`, `repository.py:92`). A month-window `SUM` over that table would erode as rows disappear — the CPU was already spent, and a user could reclaim quota by deleting jobs. The meter is only correct if rows outlive their assets.
 
 **Files:**
-- Modify: `backend/app/modules/downloads/repository.py` (meter)
+- Modify: `backend/app/modules/downloads/models.py` (`deleted_at`)
+- Create: `backend/migrations/versions/<generated>_add_download_jobs_deleted_at.py`
+- Modify: `backend/app/modules/downloads/repository.py` (soft delete, filtered reads, meter)
 - Modify: `backend/app/modules/downloads/service.py` (enforce in `create`)
 - Test: `backend/tests/quotas/test_audio_quota.py`
 
 **Interfaces:**
 - Consumes: `QuotaService.limits_for_user_id/current_month_window/enforce`, `QuotaKind.AUDIO_CHAPTERS`, `QuotaLimits` (Part B Task 1).
 - Produces (Task 2 extends, Task 5 reuses):
-  - `DownloadRepository.chapters_in_period(user_id, *, period_start, period_end) -> int` — `SUM(total_count)` of jobs created in the window (`total_count` is set at creation from the selected range, `service.py:66`)
+  - `DownloadJob.deleted_at: datetime | None`; `DownloadRepository.delete()` now **stamps** it instead of removing the row (MinIO assets are still purged via `_delete_assets` — only the row survives). All repository reads filter `deleted_at IS NULL` **except** the meter (deliberate) and `get_by_id` (worker-internal).
+  - `DownloadRepository.chapters_in_period(user_id, *, period_start, period_end) -> int` — `SUM(total_count)` of ALL jobs created in the window, soft-deleted included (`total_count` is set at creation from the selected range, `service.py:66`; deletion never reclaims spent quota)
   - `DownloadsService._enforce_quotas(user_id) -> None` called first in `create` — single choke point for the REST route, `create_single_chapter`, and the `create_audio_download` LLM tool
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Model + migration (`deleted_at`)**
+
+In `backend/app/modules/downloads/models.py`, add after `expires_at`:
+
+```python
+    # Soft delete (golden rule 6): delete/clean/TTL-purge free the MinIO
+    # assets but KEEP the row — the monthly audio_chapters meter must not
+    # shrink when jobs disappear. Reads filter this; the meter does not.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+```
+
+Run `uv run alembic revision -m "add download_jobs deleted_at"` (verify single head; `down_revision` = the current head — Part B's `membership_quotas` revision if Tasks run in plan order). Fill:
+
+```python
+def upgrade() -> None:
+    op.add_column(
+        "download_jobs",
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True,
+                  comment="Soft delete: assets purged, row kept for quota metering"),
+    )
+    op.create_index(op.f("ix_download_jobs_deleted_at"), "download_jobs", ["deleted_at"])
+
+
+def downgrade() -> None:
+    op.drop_index(op.f("ix_download_jobs_deleted_at"), table_name="download_jobs")
+    op.drop_column("download_jobs", "deleted_at")
+```
+
+(Downgrade "revives" soft-deleted rows whose assets are gone — acceptable: they are expired or user-deleted either way, and the purge sweep re-processes them.) Verify reversibility (`upgrade head` / `downgrade -1` / `upgrade head`) and apply to the test DB.
+
+- [ ] **Step 2: Write the failing tests**
 
 ```python
 # backend/tests/quotas/test_audio_quota.py
-"""audio_chapters quota through the real downloads service (needs Postgres+Redis)."""
+"""audio_chapters quota + soft-delete meter integrity (needs Postgres+Redis+MinIO)."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -53,12 +91,14 @@ from app.core.config import get_settings
 from app.modules.books.schemas import BookCreate
 from app.modules.chapters.service import ChapterService
 from app.modules.downloads.models import DownloadJob
+from app.modules.downloads.repository import DownloadRepository
 from app.modules.downloads.schemas import DownloadCreate
 from app.modules.downloads.service import DownloadsService
 from app.modules.library.service import LibraryService
 from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.models import MembershipQuota
+from app.modules.quotas.service import QuotaService
 from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
@@ -105,8 +145,18 @@ async def _set_audio_quota(session: AsyncSession, limit: float) -> None:
     await session.commit()
 
 
-async def _seed_prior_job(session: AsyncSession, user_id: UUID, book_id: UUID, n: int) -> None:
+async def _month_used(session: AsyncSession, user_id: UUID) -> int:
+    start, end = QuotaService.current_month_window(datetime.now(UTC))
+    return await DownloadRepository(session).chapters_in_period(
+        user_id, period_start=start, period_end=end
+    )
+
+
+async def _seed_prior_job(
+    session: AsyncSession, user_id: UUID, book_id: UUID, n: int, *, expired: bool = False
+) -> None:
     """A this-month job covering n chapters (created_at defaults to now())."""
+    delta = timedelta(hours=-1) if expired else timedelta(hours=1)
     session.add(
         DownloadJob(
             user_id=user_id,
@@ -118,6 +168,7 @@ async def _seed_prior_job(session: AsyncSession, user_id: UUID, book_id: UUID, n
             rate="1.0",
             status="complete",
             total_count=n,
+            expires_at=datetime.now(UTC) + delta,
         )
     )
     await session.commit()
@@ -158,16 +209,77 @@ async def test_admin_and_unlimited_are_not_metered(session: AsyncSession) -> Non
         user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=1)
     )
     assert job.status == "pending"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_deleting_a_job_hides_it_but_keeps_the_quota_charge(
+    session: AsyncSession,
+) -> None:
+    """Soft delete: the row leaves listings but the month's usage stands."""
+    user, book_id = await _user_with_book(session)
+    await _set_audio_quota(session, 3)
+    service = DownloadsService(session)
+    job = await service.create(
+        user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=3)
+    )
+    await service.delete(user.id, job.id)
+
+    listed = await DownloadRepository(session).list_for_user(
+        user.id, book_id, limit=50, include_expired=True
+    )
+    assert job.id not in [row.id for row in listed]
+    assert await _month_used(session, user.id) == 3  # charge survives
+    with pytest.raises(QuotaExceededError):
+        await service.create(
+            user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=1)
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_ttl_purge_does_not_reclaim_quota(session: AsyncSession) -> None:
+    user, book_id = await _user_with_book(session)
+    await _set_audio_quota(session, 4)
+    await _seed_prior_job(session, user.id, book_id, 4, expired=True)
+    await DownloadsService(session).purge_all_expired()
+
+    assert await _month_used(session, user.id) == 4
+    with pytest.raises(QuotaExceededError):
+        await DownloadsService(session).create(
+            user.id, DownloadCreate(book_id=book_id, chapter_from=1, chapter_to=1)
+        )
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 3: Run tests to verify they fail**
 
 Run (from `backend/`): `uv run pytest tests/quotas/test_audio_quota.py -v`
-Expected: `test_over_cap_blocks_new_audio_job` FAILs (no `QuotaExceededError` raised — job is created).
+Expected: FAIL — `AttributeError: chapters_in_period` (and, once the meter exists but delete is still hard, the two meter-integrity tests fail with `_month_used == 0`).
 
-- [ ] **Step 3: Add the meter**
+- [ ] **Step 4: Repository — soft delete, filtered reads, meter**
 
-Append to `DownloadRepository` in `backend/app/modules/downloads/repository.py` (import `func` from sqlalchemy and `datetime` if missing):
+In `backend/app/modules/downloads/repository.py` (add `from datetime import UTC, datetime` and `func` to imports if missing):
+
+Replace `delete` (`repository.py:92`):
+
+```python
+    async def delete(self, job: DownloadJob) -> None:
+        """Soft delete: stamp deleted_at, keep the row for quota metering.
+
+        Callers still purge the MinIO assets first (_delete_assets) — only
+        the DB row survives, so the monthly audio meter cannot erode.
+        """
+        job.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+```
+
+Add `DownloadJob.deleted_at.is_(None)` to the WHERE clause of `get_for_user`, `list_for_user`, `list_expired`, `list_all_expired`, and `list_jobs_admin` — then verify nothing was missed with `grep -n "select(DownloadJob" backend/app/modules/downloads/repository.py`; every select gets the filter EXCEPT:
+- `get_by_id` — worker-internal lookup; a job deleted mid-run must still be updatable (add that as a comment), and
+- the new meter below (deliberate — deletion never reclaims spent quota).
+
+`list_expired`/`list_all_expired` filtering deleted rows is what keeps the purge sweep from re-processing already-purged jobs. The service layer (`delete`, `clean_book`, `_purge_expired`, `purge_all_expired`) needs **no changes** — it keeps calling `_delete_assets` + `repo.delete`.
+
+Append the meter:
 
 ```python
     async def chapters_in_period(
@@ -179,9 +291,10 @@ Append to `DownloadRepository` in `backend/app/modules/downloads/repository.py` 
     ) -> int:
         """Chapters covered by this user's jobs created in the window.
 
-        total_count is stamped at creation from the selected range, so
-        pending/running jobs count immediately (no double-charge on retry —
-        retries reuse the job row).
+        Soft-deleted rows are INCLUDED on purpose: the synth work was already
+        done, so deleting or TTL-purging a job never refunds the quota.
+        total_count is stamped at creation, so pending/running jobs count
+        immediately (no double-charge on retry — retries reuse the job row).
         """
         stmt = select(func.coalesce(func.sum(DownloadJob.total_count), 0)).where(
             DownloadJob.user_id == user_id,
@@ -191,7 +304,7 @@ Append to `DownloadRepository` in `backend/app/modules/downloads/repository.py` 
         return int((await self._session.execute(stmt)).scalar_one())
 ```
 
-- [ ] **Step 4: Enforce in `create`**
+- [ ] **Step 5: Enforce in `create`**
 
 In `backend/app/modules/downloads/service.py`, add imports:
 
@@ -228,16 +341,16 @@ and add the helper (Task 2 extends it with `storage_bytes`):
         )
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 6: Run tests to verify they pass**
 
 Run: `uv run pytest tests/quotas/test_audio_quota.py -v`
-Expected: PASS (3 tests). Also run `uv run pytest tests/llm/test_audio_download_form.py tests/llm/test_download_confirmation_outcome.py -v` — the tool path must still pass (no quota rows exist there → short-circuit).
+Expected: PASS (5 tests). Also run `uv run pytest tests/llm/test_audio_download_form.py tests/llm/test_download_confirmation_outcome.py -v` (tool path: no quota rows there → short-circuit) and the downloads suite if one exists (`uv run pytest -k download -m "unit or integration"`) — listing/purge behavior changed from hard to soft delete and existing tests must still hold.
 
-- [ ] **Step 6: Gates + commit**
+- [ ] **Step 7: Gates + commit**
 
 ```bash
 uv run ruff check . --fix && uv run ruff format . && uv run mypy . && uv run pytest -m "unit or integration"
-printf 'feat: enforce audio_chapters quota at MP3 job creation\n' > /tmp/msg.txt
+printf 'feat: soft-delete download jobs and enforce audio_chapters quota\n' > /tmp/msg.txt
 git add -A
 bash scripts/git-commit-clean.sh /tmp/msg.txt
 git log -1 --format=%B
@@ -256,11 +369,11 @@ git log -1 --format=%B
 - Test: `backend/tests/quotas/test_storage_quota.py`
 
 **Interfaces:**
-- Consumes: Task 1's `_enforce_quotas` helper, `QuotaKind.STORAGE_BYTES`.
+- Consumes: Task 1's `_enforce_quotas` helper, `DownloadJob.deleted_at` (Task 1), `QuotaKind.STORAGE_BYTES`.
 - Produces:
   - `DownloadJob.size_bytes: int | None` (BigInteger; NULL for pre-existing rows — meter treats NULL as 0, spec §7)
   - `_total_bytes(combined: bytes, parts: list[bytes]) -> int` in `app/jobs/tasks.py` (combined MP3 + per-chapter part objects — both are stored under the job prefix)
-  - `DownloadRepository.stored_bytes(user_id) -> int` — non-expired complete jobs only
+  - `DownloadRepository.stored_bytes(user_id) -> int` — complete, non-expired, **non-deleted** jobs (a standing/level meter shrinks when assets are freed; the audio flow meter does not)
 
 - [ ] **Step 1: Model + migration**
 
@@ -272,7 +385,7 @@ In `backend/app/modules/downloads/models.py` add after `object_key` (import `Big
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 ```
 
-Run `uv run alembic revision -m "add download_jobs size_bytes"` (verify single head; `down_revision` = Part B's membership_quotas revision or the current head shown by `alembic heads`). Fill:
+Run `uv run alembic revision -m "add download_jobs size_bytes"` (verify single head; `down_revision` = the current head shown by `alembic heads` — Task 1's `deleted_at` migration when tasks run in plan order). Fill:
 
 ```python
 def upgrade() -> None:
@@ -352,7 +465,14 @@ async def _user_with_book(session: AsyncSession) -> tuple[UserRead, UUID]:
     return user, book.id
 
 
-def _stored_job(user_id: UUID, book_id: UUID, *, size: int | None, expired: bool) -> DownloadJob:
+def _stored_job(
+    user_id: UUID,
+    book_id: UUID,
+    *,
+    size: int | None,
+    expired: bool,
+    deleted: bool = False,
+) -> DownloadJob:
     delta = timedelta(hours=-1) if expired else timedelta(hours=1)
     return DownloadJob(
         user_id=user_id,
@@ -366,18 +486,24 @@ def _stored_job(user_id: UUID, book_id: UUID, *, size: int | None, expired: bool
         total_count=1,
         size_bytes=size,
         expires_at=datetime.now(UTC) + delta,
+        deleted_at=datetime.now(UTC) if deleted else None,
     )
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_stored_bytes_ignores_expired_and_null(session: AsyncSession) -> None:
+async def test_stored_bytes_ignores_expired_null_and_deleted(
+    session: AsyncSession,
+) -> None:
     user, book_id = await _user_with_book(session)
     session.add_all(
         [
             _stored_job(user.id, book_id, size=1000, expired=False),
             _stored_job(user.id, book_id, size=9999, expired=True),
             _stored_job(user.id, book_id, size=None, expired=False),
+            # Soft-deleted: assets were purged, so bytes no longer count
+            # (unlike the audio meter, which keeps counting deleted jobs).
+            _stored_job(user.id, book_id, size=7777, expired=False, deleted=True),
         ]
     )
     await session.commit()
@@ -427,11 +553,16 @@ Append to `DownloadRepository` (import `or_` from sqlalchemy):
 
 ```python
     async def stored_bytes(self, user_id: UUID) -> int:
-        """Currently retained MinIO bytes: complete, non-expired jobs only."""
+        """Currently retained MinIO bytes: complete, non-expired, non-deleted.
+
+        Soft-deleted jobs are EXCLUDED here (their assets were purged) — the
+        opposite of the audio meter, which is a flow meter and keeps them.
+        """
         now = datetime.now(UTC)
         stmt = select(func.coalesce(func.sum(DownloadJob.size_bytes), 0)).where(
             DownloadJob.user_id == user_id,
             DownloadJob.status == "complete",
+            DownloadJob.deleted_at.is_(None),
             or_(DownloadJob.expires_at.is_(None), DownloadJob.expires_at > now),
         )
         return int((await self._session.execute(stmt)).scalar_one())
@@ -1049,7 +1180,10 @@ Each repository gains a grouped variant of its Task 1/3/4 meter, same filters, `
         period_start: datetime,
         period_end: datetime,
     ) -> dict[UUID, int]:
-        """Per-user month chapter totals for the backoffice usage table."""
+        """Per-user month chapter totals for the backoffice usage table.
+
+        Same semantics as chapters_in_period: soft-deleted rows included.
+        """
         if not user_ids:
             return {}
         stmt = (

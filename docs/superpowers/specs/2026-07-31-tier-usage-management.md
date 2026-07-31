@@ -25,7 +25,7 @@ Three parts, one model:
 - `RunBudget` ([budget.py](../../../backend/app/modules/orchestration/budget.py)) holds caps + counters; the HITL freeze snapshot stores **counters only** — resume re-reads settings (`service.py:227`). Part A removes that re-resolution.
 - `llm_executions` has NOT NULL `user_id` + composite `ix_llm_executions_user_id_created_at` (migration `cc8afb8f06aa`, current head). `LlmService.usage_summary(user_id, period_start, period_end)` aggregates it.
 - **Job tables (Part C meters):**
-  - `download_jobs`: `user_id` (indexed), `total_count` (chapters in the job), `object_key`, `expires_at` (TTL + purge), `created_at`. **No size column** — storage metering needs one. MP3 bytes are written in `app/jobs/tasks.py::_process` (`put_bytes` of the combined file plus per-chapter parts), where sizes are in hand.
+  - `download_jobs`: `user_id` (indexed), `total_count` (chapters in the job), `object_key`, `expires_at` (TTL + purge), `created_at`. **No size column** — storage metering needs one. MP3 bytes are written in `app/jobs/tasks.py::_process` (`put_bytes` of the combined file plus per-chapter parts), where sizes are in hand. **Rows are hard-deleted today** (user delete, "clean book", TTL purge) — a month-window meter over this table would erode, so Part C converts downloads to soft delete (`deleted_at`), aligning it with golden rule 6.
   - `scraping_jobs`: `user_id` (indexed), `chapters_done`, `created_at`. Single creation choke point `ScrapingService.create_job` (REST + HITL scrape tool).
   - **EPUB imports are in-memory only** (`imports/jobs.py`, "v2 parity") — no durable table, nothing to meter; this also deviates from golden rule 7 (jobs are durable). Part C adds a durable import log.
 - Backoffice exists (`modules/admin/` aggregation router + `frontend/src/features/admin/` screens). Frontend has a shared `ApiError { status, message }` surfaced by the existing error handling.
@@ -80,8 +80,8 @@ Plus `id` (UUID PK), `membership` (String(32), unique, NOT NULL), `created_at`, 
 |---|---|---|
 | `llm_tokens` | month | `SUM(tokens_in + tokens_out)` from `llm_executions` (existing `usage_summary`) |
 | `llm_cost_usd` | month | `SUM(cost)` from `llm_executions` |
-| `audio_chapters` | month | `SUM(total_count)` of the month's `download_jobs` — work-proportional CPU proxy |
-| `storage_bytes` | **standing** | `SUM(size_bytes)` of non-expired complete `download_jobs` (new column, Part C) |
+| `audio_chapters` | month | `SUM(total_count)` of the month's `download_jobs`, **soft-deleted rows included** — a flow meter: deleting or TTL-purging a job never refunds spent synth work |
+| `storage_bytes` | **standing** | `SUM(size_bytes)` of complete, non-expired, **non-deleted** `download_jobs` (new column, Part C) — a level meter: freed assets stop counting |
 | `scrape_chapters` | month | `SUM(chapters_done)` of the month's `scraping_jobs` |
 | `epub_imports` | month | `COUNT(*)` of the month's **completed** rows in the new `epub_imports` table |
 
@@ -142,7 +142,7 @@ Quota limits have no chain: `membership_quotas` row if present, else unlimited.
 
 ### 4.3 Domain modules (Part C)
 
-- **downloads:** repository gains `chapters_this_month(user_id, start, end)` and `stored_bytes(user_id)`; `DownloadsService.create` enforces both kinds. Migration adds `download_jobs.size_bytes` (BigInteger, nullable); `app/jobs/tasks.py::_process` records combined + per-chapter part sizes on completion.
+- **downloads:** converts to **soft delete** — `download_jobs.deleted_at` migration; `repository.delete()` stamps instead of removing (MinIO assets still purged); all reads filter `deleted_at IS NULL` except the audio meter (deliberate) and the worker's `get_by_id`. Repository gains `chapters_in_period(user_id, start, end)` (soft-deleted included) and `stored_bytes(user_id)` (soft-deleted excluded); `DownloadsService.create` enforces both kinds. Second migration adds `download_jobs.size_bytes` (BigInteger, nullable); `app/jobs/tasks.py::_process` records combined + per-chapter part sizes on completion.
 - **scraping:** repository gains `chapters_this_month(user_id, start, end)` (SUM `chapters_done`); `create_job` enforces before creating the book/job.
 - **imports:** new `models.py` with `EpubImportRecord` (id, user_id FK, book_id nullable, chapter_count, status, created_at/updated_at) + migration; the in-memory runner writes the row at start and stamps terminal status (completed/failed/cancelled) — durable audit log + meter. `ImportService.start` enforces `COUNT(completed this month)`.
 
@@ -197,3 +197,4 @@ HTTP (job creation): **429** `{"detail": "<user-facing copy from the registry>"}
 6. Quotas module: limits resolution (row present/absent, admin exempt), month window incl. December rollover, standing kinds get no `resets_at`, `>=` threshold.
 7. LLM quotas: under cap runs; at/over blocks with the structured SSE error **before any provider call**; admin exempt; raising the limit unblocks immediately.
 8. Per Part C kind: under/over/admin-exempt/unlimited through the real domain service; the LLM tool path surfaces the quota error as a failed tool result; `size_bytes` recorded on job completion; `epub_imports` rows written by the runner with correct terminal status.
+9. Meter integrity: deleting a download job hides it from listings but keeps the month's `audio_chapters` charge; the TTL purge reclaims MinIO assets (and `storage_bytes`) but never audio quota.
