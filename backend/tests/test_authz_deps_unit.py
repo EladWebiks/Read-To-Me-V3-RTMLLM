@@ -37,7 +37,11 @@ async def test_require_admin_rejects_non_admin() -> None:
 async def test_require_membership_passes_sufficient_tier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # This test exercises the dependency's wiring (ensure_loaded is awaited,
+    # then meets_minimum gates the result) — meets_minimum's own cold/warm
+    # snapshot logic is covered exhaustively in tests/memberships/test_registry.py.
     monkeypatch.setattr("app.core.deps.ensure_loaded", AsyncMock())
+    monkeypatch.setattr("app.core.deps.meets_minimum", lambda actual, minimum: True)
     dep = require_membership("free")
     user = _user()
     assert await dep(user, None) is user
