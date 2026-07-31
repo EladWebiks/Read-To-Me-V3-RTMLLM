@@ -35,7 +35,18 @@ describe('UsagePage', () => {
       by_task: [{ ...BREAKDOWN, task: 'chat' }],
     })
     vi.mocked(fetchUsageByUser).mockResolvedValue({
-      items: [{ ...BREAKDOWN, user_id: 'u2', username: 'bob' }],
+      items: [
+        {
+          ...BREAKDOWN,
+          user_id: 'u2',
+          username: 'bob',
+          membership: 'free',
+          month_tokens: 0,
+          month_cost: 0,
+          llm_tokens_limit: null,
+          llm_cost_limit: null,
+        },
+      ],
       total: 1,
       limit: 25,
       offset: 0,

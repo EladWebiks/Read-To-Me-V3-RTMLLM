@@ -1,7 +1,16 @@
+import type { UserUsage } from '@/features/admin/api/usage'
 import { PaginationControls } from '@/features/admin/components/common/PaginationControls'
 import { usePageState } from '@/features/admin/hooks/usePageState'
 import { useUsageByUser } from '@/features/admin/hooks/useUsage'
 import type { Period } from '@/features/admin/logic/period'
+
+/** Monthly LLM quota for the row's tier; '—' = unlimited (no rule). */
+function quotaLabel(row: UserUsage): string {
+  const tokens =
+    row.llm_tokens_limit === null ? '—' : row.llm_tokens_limit.toLocaleString()
+  const cost = row.llm_cost_limit === null ? '—' : `$${row.llm_cost_limit.toFixed(2)}`
+  return `${tokens} tok · ${cost}`
+}
 
 export function ByUserTable({ period }: { period: Period }) {
   const page = usePageState(25)
@@ -20,6 +29,8 @@ export function ByUserTable({ period }: { period: Period }) {
               <th className="px-2 py-1.5 font-medium">Tokens in</th>
               <th className="px-2 py-1.5 font-medium">Tokens out</th>
               <th className="px-2 py-1.5 font-medium">Cost</th>
+              <th className="px-2 py-1.5 font-medium">This month</th>
+              <th className="px-2 py-1.5 font-medium">Quota</th>
               <th className="px-2 py-1.5 font-medium">Execs</th>
             </tr>
           </thead>
@@ -30,6 +41,10 @@ export function ByUserTable({ period }: { period: Period }) {
                 <td className="px-2 py-1.5">{row.tokens_in.toLocaleString()}</td>
                 <td className="px-2 py-1.5">{row.tokens_out.toLocaleString()}</td>
                 <td className="px-2 py-1.5">${row.total_cost.toFixed(4)}</td>
+                <td className="px-2 py-1.5">
+                  {row.month_tokens.toLocaleString()} tok · ${row.month_cost.toFixed(4)}
+                </td>
+                <td className="px-2 py-1.5">{quotaLabel(row)}</td>
                 <td className="px-2 py-1.5">{row.execution_count}</td>
               </tr>
             ))}

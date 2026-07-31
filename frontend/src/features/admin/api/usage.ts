@@ -11,7 +11,15 @@ export type UsageBreakdown = {
 
 export type ModelUsage = UsageBreakdown & { provider: string; model: string }
 export type TaskUsage = UsageBreakdown & { task: string }
-export type UserUsage = UsageBreakdown & { user_id: string; username: string | null }
+export type UserUsage = UsageBreakdown & {
+  user_id: string
+  username: string | null
+  membership: string | null
+  month_tokens: number
+  month_cost: number
+  llm_tokens_limit: number | null
+  llm_cost_limit: number | null
+}
 
 export type UsageOverview = UsageBreakdown & {
   period_start: string
