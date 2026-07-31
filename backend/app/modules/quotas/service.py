@@ -18,9 +18,11 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.quotas.exceptions import QuotaExceededError
+from app.modules.quotas.exceptions import QuotaExceededError, QuotaRuleNotFoundError
 from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.models import MembershipQuota
 from app.modules.quotas.repository import MembershipQuotaRepository
+from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 from app.modules.users.service import UserService
 
@@ -104,3 +106,53 @@ class QuotaService:
             },
         )
         raise QuotaExceededError(kind, limit=limit, used=used, resets_at=resets_at)
+
+    async def list_quotas(self) -> list[MembershipQuota]:
+        """All configured quota rules (sparse: absent pair = unlimited)."""
+        return await self._repo.list_all()
+
+    async def set_quota(
+        self,
+        membership: Membership,
+        kind: QuotaKind,
+        limit_value: float,
+        *,
+        actor_id: UUID,
+    ) -> MembershipQuota:
+        """Set or replace one rule for (membership, kind)."""
+        row = await self._repo.get(membership.value, kind.value)
+        if row is None:
+            row = MembershipQuota(
+                membership=membership.value, quota_kind=kind.value, limit_value=limit_value
+            )
+            self._repo.add(row)
+        else:
+            row.limit_value = limit_value
+        saved = await self._repo.save(row)
+        logger.info(
+            "membership quota set",
+            extra={
+                "membership": membership.value,
+                "kind": kind.value,
+                "limit": limit_value,
+                "actor": str(actor_id),
+            },
+        )
+        return saved
+
+    async def clear_quota(
+        self, membership: Membership, kind: QuotaKind, *, actor_id: UUID
+    ) -> None:
+        """Drop one rule; that (membership, kind) becomes unlimited again."""
+        row = await self._repo.get(membership.value, kind.value)
+        if row is None:
+            raise QuotaRuleNotFoundError(membership.value, kind.value)
+        await self._repo.delete(row)
+        logger.info(
+            "membership quota cleared",
+            extra={
+                "membership": membership.value,
+                "kind": kind.value,
+                "actor": str(actor_id),
+            },
+        )
