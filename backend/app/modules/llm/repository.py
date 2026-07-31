@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import ColumnElement, and_, func, select
@@ -22,6 +22,13 @@ from app.modules.llm.models import (
 )
 from app.modules.llm.registry import ModelSpec
 from app.modules.llm.schemas import ToolCallAdminFilters
+from app.modules.usage.kinds import (
+    LlmModelFact,
+    LlmTaskFact,
+    UsageFact,
+    UsageMetric,
+)
+from app.modules.usage.repository import day_window
 
 
 @dataclass(frozen=True, slots=True)
@@ -668,3 +675,68 @@ class LlmRepository:
         )
         rows = (await self._session.execute(stmt)).all()
         return [(row[0], row[1]) for row in rows], total
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user LLM facts for one UTC day (builder-facing, spec §6)."""
+        start, end = day_window(day)
+        failures = func.count(LlmExecution.id).filter(LlmExecution.status != "ok")
+        stmt = (
+            select(
+                LlmExecution.user_id,
+                func.coalesce(func.sum(LlmExecution.tokens_in), 0),
+                func.coalesce(func.sum(LlmExecution.tokens_out), 0),
+                func.coalesce(func.sum(LlmExecution.cost), 0.0),
+                func.count(LlmExecution.id),
+                failures,
+            )
+            .where(LlmExecution.created_at >= start, LlmExecution.created_at < end)
+            .group_by(LlmExecution.user_id)
+        )
+        facts: list[UsageFact] = []
+        for row in (await self._session.execute(stmt)).all():
+            user_id = row[0]
+            facts.append(UsageFact(user_id, UsageMetric.LLM_TOKENS_IN, float(row[1])))
+            facts.append(UsageFact(user_id, UsageMetric.LLM_TOKENS_OUT, float(row[2])))
+            facts.append(UsageFact(user_id, UsageMetric.LLM_COST_USD, float(row[3])))
+            facts.append(UsageFact(user_id, UsageMetric.LLM_EXECUTIONS, float(row[4])))
+            facts.append(UsageFact(user_id, UsageMetric.LLM_FAILURES, float(row[5])))
+        return facts
+
+    async def daily_model_facts(self, day: date) -> list[LlmModelFact]:
+        """Cross-user (provider, model) aggregates for one UTC day."""
+        start, end = day_window(day)
+        stmt = (
+            select(
+                LlmExecution.provider,
+                LlmExecution.model,
+                func.coalesce(func.sum(LlmExecution.tokens_in), 0),
+                func.coalesce(func.sum(LlmExecution.tokens_out), 0),
+                func.coalesce(func.sum(LlmExecution.cost), 0.0),
+                func.count(LlmExecution.id),
+            )
+            .where(LlmExecution.created_at >= start, LlmExecution.created_at < end)
+            .group_by(LlmExecution.provider, LlmExecution.model)
+        )
+        return [
+            LlmModelFact(r[0], r[1], int(r[2]), int(r[3]), float(r[4]), int(r[5]))
+            for r in (await self._session.execute(stmt)).all()
+        ]
+
+    async def daily_task_facts(self, day: date) -> list[LlmTaskFact]:
+        """Cross-user per-task aggregates for one UTC day."""
+        start, end = day_window(day)
+        stmt = (
+            select(
+                LlmExecution.task,
+                func.coalesce(func.sum(LlmExecution.tokens_in), 0),
+                func.coalesce(func.sum(LlmExecution.tokens_out), 0),
+                func.coalesce(func.sum(LlmExecution.cost), 0.0),
+                func.count(LlmExecution.id),
+            )
+            .where(LlmExecution.created_at >= start, LlmExecution.created_at < end)
+            .group_by(LlmExecution.task)
+        )
+        return [
+            LlmTaskFact(r[0], int(r[1]), int(r[2]), float(r[3]), int(r[4]))
+            for r in (await self._session.execute(stmt)).all()
+        ]

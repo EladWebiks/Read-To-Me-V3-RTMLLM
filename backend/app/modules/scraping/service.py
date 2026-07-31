@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,7 @@ from app.modules.scraping.schemas import (
     ScrapePreviewResponse,
 )
 from app.modules.scraping.types import BookMetadata
+from app.modules.usage.kinds import UsageFact
 
 _TERMINAL = {"complete", "failed", "cancelled"}
 
@@ -205,6 +206,10 @@ class ScrapingService:
             for job in jobs
         ]
         return items, total
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
 
 
 def _to_read(job: ScrapingJob, book_title: str | None = None) -> ScrapeJobRead:

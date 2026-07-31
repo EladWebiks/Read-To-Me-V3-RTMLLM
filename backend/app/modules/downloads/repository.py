@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.downloads.models import DownloadJob
+from app.modules.usage.kinds import UsageFact, UsageMetric
+from app.modules.usage.repository import day_window
 
 
 class DownloadRepository:
@@ -190,3 +192,25 @@ class DownloadRepository:
         # size_bytes is nullable, so SUM's static type is int | None even
         # though COALESCE guarantees a value at runtime.
         return int((await self._session.execute(stmt)).scalar_one() or 0)
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user audio facts for one UTC day. Soft-deleted rows INCLUDED
+        (flow-meter semantics — deletion never refunds work)."""
+        start, end = day_window(day)
+        failed = func.count(DownloadJob.id).filter(DownloadJob.status == "failed")
+        stmt = (
+            select(
+                DownloadJob.user_id,
+                func.coalesce(func.sum(DownloadJob.total_count), 0),
+                func.count(DownloadJob.id),
+                failed,
+            )
+            .where(DownloadJob.created_at >= start, DownloadJob.created_at < end)
+            .group_by(DownloadJob.user_id)
+        )
+        facts: list[UsageFact] = []
+        for user_id, chapters, jobs, failed_count in (await self._session.execute(stmt)).all():
+            facts.append(UsageFact(user_id, UsageMetric.AUDIO_CHAPTERS, float(chapters)))
+            facts.append(UsageFact(user_id, UsageMetric.AUDIO_JOBS, float(jobs)))
+            facts.append(UsageFact(user_id, UsageMetric.AUDIO_JOBS_FAILED, float(failed_count)))
+        return facts

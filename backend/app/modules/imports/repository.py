@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.imports.models import EpubImportRecord
+from app.modules.usage.kinds import UsageFact, UsageMetric
+from app.modules.usage.repository import day_window
 
 
 class EpubImportRepository:
@@ -79,3 +81,23 @@ class EpubImportRepository:
         )
         rows = (await self._session.execute(stmt)).all()
         return {row[0]: int(row[1]) for row in rows}
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user EPUB import facts for one UTC day (builder-facing, spec §6).
+
+        Both metrics are emitted even when one is zero — replace_day drops the
+        zero rows, keeping usage_daily sparse.
+        """
+        start, end = day_window(day)
+        completed = func.count(EpubImportRecord.id).filter(EpubImportRecord.status == "completed")
+        failed = func.count(EpubImportRecord.id).filter(EpubImportRecord.status == "failed")
+        stmt = (
+            select(EpubImportRecord.user_id, completed, failed)
+            .where(EpubImportRecord.created_at >= start, EpubImportRecord.created_at < end)
+            .group_by(EpubImportRecord.user_id)
+        )
+        facts: list[UsageFact] = []
+        for user_id, done, failed_count in (await self._session.execute(stmt)).all():
+            facts.append(UsageFact(user_id, UsageMetric.EPUB_IMPORTS, float(done)))
+            facts.append(UsageFact(user_id, UsageMetric.EPUB_IMPORTS_FAILED, float(failed_count)))
+        return facts

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from app.modules.downloads.schemas import (
 from app.modules.library.service import LibraryService
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaLimits, QuotaService
+from app.modules.usage.kinds import UsageFact
 
 
 class DownloadService:
@@ -263,6 +264,10 @@ class DownloadService:
         """Backoffice: all users' jobs, read-only — deliberately no purge."""
         jobs, total = await self._repo.list_jobs_admin(status=status, limit=limit, offset=offset)
         return [DownloadJobAdminRead.model_validate(job) for job in jobs], total
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
 
 
 def _ttl_deadline() -> datetime:

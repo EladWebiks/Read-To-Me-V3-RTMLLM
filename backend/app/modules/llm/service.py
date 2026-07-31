@@ -7,7 +7,7 @@ import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import aclosing
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 from typing import TypeVar
 from uuid import UUID
 
@@ -52,6 +52,7 @@ from app.modules.llm.types import (
     ToolCallingStreamChunk,
     Usage,
 )
+from app.modules.usage.kinds import LlmModelFact, LlmTaskFact, UsageFact
 
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R")
@@ -424,6 +425,18 @@ class LlmService:
             status=status,
             error=error,
         )
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
+
+    async def daily_model_facts(self, day: date) -> list[LlmModelFact]:
+        """Cross-user (provider, model) aggregates for one UTC day."""
+        return await self._repo.daily_model_facts(day)
+
+    async def daily_task_facts(self, day: date) -> list[LlmTaskFact]:
+        """Cross-user per-task aggregates for one UTC day."""
+        return await self._repo.daily_task_facts(day)
 
 
 def _require_terminal(response: ToolCallingResponse | None) -> ToolCallingResponse:

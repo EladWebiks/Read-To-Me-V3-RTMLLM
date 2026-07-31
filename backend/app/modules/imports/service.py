@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from app.modules.imports.schemas import (
 )
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaService
+from app.modules.usage.kinds import UsageFact
 
 _MAX_FILES = 20
 _MAX_BYTES_PER_FILE = 80 * 1024 * 1024
@@ -156,6 +157,10 @@ class ImportService:
             raise InvalidEpubUploadError("starting_chapter must be >= 1")
         for name, data in file_payloads:
             self._validate_file(name, data)
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
 
     def _validate_file(self, name: str, data: bytes) -> None:
         if not name.lower().endswith(".epub"):

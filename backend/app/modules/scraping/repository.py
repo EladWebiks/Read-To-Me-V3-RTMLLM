@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.scraping.models import ScrapingJob, ScrapingJobItem, ScrapingSource
+from app.modules.usage.kinds import UsageFact, UsageMetric
+from app.modules.usage.repository import day_window
 
 
 class ScrapingRepository:
@@ -155,3 +157,24 @@ class ScrapingRepository:
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return list(rows), total
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user scraping facts for one UTC day (builder-facing, spec §6)."""
+        start, end = day_window(day)
+        failed = func.count(ScrapingJob.id).filter(ScrapingJob.status == "failed")
+        stmt = (
+            select(
+                ScrapingJob.user_id,
+                func.coalesce(func.sum(ScrapingJob.chapters_done), 0),
+                func.count(ScrapingJob.id),
+                failed,
+            )
+            .where(ScrapingJob.created_at >= start, ScrapingJob.created_at < end)
+            .group_by(ScrapingJob.user_id)
+        )
+        facts: list[UsageFact] = []
+        for user_id, chapters, jobs, failed_count in (await self._session.execute(stmt)).all():
+            facts.append(UsageFact(user_id, UsageMetric.SCRAPE_CHAPTERS, float(chapters)))
+            facts.append(UsageFact(user_id, UsageMetric.SCRAPE_JOBS, float(jobs)))
+            facts.append(UsageFact(user_id, UsageMetric.SCRAPE_JOBS_FAILED, float(failed_count)))
+        return facts
