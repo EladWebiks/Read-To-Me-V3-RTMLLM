@@ -1,15 +1,16 @@
 import { PaginationControls } from '@/features/admin/components/common/PaginationControls'
 import { useAdminUsers } from '@/features/admin/hooks/useAdminUsers'
-import { useMembershipPolicies } from '@/features/admin/hooks/useMembershipPolicies'
+import { useMemberships } from '@/features/admin/hooks/useMemberships'
 import { usePageState } from '@/features/admin/hooks/usePageState'
 import { UsersTable } from './UsersTable'
 
 export function UsersPage() {
   const page = usePageState(50)
   const { data, isLoading, error } = useAdminUsers(page.limit, page.offset)
-  // Tiers come from the policies registry — never a hardcoded list.
-  const { data: policies } = useMembershipPolicies()
-  const memberships = policies?.policies.map((policy) => policy.membership) ?? []
+  // Tiers come from the memberships registry — never a hardcoded list.
+  const { data: membershipsData } = useMemberships()
+  const memberships =
+    membershipsData?.memberships.filter((m) => m.is_active).map((m) => m.slug) ?? []
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading users…</p>
   }

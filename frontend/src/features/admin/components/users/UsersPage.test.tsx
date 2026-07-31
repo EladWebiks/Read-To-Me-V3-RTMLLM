@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UsersPage } from './UsersPage'
-import { fetchMembershipPolicies } from '@/features/admin/api/membershipPolicies'
+import { fetchMemberships } from '@/features/admin/api/memberships'
 import { fetchAdminUsers, patchAdminUser } from '@/features/admin/api/users'
 
 vi.mock('@/features/admin/api/users', () => ({
@@ -12,9 +12,11 @@ vi.mock('@/features/admin/api/users', () => ({
   restoreAdminUser: vi.fn(),
 }))
 
-vi.mock('@/features/admin/api/membershipPolicies', () => ({
-  fetchMembershipPolicies: vi.fn(),
-  patchMembershipPolicy: vi.fn(),
+vi.mock('@/features/admin/api/memberships', () => ({
+  fetchMemberships: vi.fn(),
+  createMembership: vi.fn(),
+  patchMembership: vi.fn(),
+  deactivateMembership: vi.fn(),
 }))
 
 const USER = {
@@ -41,19 +43,19 @@ function renderPage() {
 afterEach(cleanup)
 
 describe('UsersPage', () => {
-  it('renders one membership option per served policy', async () => {
+  it('renders one membership option per active tier, in rank order', async () => {
     vi.mocked(fetchAdminUsers).mockResolvedValue({
       items: [USER],
       total: 1,
       limit: 50,
       offset: 0,
     })
-    vi.mocked(fetchMembershipPolicies).mockResolvedValue({
-      policies: [
-        { membership: 'free', updated_at: '' },
-        { membership: 'plus', updated_at: '' },
+    vi.mocked(fetchMemberships).mockResolvedValue({
+      memberships: [
+        { slug: 'free', is_active: true, rank: 0 },
+        { slug: 'premium', is_active: true, rank: 1 },
+        { slug: 'legacy', is_active: false, rank: 2 },
       ] as never,
-      inherited: {},
     })
     renderPage()
 
@@ -61,13 +63,15 @@ describe('UsersPage', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
         'free',
-        'plus',
+        'premium',
       ])
     })
 
-    fireEvent.change(select, { target: { value: 'plus' } })
+    fireEvent.change(select, { target: { value: 'premium' } })
     await waitFor(() => {
-      expect(vi.mocked(patchAdminUser)).toHaveBeenCalledWith('u1', { membership: 'plus' })
+      expect(vi.mocked(patchAdminUser)).toHaveBeenCalledWith('u1', {
+        membership: 'premium',
+      })
     })
   })
 })

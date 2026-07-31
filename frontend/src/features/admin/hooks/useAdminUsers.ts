@@ -7,7 +7,7 @@ import {
   type AdminUserPatch,
 } from '@/features/admin/api/users'
 
-const usersKey = ['admin', 'users'] as const
+export const usersKey = ['admin', 'users'] as const
 
 export function useAdminUsers(limit: number, offset: number) {
   return useQuery({
