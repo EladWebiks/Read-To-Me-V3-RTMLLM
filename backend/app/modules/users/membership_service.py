@@ -16,11 +16,19 @@ from app.modules.users.exceptions import (
     DuplicateMembershipError,
     MembershipLifecycleError,
     UnknownMembershipError,
+    UserNotFoundError,
 )
 from app.modules.users.membership import DEFAULT_SLUG
 from app.modules.users.membership_repository import MembershipRepository
 from app.modules.users.models import MembershipTier
-from app.modules.users.schemas import MembershipAdminRead, MembershipCreate, MembershipPatch
+from app.modules.users.repository import UserRepository
+from app.modules.users.schemas import (
+    MembershipAdminRead,
+    MembershipCreate,
+    MembershipPatch,
+    PlanRead,
+    UserRead,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +38,7 @@ class MembershipService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._repo = MembershipRepository(session)
+        self._users = UserRepository(session)
 
     async def list_tiers(self) -> list[MembershipAdminRead]:
         counts = await self._repo.user_counts()
@@ -122,3 +131,29 @@ class MembershipService:
             },
         )
         return saved, moved
+
+    async def active_plans(self, current_slug: str) -> list[PlanRead]:
+        """Active tiers in rank order for the self-serve picker."""
+        rows = await self._repo.list_all()
+        return [
+            PlanRead(
+                slug=row.slug,
+                label=row.label,
+                description=row.description,
+                price_label=row.price_label,
+                current=row.slug == current_slug,
+            )
+            for row in rows
+            if row.is_active
+        ]
+
+    async def switch_user(self, user_id: UUID, slug: str) -> UserRead:
+        """Self-serve tier switch (no billing). Validates active; audited."""
+        await self.require_assignable(slug)
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(str(user_id))
+        user.membership = slug
+        await self._users.save(user)
+        logger.info("user switched membership", extra={"actor": str(user_id), "membership": slug})
+        return UserRead.model_validate(user)

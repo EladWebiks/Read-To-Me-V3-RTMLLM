@@ -35,6 +35,7 @@ from app.modules.runtime_config.router import router as runtime_config_router
 from app.modules.scraping.router import router as scraping_router
 from app.modules.scraping.seed import seed_scraping_sources
 from app.modules.usage.router import router as usage_router
+from app.modules.users.me_router import router as me_plans_router
 from app.modules.users.seed import seed_default_membership
 
 
@@ -64,6 +65,7 @@ def _register_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(imports_router, prefix=api_prefix)
     app.include_router(discovery_router, prefix=api_prefix)
     app.include_router(usage_router, prefix=api_prefix)
+    app.include_router(me_plans_router, prefix=api_prefix)
     app.include_router(llm_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(llm_admin_router, prefix=api_prefix)

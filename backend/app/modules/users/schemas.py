@@ -128,3 +128,22 @@ class MembershipsResponse(BaseModel):
 
 class MembershipDeactivate(BaseModel):
     migrate_to: str
+
+
+class PlanRead(BaseModel):
+    """One selectable plan on the self-serve picker."""
+
+    slug: str
+    label: str
+    description: str | None
+    price_label: str | None
+    current: bool
+
+
+class PlansResponse(BaseModel):
+    plans: list[PlanRead]
+    can_switch: bool
+
+
+class MembershipSwitch(BaseModel):
+    membership: str

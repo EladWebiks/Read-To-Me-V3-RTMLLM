@@ -184,6 +184,14 @@ class UsageSettings(_GroupSettings):
     rollup_window_days: int = Field(default=7, ge=1, validation_alias="usage_rollup_window_days")
 
 
+class MembershipSettings(_GroupSettings):
+    """Membership/tier behavior toggles."""
+
+    self_switch_enabled: bool = Field(
+        default=True, validation_alias="membership_self_switch_enabled"
+    )
+
+
 class Settings(BaseSettings):
     """Runtime configuration, composed of env-loaded groups."""
 
@@ -200,6 +208,7 @@ class Settings(BaseSettings):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     llm_runtime: LlmRuntimeSettings = Field(default_factory=LlmRuntimeSettings)
     usage: UsageSettings = Field(default_factory=UsageSettings)
+    membership: MembershipSettings = Field(default_factory=MembershipSettings)
 
 
 @lru_cache

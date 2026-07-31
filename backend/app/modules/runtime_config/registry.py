@@ -17,6 +17,7 @@ from pydantic_settings import BaseSettings
 from app.core.config import (
     AudioSettings,
     LlmRuntimeSettings,
+    MembershipSettings,
     ScrapeSettings,
     StorageSettings,
     UsageSettings,
@@ -27,6 +28,7 @@ from app.core.config import (
 _FULL_SECTIONS: dict[str, type[BaseSettings]] = {
     "llm_runtime": LlmRuntimeSettings,
     "usage": UsageSettings,
+    "membership": MembershipSettings,
 }
 
 # Sections where only the listed fields are tunable. An unknown field name
