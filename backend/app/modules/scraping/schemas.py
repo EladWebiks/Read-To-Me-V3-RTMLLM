@@ -46,3 +46,24 @@ class ScrapeJobRead(BaseModel):
     error: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class ScrapeJobAdminRead(BaseModel):
+    """Backoffice view of one scraping job (cross-user, read-only, raw error)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    book_id: UUID | None
+    book_title: str | None = None
+    start_url: str
+    mode: str
+    status: str
+    chapters_done: int
+    chapter_from: int | None
+    chapter_to: int | None
+    message: str | None
+    error: str | None
+    created_at: datetime
+    updated_at: datetime

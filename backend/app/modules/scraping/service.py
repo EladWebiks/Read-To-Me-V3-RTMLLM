@@ -21,6 +21,7 @@ from app.modules.scraping.models import ScrapingJob
 from app.modules.scraping.registry import ALL_ALLOWED_HOSTS, get_adapter
 from app.modules.scraping.repository import ScrapingRepository
 from app.modules.scraping.schemas import (
+    ScrapeJobAdminRead,
     ScrapeJobCreate,
     ScrapeJobRead,
     ScrapePreviewResponse,
@@ -157,6 +158,22 @@ class ScrapingService:
             return {}
         books = await BookService(self._session).list_read(book_ids, {})
         return {book.id: book.title for book in books}
+
+    # ── backoffice reads ─────────────────────────────────
+
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[ScrapeJobAdminRead], int]:
+        """Backoffice: all users' jobs with book titles; no pruning, raw errors."""
+        jobs, total = await self._repo.list_jobs_admin(status=status, limit=limit, offset=offset)
+        titles = await self._book_titles(jobs)
+        items = [
+            ScrapeJobAdminRead.model_validate(job).model_copy(
+                update={"book_title": titles.get(job.book_id) if job.book_id else None}
+            )
+            for job in jobs
+        ]
+        return items, total
 
 
 def _to_read(job: ScrapingJob, book_title: str | None = None) -> ScrapeJobRead:

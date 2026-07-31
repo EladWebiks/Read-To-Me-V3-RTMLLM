@@ -22,6 +22,7 @@ from app.modules.downloads.repository import DownloadRepository
 from app.modules.downloads.schemas import (
     DownloadCleanResult,
     DownloadCreate,
+    DownloadJobAdminRead,
     DownloadJobRead,
     DownloadUrlRead,
 )
@@ -222,6 +223,13 @@ class DownloadService:
         from app.jobs.queue import enqueue_download_job
 
         await enqueue_download_job(job_id)
+
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[DownloadJobAdminRead], int]:
+        """Backoffice: all users' jobs, read-only — deliberately no purge."""
+        jobs, total = await self._repo.list_jobs_admin(status=status, limit=limit, offset=offset)
+        return [DownloadJobAdminRead.model_validate(job) for job in jobs], total
 
 
 def _ttl_deadline() -> datetime:

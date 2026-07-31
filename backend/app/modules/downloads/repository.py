@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.downloads.models import DownloadJob
@@ -94,3 +94,20 @@ class DownloadRepository:
 
     async def flush(self) -> None:
         await self._session.flush()
+
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[DownloadJob], int]:
+        """Backoffice page over ALL users' jobs, newest first (no expiry purge)."""
+        conditions = [] if status is None else [DownloadJob.status == status]
+        total_stmt = select(func.count()).select_from(DownloadJob).where(*conditions)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(DownloadJob)
+            .where(*conditions)
+            .order_by(DownloadJob.created_at.desc(), DownloadJob.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total

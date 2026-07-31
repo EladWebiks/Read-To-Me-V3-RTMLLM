@@ -24,6 +24,8 @@ ROUTES: list[tuple[str, str, dict[str, object] | None]] = [
     ("GET", "/api/admin/usage/by-user?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z", None),
     ("GET", "/api/admin/usage/executions?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z", None),
     ("GET", "/api/admin/tool-calls", None),
+    ("GET", "/api/admin/jobs/scraping", None),
+    ("GET", "/api/admin/jobs/downloads", None),
 ]
 
 

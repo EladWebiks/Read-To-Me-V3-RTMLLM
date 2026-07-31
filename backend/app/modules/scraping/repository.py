@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.scraping.models import ScrapingJob, ScrapingJobItem, ScrapingSource
@@ -95,3 +95,22 @@ class ScrapingRepository:
 
     async def flush(self) -> None:
         await self._session.flush()
+
+    # ── backoffice reads ─────────────────────────────────
+
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[ScrapingJob], int]:
+        """Backoffice page over ALL users' jobs, newest first."""
+        conditions = [] if status is None else [ScrapingJob.status == status]
+        total_stmt = select(func.count()).select_from(ScrapingJob).where(*conditions)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(ScrapingJob)
+            .where(*conditions)
+            .order_by(ScrapingJob.created_at.desc(), ScrapingJob.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total
