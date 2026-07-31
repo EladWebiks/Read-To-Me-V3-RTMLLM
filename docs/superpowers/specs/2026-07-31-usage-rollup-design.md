@@ -1,7 +1,7 @@
 # Usage Rollup — Design Spec
 
 **Status:** Approved (maintainer, 2026-07-31)
-**Plan:** Part D — `docs/superpowers/plans/2026-07-31-usage-rollup-part-d.md` (to be written after spec review)
+**Plan:** [Part D — usage rollup](../plans/2026-07-31-usage-rollup-part-d.md)
 **Relates to:** [Tier-Based Usage Management](./2026-07-31-tier-usage-management.md) (Parts A–C). Part D sequences **after Part C** (it rolls up tables Part C creates). The user-facing usage surface / admin-gap work discussed separately becomes **Part E** and reads from this rollup.
 
 ## 1. Problem
