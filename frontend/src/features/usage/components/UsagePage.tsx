@@ -1,6 +1,7 @@
 import { useMeUsage } from '../hooks/useMeUsage'
 import { resetLabel } from '../logic/format'
 import { MeterRow } from './MeterRow'
+import { PlansSection } from './PlansSection'
 import { StorageSection } from './StorageSection'
 
 export function UsagePage() {
@@ -30,6 +31,7 @@ export function UsagePage() {
         ))}
       </section>
       <StorageSection kinds={standing} />
+      <PlansSection />
     </div>
   )
 }
