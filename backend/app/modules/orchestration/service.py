@@ -68,6 +68,12 @@ from app.modules.users.schemas import UserRead
 
 _MAX_TOOL_RESULT_CHARS = 6_000
 
+# Persisted role for quota refusals. NOT a member of llm.types.Role on
+# purpose: _to_llm_messages drops roles Role() cannot parse, which is what
+# keeps refusal copy out of future prompts (spec §3.3). If Role ever grows
+# this value, add an explicit skip there.
+QUOTA_REFUSAL_ROLE = "quota_refusal"
+
 
 @dataclass(frozen=True, slots=True)
 class _ConfirmedExec:
@@ -180,6 +186,12 @@ class OrchestrationService:
         try:
             await self._check_llm_quota(user)
         except QuotaExceededError as exc:
+            # Same-session write: refusal marker + rejection row (Part D), one
+            # commit, then the SSE error. The user's message is already
+            # persisted; the marker is what explains it after a reload.
+            await self._repo.add_message(
+                conversation_id, role=QUOTA_REFUSAL_ROLE, content=str(exc)
+            )
             await UsageReadService(self._session).record_rejection(user.id, exc.kind, "chat")
             await self._session.commit()
             yield _quota_error_event(exc)
