@@ -105,7 +105,9 @@ class QuotaService:
                 "resets_at": resets_at.isoformat() if resets_at else None,
             },
         )
-        raise QuotaExceededError(kind, limit=limit, used=used, resets_at=resets_at)
+        raise QuotaExceededError(
+            kind, limit=limit, used=used, resets_at=resets_at, user_id=user_id
+        )
 
     async def list_quotas(self) -> list[MembershipQuota]:
         """All configured quota rules (sparse: absent pair = unlimited)."""

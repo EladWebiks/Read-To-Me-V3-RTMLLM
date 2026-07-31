@@ -8,11 +8,13 @@ imports cycle-free. rollup.py is the only usage file importing domains.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime, time
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db import SessionLocal
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaService
 from app.modules.usage.kinds import (
@@ -22,6 +24,8 @@ from app.modules.usage.kinds import (
     UsageMetric,
 )
 from app.modules.usage.repository import UsageRepository
+
+logger = logging.getLogger(__name__)
 
 
 class UsageReadService:
@@ -81,3 +85,23 @@ class UsageReadService:
     async def record_rejection(self, user_id: UUID, kind: QuotaKind, source: str) -> None:
         """Queue a rejection event on the caller's session (caller commits)."""
         self._repo.add_rejection(user_id, kind, source)
+
+
+async def record_rejection_detached(user_id: UUID | None, kind: QuotaKind, source: str) -> None:
+    """Write a rejection event in its OWN transaction (429 handler path).
+
+    The request transaction rolls back when QuotaExceededError propagates,
+    so the handler cannot use the request session. Best-effort: a failure
+    here must never break the 429 response.
+    """
+    if user_id is None:
+        return
+    try:
+        async with SessionLocal() as session:
+            UsageRepository(session).add_rejection(user_id, kind, source)
+            await session.commit()
+    except Exception:
+        logger.warning(
+            "failed to record quota rejection",
+            extra={"user_id": str(user_id), "kind": kind.value},
+        )

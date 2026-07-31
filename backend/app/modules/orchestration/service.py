@@ -63,6 +63,7 @@ from app.modules.tools.exceptions import (
 from app.modules.tools.executor import ExecuteOptions, execute_tool_call, prepare_gated_call
 from app.modules.tools.hitl import merge_confirmed_args
 from app.modules.tools.registry import ToolRegistry
+from app.modules.usage.read_service import UsageReadService
 from app.modules.users.schemas import UserRead
 
 _MAX_TOOL_RESULT_CHARS = 6_000
@@ -179,6 +180,8 @@ class OrchestrationService:
         try:
             await self._check_llm_quota(user)
         except QuotaExceededError as exc:
+            await UsageReadService(self._session).record_rejection(user.id, exc.kind, "chat")
+            await self._session.commit()
             yield _quota_error_event(exc)
             return
         ctx = self._make_ctx(user.id, conversation_id, uuid4())

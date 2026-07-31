@@ -25,6 +25,9 @@ CLEAR_ORDER = (
     "conversations",
     "app_settings_audit",
     "app_settings",
+    # Usage rollup (Part D): both reference users; the llm_*_daily tables do not.
+    "usage_daily",
+    "quota_rejections",
     "users",
 )
 

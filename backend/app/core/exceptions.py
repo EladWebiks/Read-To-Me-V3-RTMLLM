@@ -57,6 +57,7 @@ from app.modules.scraping.exceptions import (
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
+from app.modules.usage.read_service import record_rejection_detached
 from app.modules.users.exceptions import (
     AdminSelfActionError,
     LastAdminError,
@@ -88,6 +89,7 @@ def _register_quota_handlers(app: FastAPI) -> None:
         _request: Request,
         exc: QuotaExceededError,
     ) -> JSONResponse:
+        await record_rejection_detached(exc.user_id, exc.kind, "api")
         return JSONResponse(status_code=429, content={"detail": str(exc)})
 
     @app.exception_handler(QuotaRuleNotFoundError)

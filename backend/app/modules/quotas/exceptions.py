@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
 from app.modules.quotas.kinds import KIND_REGISTRY, QuotaKind
 
@@ -17,11 +18,15 @@ class QuotaExceededError(Exception):
         limit: float,
         used: float,
         resets_at: datetime | None,
+        user_id: UUID | None = None,
     ) -> None:
         self.kind = kind
         self.limit = limit
         self.used = used
         self.resets_at = resets_at
+        # Carried so the 429 handler can attribute the rejection event; the
+        # request session is already rolling back by the time it runs.
+        self.user_id = user_id
         super().__init__(_user_copy(kind, limit, used, resets_at))
 
 
