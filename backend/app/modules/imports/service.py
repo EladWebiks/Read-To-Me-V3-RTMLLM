@@ -122,6 +122,14 @@ class ImportService:
             user_ids, period_start=period_start, period_end=period_end
         )
 
+    async def completed_in_period(
+        self, user_id: UUID, *, period_start: datetime, period_end: datetime
+    ) -> int:
+        """Month completed-EPUB-imports meter for usage composition."""
+        return await self._repo.completed_in_period(
+            user_id, period_start=period_start, period_end=period_end
+        )
+
     async def _enforce_quota(self, user_id: UUID) -> None:
         """Tier quota gate for new imports; completed imports count (spec §3.5).
 

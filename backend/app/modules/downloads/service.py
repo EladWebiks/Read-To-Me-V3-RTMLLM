@@ -114,6 +114,18 @@ class DownloadService:
             user_ids, period_start=period_start, period_end=period_end
         )
 
+    async def chapters_in_period(
+        self, user_id: UUID, *, period_start: datetime, period_end: datetime
+    ) -> int:
+        """Month audio-chapter meter (soft-deleted included) for usage composition."""
+        return await self._repo.chapters_in_period(
+            user_id, period_start=period_start, period_end=period_end
+        )
+
+    async def stored_bytes(self, user_id: UUID) -> int:
+        """Live retained-MP3 bytes (level meter) for usage composition."""
+        return await self._repo.stored_bytes(user_id)
+
     async def create_single_chapter(
         self,
         user_id: UUID,

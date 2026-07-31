@@ -132,6 +132,14 @@ class ScrapingService:
             user_ids, period_start=period_start, period_end=period_end
         )
 
+    async def chapters_in_period(
+        self, user_id: UUID, *, period_start: datetime, period_end: datetime
+    ) -> int:
+        """Month scraped-chapter meter for usage composition."""
+        return await self._repo.chapters_in_period(
+            user_id, period_start=period_start, period_end=period_end
+        )
+
     async def get_job(self, user_id: UUID, job_id: UUID) -> ScrapeJobRead:
         job = await self._require(user_id, job_id)
         return await self._read_with_title(job)

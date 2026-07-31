@@ -33,6 +33,7 @@ from app.modules.reader.router import router as reader_router
 from app.modules.runtime_config.router import router as runtime_config_router
 from app.modules.scraping.router import router as scraping_router
 from app.modules.scraping.seed import seed_scraping_sources
+from app.modules.usage.router import router as usage_router
 
 
 @asynccontextmanager
@@ -57,6 +58,7 @@ def _register_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(scraping_router, prefix=api_prefix)
     app.include_router(imports_router, prefix=api_prefix)
     app.include_router(discovery_router, prefix=api_prefix)
+    app.include_router(usage_router, prefix=api_prefix)
     app.include_router(llm_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(llm_admin_router, prefix=api_prefix)
