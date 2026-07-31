@@ -47,6 +47,14 @@ class DownloadJob(Base):
         nullable=True,
         index=True,
     )
+    # Soft delete (golden rule 6): delete/clean/TTL-purge free the MinIO
+    # assets but KEEP the row — the monthly audio_chapters meter must not
+    # shrink when jobs disappear. Reads filter this; the meter does not.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

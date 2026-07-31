@@ -27,6 +27,8 @@ from app.modules.downloads.schemas import (
     DownloadUrlRead,
 )
 from app.modules.library.service import LibraryService
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaLimits, QuotaService
 
 
 class DownloadService:
@@ -39,7 +41,8 @@ class DownloadService:
         self._chapters = ChapterService(session)
 
     async def create(self, user_id: UUID, data: DownloadCreate) -> DownloadJobRead:
-        """Create a pending job after ownership + range checks."""
+        """Create a pending job after quota, ownership + range checks."""
+        await self._enforce_quotas(user_id)
         if data.chapter_to < data.chapter_from:
             raise InvalidChapterRangeError("chapter_to < chapter_from")
         await self._library.assert_access(user_id, data.book_id)
@@ -70,6 +73,20 @@ class DownloadService:
         await self._session.commit()
         await self._enqueue(created.id)
         return DownloadJobRead.model_validate(created)
+
+    async def _enforce_quotas(self, user_id: UUID) -> None:
+        """Tier quota gate for new MP3 work (audio_chapters; storage in Task C2)."""
+        limits = await QuotaService(self._session).limits_for_user_id(user_id)
+        if not limits.any_limited(QuotaKind.AUDIO_CHAPTERS):
+            return
+        await self._enforce_audio_chapters(user_id, limits)
+
+    async def _enforce_audio_chapters(self, user_id: UUID, limits: QuotaLimits) -> None:
+        start, end = QuotaService.current_month_window(datetime.now(UTC))
+        used = await self._repo.chapters_in_period(user_id, period_start=start, period_end=end)
+        QuotaService.enforce(
+            QuotaKind.AUDIO_CHAPTERS, used, limits, resets_at=end, user_id=user_id
+        )
 
     async def create_single_chapter(
         self,
