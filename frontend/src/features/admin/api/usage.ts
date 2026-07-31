@@ -22,6 +22,7 @@ export type UserUsage = UsageBreakdown & {
   month_audio_chapters: number
   month_scrape_chapters: number
   month_epub_imports: number
+  period_rejections: number
 }
 
 export type UsageOverview = UsageBreakdown & {
@@ -29,6 +30,8 @@ export type UsageOverview = UsageBreakdown & {
   period_end: string
   by_model: ModelUsage[]
   by_task: TaskUsage[]
+  rejections: number
+  rejections_by_kind: Record<string, number>
 }
 
 export type LlmExecutionRow = {

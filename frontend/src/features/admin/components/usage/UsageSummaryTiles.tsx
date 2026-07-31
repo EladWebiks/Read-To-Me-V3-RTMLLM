@@ -3,6 +3,29 @@ import { useUsageOverview } from '@/features/admin/hooks/useUsage'
 import type { Period } from '@/features/admin/logic/period'
 import { BreakdownTable } from './BreakdownTable'
 
+/** Quota rejections per kind over the selected period; hidden when none. */
+function RejectionsByKind({ counts }: { counts: Record<string, number> }) {
+  const kinds = Object.entries(counts)
+  if (kinds.length === 0) {
+    return null
+  }
+  return (
+    <div className="mt-4 rounded-xl border p-3">
+      <h3 className="mb-2 text-sm font-medium">Rejections by kind</h3>
+      <table className="w-full text-sm">
+        <tbody>
+          {kinds.map(([kind, count]) => (
+            <tr key={kind}>
+              <td className="py-1 text-muted-foreground">{kind}</td>
+              <td className="py-1 text-right tabular-nums">{count.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function UsageSummaryTiles({ period }: { period: Period }) {
   const { data, isLoading } = useUsageOverview(period)
   if (isLoading || !data) {
@@ -15,6 +38,7 @@ export function UsageSummaryTiles({ period }: { period: Period }) {
         <StatTile label="Tokens out" value={data.tokens_out.toLocaleString()} />
         <StatTile label="Cost (USD)" value={`$${data.total_cost.toFixed(4)}`} />
         <StatTile label="Executions" value={data.execution_count.toLocaleString()} />
+        <StatTile label="Rejections" value={data.rejections.toLocaleString()} />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <BreakdownTable
@@ -29,6 +53,7 @@ export function UsageSummaryTiles({ period }: { period: Period }) {
           rows={data.by_task.map((row) => ({ ...row, label: row.task }))}
         />
       </div>
+      <RejectionsByKind counts={data.rejections_by_kind} />
     </>
   )
 }

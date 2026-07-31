@@ -33,6 +33,8 @@ describe('UsagePage', () => {
       period_end: '2026-08-01T00:00:00Z',
       by_model: [{ ...BREAKDOWN, provider: 'gemini', model: 'm1' }],
       by_task: [{ ...BREAKDOWN, task: 'chat' }],
+      rejections: 5,
+      rejections_by_kind: { llm_tokens: 5 },
     })
     vi.mocked(fetchUsageByUser).mockResolvedValue({
       items: [
@@ -48,6 +50,7 @@ describe('UsagePage', () => {
           month_audio_chapters: 0,
           month_scrape_chapters: 0,
           month_epub_imports: 0,
+          period_rejections: 2,
         },
       ],
       total: 1,
@@ -87,5 +90,9 @@ describe('UsagePage', () => {
     expect(await screen.findByText('bob')).toBeTruthy()
     expect((await screen.findAllByText('ok')).length).toBeGreaterThan(0)
     expect(await screen.findByText('400/40')).toBeTruthy()
+    // 'Rejections' labels both the tile and the by-user column header.
+    expect((await screen.findAllByText('Rejections')).length).toBe(2)
+    expect((await screen.findAllByText('5')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('llm_tokens')).toBeTruthy()
   })
 })
