@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type {
   MembershipPolicy,
   PolicyPatch,
@@ -7,7 +7,11 @@ import { usePatchMembershipPolicy } from '@/features/admin/hooks/useMembershipPo
 import { parsePolicyInput, POLICY_FIELDS } from '@/features/admin/logic/policyFields'
 import { PolicyField } from './PolicyField'
 
-type Props = { policy: MembershipPolicy; inherited: Record<string, number> }
+type Props = {
+  policy: MembershipPolicy
+  inherited: Record<string, number>
+  children?: ReactNode
+}
 
 function initialDrafts(policy: MembershipPolicy): Record<string, string> {
   return Object.fromEntries(
@@ -32,7 +36,7 @@ function buildPatch(
   return patch
 }
 
-export function PolicyCard({ policy, inherited }: Props) {
+export function PolicyCard({ policy, inherited, children }: Props) {
   const [drafts, setDrafts] = useState(() => initialDrafts(policy))
   const [invalid, setInvalid] = useState(false)
   const mutation = usePatchMembershipPolicy()
@@ -71,6 +75,7 @@ export function PolicyCard({ policy, inherited }: Props) {
       >
         {mutation.isPending ? 'Saving…' : 'Save'}
       </button>
+      {children}
     </div>
   )
 }
