@@ -28,6 +28,14 @@ export {
   PaginationNext,
   PaginationPrevious,
 } from './pagination'
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './dropdown-menu'
 export { ListPagination } from './list-pagination'
 export { ThemeProvider } from './theme-provider'
 export {
