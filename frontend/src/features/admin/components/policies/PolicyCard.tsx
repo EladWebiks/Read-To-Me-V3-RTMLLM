@@ -10,6 +10,7 @@ import { PolicyField } from './PolicyField'
 type Props = {
   policy: MembershipPolicy
   inherited: Record<string, number>
+  header?: ReactNode
   children?: ReactNode
 }
 
@@ -36,7 +37,7 @@ function buildPatch(
   return patch
 }
 
-export function PolicyCard({ policy, inherited, children }: Props) {
+export function PolicyCard({ policy, inherited, header, children }: Props) {
   const [drafts, setDrafts] = useState(() => initialDrafts(policy))
   const [invalid, setInvalid] = useState(false)
   const mutation = usePatchMembershipPolicy()
@@ -52,7 +53,7 @@ export function PolicyCard({ policy, inherited, children }: Props) {
 
   return (
     <div className="rounded-lg border border-border p-4">
-      <h2 className="mb-2 font-medium capitalize">{policy.membership}</h2>
+      {header ?? <h2 className="mb-2 font-medium capitalize">{policy.membership}</h2>}
       <div className="grid gap-2 sm:grid-cols-2">
         {POLICY_FIELDS.map((meta) => (
           <PolicyField
