@@ -1,48 +1,6 @@
 import { MEMBERSHIPS, type AdminUser } from '@/features/admin/api/users'
-import {
-  useDeleteUser,
-  usePatchUser,
-  useRestoreUser,
-} from '@/features/admin/hooks/useAdminUsers'
-
-function UserRowActions({
-  user,
-  deleted,
-  patchError,
-}: {
-  user: AdminUser
-  deleted: boolean
-  patchError?: Error | null
-}) {
-  const remove = useDeleteUser()
-  const restore = useRestoreUser()
-  const error = patchError ?? remove.error ?? restore.error
-
-  const softDelete = () => {
-    if (window.confirm(`Soft-delete ${user.username}?`)) {
-      remove.mutate(user.id)
-    }
-  }
-
-  return (
-    <td className="px-2 py-1.5">
-      {deleted ? (
-        <button
-          type="button"
-          className="text-xs underline"
-          onClick={() => restore.mutate(user.id)}
-        >
-          Restore
-        </button>
-      ) : (
-        <button type="button" className="text-xs underline" onClick={softDelete}>
-          Delete
-        </button>
-      )}
-      {error ? <p className="text-xs text-destructive">{error.message}</p> : null}
-    </td>
-  )
-}
+import { usePatchUser } from '@/features/admin/hooks/useAdminUsers'
+import { UserRowActions } from './UserRowActions'
 
 export function UserRow({ user }: { user: AdminUser }) {
   const patch = usePatchUser()
