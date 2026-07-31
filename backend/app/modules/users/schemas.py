@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.modules.users.membership import Membership
 
 if TYPE_CHECKING:
-    from app.modules.users.models import User
+    from app.modules.users.models import MembershipTier, User
 
 
 class UserCreate(BaseModel):
@@ -69,3 +69,64 @@ class UserAdminPatch(BaseModel):
 
     is_admin: bool | None = None
     membership: Membership | None = None
+
+
+class MembershipCreate(BaseModel):
+    """POST /api/admin/memberships body. Slug is immutable after creation."""
+
+    slug: str = Field(pattern=r"^[a-z0-9_-]{1,32}$")
+    label: str = Field(min_length=1, max_length=64)
+    rank: int = 0
+    description: str | None = None
+    price_label: str | None = Field(default=None, max_length=32)
+
+
+class MembershipPatch(BaseModel):
+    """PATCH body — only supplied fields change; explicit null clears text.
+
+    is_default/is_active only accept True: crowning moves the flag, and
+    deactivation goes through the dedicated endpoint (it needs a target).
+    """
+
+    label: str | None = Field(default=None, min_length=1, max_length=64)
+    description: str | None = None
+    price_label: str | None = Field(default=None, max_length=32)
+    rank: int | None = None
+    is_default: Literal[True] | None = None
+    is_active: Literal[True] | None = None
+
+
+class MembershipAdminRead(BaseModel):
+    """Backoffice view of one tier, with how many users sit on it."""
+
+    slug: str
+    label: str
+    description: str | None
+    price_label: str | None
+    rank: int
+    is_active: bool
+    is_default: bool
+    user_count: int
+    updated_at: datetime
+
+    @classmethod
+    def from_tier(cls, tier: MembershipTier, user_count: int) -> MembershipAdminRead:
+        return cls(
+            slug=tier.slug,
+            label=tier.label,
+            description=tier.description,
+            price_label=tier.price_label,
+            rank=tier.rank,
+            is_active=tier.is_active,
+            is_default=tier.is_default,
+            user_count=user_count,
+            updated_at=tier.updated_at,
+        )
+
+
+class MembershipsResponse(BaseModel):
+    memberships: list[MembershipAdminRead]
+
+
+class MembershipDeactivate(BaseModel):
+    migrate_to: str

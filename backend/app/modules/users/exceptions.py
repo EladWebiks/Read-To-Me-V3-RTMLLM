@@ -38,3 +38,15 @@ class AdminSelfActionError(UserError):
 
 class LastAdminError(UserError):
     """The operation would leave zero active (non-deleted) admins."""
+
+
+class UnknownMembershipError(UserError):
+    """A membership slug that does not exist (or is not assignable)."""
+
+
+class DuplicateMembershipError(UserError):
+    """Creating a tier whose slug is already taken."""
+
+
+class MembershipLifecycleError(UserError):
+    """A create/edit/deactivate rule was violated. str(exc) is user-facing."""
