@@ -145,3 +145,20 @@ class DownloadRepository:
             DownloadJob.created_at < period_end,
         )
         return int((await self._session.execute(stmt)).scalar_one())
+
+    async def stored_bytes(self, user_id: UUID) -> int:
+        """Currently retained MinIO bytes: complete, non-expired, non-deleted.
+
+        Soft-deleted jobs are EXCLUDED here (their assets were purged) — the
+        opposite of the audio meter, which is a flow meter and keeps them.
+        """
+        now = datetime.now(UTC)
+        stmt = select(func.coalesce(func.sum(DownloadJob.size_bytes), 0)).where(
+            DownloadJob.user_id == user_id,
+            DownloadJob.status == "complete",
+            DownloadJob.deleted_at.is_(None),
+            or_(DownloadJob.expires_at.is_(None), DownloadJob.expires_at > now),
+        )
+        # size_bytes is nullable, so SUM's static type is int | None even
+        # though COALESCE guarantees a value at runtime.
+        return int((await self._session.execute(stmt)).scalar_one() or 0)

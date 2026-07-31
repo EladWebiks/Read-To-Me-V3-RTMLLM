@@ -75,11 +75,15 @@ class DownloadService:
         return DownloadJobRead.model_validate(created)
 
     async def _enforce_quotas(self, user_id: UUID) -> None:
-        """Tier quota gate for new MP3 work (audio_chapters; storage in Task C2)."""
+        """Tier quota gate for new MP3 work (monthly chapters + standing storage)."""
         limits = await QuotaService(self._session).limits_for_user_id(user_id)
-        if not limits.any_limited(QuotaKind.AUDIO_CHAPTERS):
-            return
-        await self._enforce_audio_chapters(user_id, limits)
+        if limits.any_limited(QuotaKind.AUDIO_CHAPTERS):
+            await self._enforce_audio_chapters(user_id, limits)
+        if limits.any_limited(QuotaKind.STORAGE_BYTES):
+            stored = await self._repo.stored_bytes(user_id)
+            QuotaService.enforce(
+                QuotaKind.STORAGE_BYTES, stored, limits, resets_at=None, user_id=user_id
+            )
 
     async def _enforce_audio_chapters(self, user_id: UUID, limits: QuotaLimits) -> None:
         start, end = QuotaService.current_month_window(datetime.now(UTC))
