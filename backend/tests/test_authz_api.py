@@ -8,7 +8,6 @@ from app.core.config import get_settings
 from app.core.deps import get_db, require_admin, require_membership
 from app.core.exceptions import register_exception_handlers
 from app.core.security import create_access_token
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from fastapi import Depends, FastAPI
@@ -35,7 +34,7 @@ def _build_app() -> FastAPI:
 
     @test_app.get("/free-tier")
     async def free_tier(
-        user: Annotated[UserRead, Depends(require_membership(Membership.FREE))],
+        user: Annotated[UserRead, Depends(require_membership("free"))],
     ) -> dict[str, str]:
         return {"username": user.username}
 

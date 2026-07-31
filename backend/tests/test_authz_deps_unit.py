@@ -1,16 +1,16 @@
 """Unit tests for the authorization dependencies (no DB, no HTTP)."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from app.core.deps import require_admin, require_membership
 from app.modules.auth.exceptions import NotAuthorizedError
-from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 
 
-def _user(*, is_admin: bool = False, membership: Membership = Membership.FREE) -> UserRead:
+def _user(*, is_admin: bool = False, membership: str = "free") -> UserRead:
     return UserRead(
         id=uuid4(),
         username="tester",
@@ -34,10 +34,13 @@ async def test_require_admin_rejects_non_admin() -> None:
 
 
 @pytest.mark.unit
-async def test_require_membership_passes_sufficient_tier() -> None:
-    dep = require_membership(Membership.FREE)
+async def test_require_membership_passes_sufficient_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.core.deps.ensure_loaded", AsyncMock())
+    dep = require_membership("free")
     user = _user()
-    assert await dep(user) is user
+    assert await dep(user, None) is user
 
 
 @pytest.mark.unit
@@ -45,7 +48,8 @@ async def test_require_membership_rejects_insufficient_tier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Only `free` exists; simulate a higher requirement by failing the comparator.
+    monkeypatch.setattr("app.core.deps.ensure_loaded", AsyncMock())
     monkeypatch.setattr("app.core.deps.meets_minimum", lambda actual, minimum: False)
-    dep = require_membership(Membership.FREE)
+    dep = require_membership("free")
     with pytest.raises(NotAuthorizedError):
-        await dep(_user())
+        await dep(_user(), None)

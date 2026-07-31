@@ -21,7 +21,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from app.modules.users.membership import Membership
 
 
 class User(Base):
@@ -52,8 +51,8 @@ class User(Base):
     membership: Mapped[str] = mapped_column(
         String(32),
         ForeignKey("memberships.slug"),
-        default=Membership.FREE,
-        server_default=Membership.FREE.value,
+        default="free",
+        server_default="free",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

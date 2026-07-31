@@ -11,7 +11,8 @@ from app.core.db import get_db_session
 from app.modules.auth.exceptions import NotAuthenticatedError, NotAuthorizedError
 from app.modules.auth.service import AuthService
 from app.modules.runtime_config.service import RuntimeConfigService
-from app.modules.users.membership import Membership, meets_minimum
+from app.modules.users.membership import meets_minimum
+from app.modules.users.membership_registry import ensure_loaded
 from app.modules.users.schemas import UserRead
 
 COOKIE_NAME = "rtm_token"
@@ -45,17 +46,19 @@ async def require_admin(
 
 
 def require_membership(
-    minimum: Membership,
-) -> Callable[[UserRead], Awaitable[UserRead]]:
+    minimum: str,
+) -> Callable[[UserRead, AsyncSession], Awaitable[UserRead]]:
     """Dependency factory gating a route on a minimum membership tier.
 
-    Ordering comes from MEMBERSHIP_RANK (in code, fail-closed) — this is the
-    hook for tier-gated features and per-tier AI budgets.
+    Ordering comes from the tier registry snapshot (fail-closed) — this is
+    the hook for tier-gated features and per-tier AI budgets.
     """
 
     async def _require(
         current_user: Annotated[UserRead, Depends(get_current_user)],
+        session: Annotated[AsyncSession, Depends(get_db)],
     ) -> UserRead:
+        await ensure_loaded(session)
         if not meets_minimum(current_user.membership, minimum):
             raise NotAuthorizedError
         return current_user
