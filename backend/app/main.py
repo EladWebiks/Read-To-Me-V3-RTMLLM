@@ -24,6 +24,7 @@ from app.modules.llm.admin_router import router as llm_admin_router
 from app.modules.llm.router import chat_router
 from app.modules.llm.router import router as llm_router
 from app.modules.llm.seed import seed_llm_models
+from app.modules.orchestration.seed import seed_membership_policies
 from app.modules.reader.router import router as reader_router
 from app.modules.runtime_config.router import router as runtime_config_router
 from app.modules.scraping.router import router as scraping_router
@@ -37,6 +38,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await seed_admin_user()
     await seed_scraping_sources()
     await seed_llm_models()
+    await seed_membership_policies()
     yield
 
 
