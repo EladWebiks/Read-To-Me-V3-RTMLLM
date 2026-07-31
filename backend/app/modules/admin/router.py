@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from app.modules.admin.audit_router import router as audit_router
 from app.modules.admin.jobs_router import router as jobs_router
+from app.modules.admin.memberships_router import router as memberships_router
 from app.modules.admin.usage_router import router as usage_router
 from app.modules.admin.users_router import router as users_router
 
@@ -19,3 +20,4 @@ router.include_router(users_router)
 router.include_router(usage_router)
 router.include_router(audit_router)
 router.include_router(jobs_router)
+router.include_router(memberships_router)

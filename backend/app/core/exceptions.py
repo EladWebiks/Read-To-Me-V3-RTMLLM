@@ -60,7 +60,9 @@ from app.modules.scraping.exceptions import (
 from app.modules.usage.read_service import record_rejection_detached
 from app.modules.users.exceptions import (
     AdminSelfActionError,
+    DuplicateMembershipError,
     LastAdminError,
+    MembershipLifecycleError,
     UnknownMembershipError,
     UserAccountDisabledError,
     UserAlreadyExistsError,
@@ -180,6 +182,20 @@ def _register_admin_user_handlers(app: FastAPI) -> None:
         _exc: UnknownMembershipError,
     ) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": "Membership tier not found"})
+
+    @app.exception_handler(DuplicateMembershipError)
+    async def _duplicate_membership(
+        _request: Request,
+        _exc: DuplicateMembershipError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": "Membership tier already exists"})
+
+    @app.exception_handler(MembershipLifecycleError)
+    async def _membership_lifecycle(
+        _request: Request,
+        exc: MembershipLifecycleError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 def _register_library_handlers(app: FastAPI) -> None:

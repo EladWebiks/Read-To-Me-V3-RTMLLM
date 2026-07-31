@@ -127,6 +127,12 @@ class PolicyService:
         )
         return saved
 
+    async def ensure_row(self, membership: str) -> None:
+        """Insert the all-NULL policy row for a tier if absent (create path)."""
+        if await self._repo.get_by_membership(membership) is None:
+            self._repo.add(MembershipPolicy(membership=membership))
+            await self._session.flush()
+
     def _per_turn_caps(self, row: MembershipPolicy | None) -> tuple[dict[str, Any], list[str]]:
         """Collapse tier row over effective runtime settings. NULL = inherit."""
         runtime = self._settings.llm_runtime

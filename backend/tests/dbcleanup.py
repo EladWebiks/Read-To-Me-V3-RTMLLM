@@ -38,6 +38,13 @@ _NON_FREE_TIER_CLEANUP = (
     "DELETE FROM membership_policies WHERE membership <> 'free'",
     "DELETE FROM membership_quotas WHERE membership <> 'free'",
     "DELETE FROM memberships WHERE slug <> 'free'",
+    # The 'free' row itself survives (other tables FK to it without reseeding),
+    # but tests may mutate its own flags (crowning another tier default clears
+    # free's is_default; a rejected deactivate attempt must never stick). Reset
+    # it to the seeded truth so cross-test pollution can't leak is_default/
+    # is_active state into later tests.
+    "UPDATE memberships SET label = 'Free', description = NULL, price_label = NULL, "
+    "rank = 0, is_active = TRUE, is_default = TRUE WHERE slug = 'free'",
 )
 
 
