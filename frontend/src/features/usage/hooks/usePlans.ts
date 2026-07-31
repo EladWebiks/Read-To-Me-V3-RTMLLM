@@ -14,6 +14,7 @@ export function useSwitchPlan() {
     mutationFn: (slug: string) => switchPlan(slug),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: plansKey })
+      // Switching tiers changes the user's quotas, so the usage meters must refetch too.
       queryClient.invalidateQueries({ queryKey: meUsageKey })
     },
   })

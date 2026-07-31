@@ -40,6 +40,9 @@ export function PlanCard({ plan }: { plan: Plan }) {
             Switch to {plan.label}
           </Button>
         )}
+        {switchTo.error ? (
+          <p className="text-xs text-destructive">{switchTo.error.message}</p>
+        ) : null}
       </CardContent>
     </Card>
   )

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlansResponse } from '../api/plans'
 import { plansKey } from '../hooks/usePlans'
@@ -38,8 +38,11 @@ function renderSection(client: QueryClient) {
   )
 }
 
+// vitest runs with globals:false, so testing-library's auto-cleanup is not registered.
+afterEach(cleanup)
+
 afterEach(() => {
-  vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 describe('PlansSection', () => {
@@ -64,6 +67,18 @@ describe('PlansSection', () => {
 
     expect(confirmSpy).toHaveBeenCalledWith('Switch to Premium?')
     await waitFor(() => expect(switchPlan).toHaveBeenCalledWith('premium'))
+  })
+
+  it('surfaces the error message when the switch fails', async () => {
+    fetchPlans.mockResolvedValue(plans)
+    switchPlan.mockRejectedValue(new Error('Self-switching is currently disabled.'))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderSection(newClient())
+
+    const button = await screen.findByRole('button', { name: 'Switch to Premium' })
+    fireEvent.click(button)
+
+    expect(await screen.findByText('Self-switching is currently disabled.')).toBeTruthy()
   })
 
   it('renders nothing when can_switch is false', async () => {
