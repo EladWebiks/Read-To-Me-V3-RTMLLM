@@ -3,6 +3,7 @@ import {
   AdminLayout,
   CatalogPage,
   JobsPage,
+  PoliciesPage,
   SettingsPage,
   ToolCallsPage,
   UsagePage,
@@ -48,6 +49,7 @@ export function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/admin/users" replace />} />
                 <Route path="users" element={<UsersPage />} />
+                <Route path="policies" element={<PoliciesPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="usage" element={<UsagePage />} />
                 <Route path="catalog" element={<CatalogPage />} />

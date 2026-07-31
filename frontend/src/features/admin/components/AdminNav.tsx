@@ -2,6 +2,7 @@ import { NavLink } from 'react-router'
 
 const LINKS = [
   { to: '/admin/users', label: 'Users' },
+  { to: '/admin/policies', label: 'Memberships' },
   { to: '/admin/settings', label: 'Settings' },
   { to: '/admin/usage', label: 'AI Usage' },
   { to: '/admin/catalog', label: 'LLM Catalog' },
