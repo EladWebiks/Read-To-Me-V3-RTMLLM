@@ -7,6 +7,7 @@ jobs, …) make `DELETE FROM users` fail on a foreign-key violation.
 
 from __future__ import annotations
 
+from app.modules.users import membership_registry
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
@@ -46,3 +47,8 @@ async def clear_users(executor: AsyncSession | AsyncConnection) -> None:
         await executor.execute(text(f"DELETE FROM {table}"))  # noqa: S608 - fixed literals
     for stmt in _NON_FREE_TIER_CLEANUP:
         await executor.execute(text(stmt))
+    # The tier registry is a process-level 30s snapshot and seed_membership_policies
+    # derives its inserts from it. Without this, a snapshot warmed with a tier we
+    # just deleted makes the next seed insert a membership_policies row whose FK
+    # target is gone.
+    membership_registry.invalidate()

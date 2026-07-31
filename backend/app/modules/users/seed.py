@@ -7,6 +7,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import SessionLocal
+from app.modules.users import membership_registry
 from app.modules.users.membership import DEFAULT_SLUG
 from app.modules.users.membership_repository import MembershipRepository
 from app.modules.users.models import MembershipTier
@@ -36,4 +37,5 @@ async def _seed(session: AsyncSession) -> None:
             slug=DEFAULT_SLUG, label="Free", rank=0, is_active=True, is_default=not has_default
         )
     )
+    membership_registry.invalidate()  # every memberships write invalidates the snapshot
     logger.info("seeding default membership tier", extra={"slug": DEFAULT_SLUG})
