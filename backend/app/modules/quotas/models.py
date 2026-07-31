@@ -25,7 +25,7 @@ class MembershipQuota(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    membership: Mapped[str] = mapped_column(String(32), index=True)
+    membership: Mapped[str] = mapped_column(String(32), ForeignKey("memberships.slug"), index=True)
     quota_kind: Mapped[str] = mapped_column(String(32))
     limit_value: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(

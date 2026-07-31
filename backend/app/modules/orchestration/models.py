@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,7 +24,9 @@ class MembershipPolicy(Base):
     __tablename__ = "membership_policies"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    membership: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    membership: Mapped[str] = mapped_column(
+        String(32), ForeignKey("memberships.slug"), unique=True, index=True
+    )
     # Per-turn budget overrides. Field names match LlmRuntimeSettings exactly
     # so resolution can iterate one shared name list. NULL = inherit.
     max_tool_iters: Mapped[int | None] = mapped_column(Integer, nullable=True)

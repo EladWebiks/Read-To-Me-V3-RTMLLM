@@ -33,8 +33,16 @@ CLEAR_ORDER = (
     "users",
 )
 
+_NON_FREE_TIER_CLEANUP = (
+    "DELETE FROM membership_policies WHERE membership <> 'free'",
+    "DELETE FROM membership_quotas WHERE membership <> 'free'",
+    "DELETE FROM memberships WHERE slug <> 'free'",
+)
+
 
 async def clear_users(executor: AsyncSession | AsyncConnection) -> None:
     """Delete every user and all rows that reference them."""
     for table in CLEAR_ORDER:
         await executor.execute(text(f"DELETE FROM {table}"))  # noqa: S608 - fixed literals
+    for stmt in _NON_FREE_TIER_CLEANUP:
+        await executor.execute(text(stmt))
