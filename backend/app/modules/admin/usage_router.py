@@ -246,17 +246,70 @@ async def usage_by_user(
 
 
 @dataclass(frozen=True)
+class _MonthLookups:
+    """Current-month values, hybrid: rolled closed days + today's raw tails."""
+
+    rolled: dict[UUID, dict[UsageMetric, float]]
+    tail_llm: dict[UUID, UserUsageRead]
+    audio: dict[UUID, int]
+    scrape: dict[UUID, int]
+    imports: dict[UUID, int]
+
+
+@dataclass(frozen=True)
 class _RowContext:
     """Per-request lookup tables for decorating by-user rows."""
 
     names: dict[UUID, str]
     tiers: dict[UUID, Membership]
-    month: dict[UUID, UserUsageRead]
     quotas: dict[tuple[str, str], float]
-    audio: dict[UUID, int]
-    scrape: dict[UUID, int]
-    imports: dict[UUID, int]
+    months: _MonthLookups
     rejections: dict[UUID, int]
+
+
+async def _month_lookups(
+    session: AsyncSession, service: LlmService, ids: list[UUID]
+) -> _MonthLookups:
+    """Hybrid month values: rolled closed days + today tails (usage spec §7)."""
+    now = datetime.now(UTC)
+    month_start, month_end = QuotaService.current_month_window(now)
+    today, today_start = UsageReadService.hybrid_split(now)
+    rolled: dict[UUID, dict[UsageMetric, float]] = {}
+    if month_start.date() < today:
+        wanted = set(ids)
+        table = await UsageReadService(session).rolled_user_table(
+            start_day=month_start.date(), end_day=today
+        )
+        rolled = {uid: metrics for uid, metrics in table.items() if uid in wanted}
+    window = {"period_start": today_start, "period_end": month_end}
+    return _MonthLookups(
+        rolled=rolled,
+        tail_llm=await service.usage_for_users_admin(ids, **window),
+        audio=await DownloadService(session).month_chapters_for_users(ids, **window),
+        scrape=await ScrapingService(session).month_chapters_for_users(ids, **window),
+        imports=await ImportService(session).month_imports_for_users(ids, **window),
+    )
+
+
+def _month_tokens(lookups: _MonthLookups, uid: UUID) -> int:
+    metrics = lookups.rolled.get(uid, {})
+    rolled = metrics.get(UsageMetric.LLM_TOKENS_IN, 0.0) + metrics.get(
+        UsageMetric.LLM_TOKENS_OUT, 0.0
+    )
+    tail = lookups.tail_llm.get(uid)
+    return int(rolled) + ((tail.tokens_in + tail.tokens_out) if tail else 0)
+
+
+def _month_cost(lookups: _MonthLookups, uid: UUID) -> float:
+    rolled = lookups.rolled.get(uid, {}).get(UsageMetric.LLM_COST_USD, 0.0)
+    tail = lookups.tail_llm.get(uid)
+    return rolled + (tail.total_cost if tail else 0.0)
+
+
+def _month_metric(
+    lookups: _MonthLookups, uid: UUID, metric: UsageMetric, tail: dict[UUID, int]
+) -> int:
+    return int(lookups.rolled.get(uid, {}).get(metric, 0.0)) + tail.get(uid, 0)
 
 
 async def _decorate_rows(
@@ -268,22 +321,18 @@ async def _decorate_rows(
     """Join usernames, tiers, current-month usage, job counts, and quota rules."""
     users = UserService(session)
     ids = [row.user_id for row in rows]
-    now = datetime.now(UTC)
-    month_start, month_end = QuotaService.current_month_window(now)
-    window = {"period_start": month_start, "period_end": month_end}
     ctx = _RowContext(
         names=await users.usernames_for_ids(ids),
         tiers=await users.memberships_for_ids(ids),
-        month=await service.usage_for_users_admin(ids, **window),
         quotas={
             (q.membership, q.quota_kind): q.limit_value
             for q in await QuotaService(session).list_quotas()
         },
-        audio=await DownloadService(session).month_chapters_for_users(ids, **window),
-        scrape=await ScrapingService(session).month_chapters_for_users(ids, **window),
-        imports=await ImportService(session).month_imports_for_users(ids, **window),
+        months=await _month_lookups(session, service, ids),
         rejections=await UsageReadService(session).period_rejections_by_user(
-            period_start=period.period_start, period_end=period.period_end, now=now
+            period_start=period.period_start,
+            period_end=period.period_end,
+            now=datetime.now(UTC),
         ),
     )
     return [_decorated_row(row, ctx) for row in rows]
@@ -292,18 +341,21 @@ async def _decorate_rows(
 def _decorated_row(row: UserUsageRead, ctx: _RowContext) -> AdminUserUsageRead:
     tier = ctx.tiers.get(row.user_id)
     tier_value = tier.value if tier is not None else None
-    month_row = ctx.month.get(row.user_id)
+    uid = row.user_id
+    months = ctx.months
     return AdminUserUsageRead(
-        username=ctx.names.get(row.user_id),
+        username=ctx.names.get(uid),
         membership=tier_value,
-        month_tokens=(month_row.tokens_in + month_row.tokens_out) if month_row else 0,
-        month_cost=month_row.total_cost if month_row else 0.0,
+        month_tokens=_month_tokens(months, uid),
+        month_cost=_month_cost(months, uid),
         llm_tokens_limit=ctx.quotas.get((tier_value or "", QuotaKind.LLM_TOKENS.value)),
         llm_cost_limit=ctx.quotas.get((tier_value or "", QuotaKind.LLM_COST_USD.value)),
-        month_audio_chapters=ctx.audio.get(row.user_id, 0),
-        month_scrape_chapters=ctx.scrape.get(row.user_id, 0),
-        month_epub_imports=ctx.imports.get(row.user_id, 0),
-        period_rejections=ctx.rejections.get(row.user_id, 0),
+        month_audio_chapters=_month_metric(months, uid, UsageMetric.AUDIO_CHAPTERS, months.audio),
+        month_scrape_chapters=_month_metric(
+            months, uid, UsageMetric.SCRAPE_CHAPTERS, months.scrape
+        ),
+        month_epub_imports=_month_metric(months, uid, UsageMetric.EPUB_IMPORTS, months.imports),
+        period_rejections=ctx.rejections.get(uid, 0),
         **row.model_dump(),
     )
 
