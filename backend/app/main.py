@@ -29,6 +29,7 @@ from app.modules.orchestration.admin_router import (
 )
 from app.modules.orchestration.seed import seed_membership_policies
 from app.modules.quotas.admin_router import router as quotas_admin_router
+from app.modules.quotas.admin_router import user_router as user_quotas_router
 from app.modules.reader.router import router as reader_router
 from app.modules.runtime_config.router import router as runtime_config_router
 from app.modules.scraping.router import router as scraping_router
@@ -64,6 +65,7 @@ def _register_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(llm_admin_router, prefix=api_prefix)
     app.include_router(membership_admin_router, prefix=api_prefix)
     app.include_router(quotas_admin_router, prefix=api_prefix)
+    app.include_router(user_quotas_router, prefix=api_prefix)
     app.include_router(runtime_config_router, prefix=api_prefix)
     app.include_router(admin_router, prefix=api_prefix)
 

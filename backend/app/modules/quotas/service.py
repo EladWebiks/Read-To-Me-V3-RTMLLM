@@ -155,6 +155,52 @@ class QuotaService:
         )
         return saved
 
+    async def user_quotas(
+        self, user_id: UUID
+    ) -> tuple[Membership, dict[str, float], list[UserQuotaOverride]]:
+        """(membership, sparse tier limits, override rows) for the admin dialog."""
+        user = await UserService(self._session).get_by_id(user_id)  # 404s unknown ids
+        tier_rows = await self._repo.list_for_membership(user.membership.value)
+        tier_limits = {row.quota_kind: row.limit_value for row in tier_rows}
+        overrides = await self._repo.list_overrides_for_user(user_id)
+        return user.membership, tier_limits, overrides
+
+    async def set_user_quota(
+        self, user_id: UUID, kind: QuotaKind, limit_value: float, *, actor_id: UUID
+    ) -> UserQuotaOverride:
+        """Set or replace this user's override for one kind."""
+        await UserService(self._session).get_by_id(user_id)
+        row = await self._repo.get_override(user_id, kind.value)
+        if row is None:
+            row = UserQuotaOverride(
+                user_id=user_id, quota_kind=kind.value, limit_value=limit_value
+            )
+            self._repo.add(row)
+        else:
+            row.limit_value = limit_value
+        saved = await self._repo.save(row)
+        logger.info(
+            "user quota override set",
+            extra={
+                "user_id": str(user_id),
+                "kind": kind.value,
+                "limit": limit_value,
+                "actor": str(actor_id),
+            },
+        )
+        return saved
+
+    async def clear_user_quota(self, user_id: UUID, kind: QuotaKind, *, actor_id: UUID) -> None:
+        """Drop this user's override; their tier limit applies again."""
+        row = await self._repo.get_override(user_id, kind.value)
+        if row is None:
+            raise QuotaRuleNotFoundError(str(user_id), kind.value)
+        await self._repo.delete(row)
+        logger.info(
+            "user quota override cleared",
+            extra={"user_id": str(user_id), "kind": kind.value, "actor": str(actor_id)},
+        )
+
     async def clear_quota(
         self, membership: Membership, kind: QuotaKind, *, actor_id: UUID
     ) -> None:

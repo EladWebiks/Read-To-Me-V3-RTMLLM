@@ -38,6 +38,25 @@ class MembershipQuotasResponse(BaseModel):
     quotas: list[MembershipQuotaRead]
 
 
+class UserQuotaOverrideRead(BaseModel):
+    """One per-user override row (absent kind = the tier limit applies)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    quota_kind: QuotaKind
+    limit_value: float
+    updated_at: datetime
+
+
+class UserQuotasResponse(BaseModel):
+    """Registry + the user's tier limits (sparse) + their override rows."""
+
+    membership: Membership
+    kinds: list[QuotaKindInfo]
+    tier_limits: dict[str, float]
+    overrides: list[UserQuotaOverrideRead]
+
+
 class QuotaLimitWrite(BaseModel):
     """Body of a quota upsert; a zero/negative limit would block everything."""
 

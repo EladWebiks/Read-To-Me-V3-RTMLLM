@@ -1,8 +1,14 @@
-"""Admin CRUD for quota rules. Set/clear pattern mirrors runtime_config."""
+"""Admin CRUD for quota rules. Set/clear pattern mirrors runtime_config.
+
+Two routers: tier rules under /admin/membership-quotas and per-user
+overrides under /admin/users/{user_id}/quotas (an override wins over the
+tier rule for its kind, looser or tighter).
+"""
 
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +20,8 @@ from app.modules.quotas.schemas import (
     MembershipQuotasResponse,
     QuotaKindInfo,
     QuotaLimitWrite,
+    UserQuotaOverrideRead,
+    UserQuotasResponse,
 )
 from app.modules.quotas.service import QuotaService
 from app.modules.users.membership import Membership
@@ -64,3 +72,49 @@ async def delete_quota(
 ) -> None:
     """Remove one rule; that (membership, kind) becomes unlimited again."""
     await service.clear_quota(membership, kind, actor_id=admin.id)
+
+
+user_router = APIRouter(prefix="/admin/users", tags=["admin"])
+
+
+@user_router.get("/{user_id}/quotas")
+async def get_user_quotas(
+    user_id: UUID,
+    _admin: Annotated[UserRead, Depends(require_admin)],
+    service: Annotated[QuotaService, Depends(_service)],
+) -> UserQuotasResponse:
+    """Registry + tier limits + this user's override rows."""
+    membership, tier_limits, overrides = await service.user_quotas(user_id)
+    return UserQuotasResponse(
+        membership=membership,
+        kinds=[
+            QuotaKindInfo(kind=kind, label=m.label, unit=m.unit, window=m.window)
+            for kind, m in KIND_REGISTRY.items()
+        ],
+        tier_limits=tier_limits,
+        overrides=[UserQuotaOverrideRead.model_validate(row) for row in overrides],
+    )
+
+
+@user_router.put("/{user_id}/quotas/{kind}")
+async def put_user_quota(
+    user_id: UUID,
+    kind: QuotaKind,
+    body: QuotaLimitWrite,
+    admin: Annotated[UserRead, Depends(require_admin)],
+    service: Annotated[QuotaService, Depends(_service)],
+) -> UserQuotaOverrideRead:
+    """Set or replace this user's override for one kind."""
+    row = await service.set_user_quota(user_id, kind, body.limit_value, actor_id=admin.id)
+    return UserQuotaOverrideRead.model_validate(row)
+
+
+@user_router.delete("/{user_id}/quotas/{kind}", status_code=204)
+async def delete_user_quota(
+    user_id: UUID,
+    kind: QuotaKind,
+    admin: Annotated[UserRead, Depends(require_admin)],
+    service: Annotated[QuotaService, Depends(_service)],
+) -> None:
+    """Drop this user's override; their tier limit applies again."""
+    await service.clear_user_quota(user_id, kind, actor_id=admin.id)
