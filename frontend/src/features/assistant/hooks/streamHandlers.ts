@@ -6,6 +6,7 @@ import type {
   ClientAction,
   ConfirmationPayload,
 } from '../api/chatApi'
+import { chatErrorMessage } from '../logic/errorCopy'
 import {
   appendChoice,
   appendConfirmation,
@@ -73,9 +74,9 @@ export function buildStreamHandlers(
         prev.map((m) => (m.id === assistantId ? { ...m, id: messageId } : m)),
       )
     },
-    onError: (detail) => {
+    onError: (detail, code, resetsAt) => {
       setLiveStatus(null)
-      setError(detail)
+      setError(chatErrorMessage(detail, code, resetsAt))
     },
   }
 }
