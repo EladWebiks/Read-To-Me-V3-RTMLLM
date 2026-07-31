@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.users.membership import Membership
 from app.modules.users.models import User
 
 
@@ -117,6 +118,14 @@ class UserRepository:
         stmt = select(User.id, User.username).where(User.id.in_(user_ids))
         rows = (await self._session.execute(stmt)).all()
         return {row[0]: row[1] for row in rows}
+
+    async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, Membership]:
+        """ids -> membership tier, soft-deleted included (attribution)."""
+        if not user_ids:
+            return {}
+        stmt = select(User.id, User.membership).where(User.id.in_(user_ids))
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: Membership(row[1]) for row in rows}
 
     async def count_active_admins(self) -> int:
         """Non-deleted users with the admin flag."""

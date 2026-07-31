@@ -17,6 +17,15 @@ class Page[ItemT](BaseModel):
 
 
 class AdminUserUsageRead(UserUsageRead):
-    """Per-user usage row + username resolved by the admin router."""
+    """Per-user usage row + identity/quota columns resolved by the admin router.
+
+    month_* cover the CURRENT UTC calendar month regardless of the selected
+    period. *_limit fields: None = unlimited (no membership_quotas rule).
+    """
 
     username: str | None = None
+    membership: str | None = None
+    month_tokens: int = 0
+    month_cost: float = 0.0
+    llm_tokens_limit: float | None = None
+    llm_cost_limit: float | None = None

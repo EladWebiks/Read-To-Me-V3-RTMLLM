@@ -362,6 +362,15 @@ class LlmService:
         )
         return [UserUsageRead(**asdict(row)) for row in rows], total
 
+    async def usage_for_users_admin(
+        self, user_ids: list[UUID], *, period_start: datetime, period_end: datetime
+    ) -> dict[UUID, UserUsageRead]:
+        """Backoffice: per-user totals for a fixed id set (quota column)."""
+        totals = await self._repo.usage_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+        return {uid: UserUsageRead(user_id=uid, **asdict(t)) for uid, t in totals.items()}
+
     async def list_executions_admin(
         self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
     ) -> tuple[list[LlmExecutionRead], int]:

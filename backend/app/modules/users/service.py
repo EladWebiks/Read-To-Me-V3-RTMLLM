@@ -18,6 +18,7 @@ from app.modules.users.exceptions import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
+from app.modules.users.membership import Membership
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import UserAdminPatch, UserAdminRead, UserCreate, UserRead
@@ -235,6 +236,10 @@ class UserService:
     async def usernames_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """Backoffice attribution: ids → usernames, soft-deleted included."""
         return await self._repo.usernames_for_ids(user_ids)
+
+    async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, Membership]:
+        """Backoffice attribution: ids → membership tiers."""
+        return await self._repo.memberships_for_ids(user_ids)
 
     async def update_user_admin(
         self, *, actor_id: UUID, user_id: UUID, patch: UserAdminPatch

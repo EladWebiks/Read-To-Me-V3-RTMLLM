@@ -334,6 +334,30 @@ class LlmRepository:
         ]
         return items, total
 
+    async def usage_for_users(
+        self,
+        user_ids: list[uuid.UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[uuid.UUID, UsageTotals]:
+        """Per-user aggregates for a fixed id set (backoffice quota column)."""
+        if not user_ids:
+            return {}
+        stmt = (
+            select(LlmExecution.user_id, *self._usage_sums())
+            .where(
+                LlmExecution.user_id.in_(user_ids),
+                self._in_period(period_start, period_end),
+            )
+            .group_by(LlmExecution.user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {
+            row[0]: UsageTotals(int(row[1]), int(row[2]), float(row[3]), int(row[4]))
+            for row in rows
+        }
+
     async def list_executions_admin(
         self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
     ) -> tuple[list[LlmExecution], int]:
