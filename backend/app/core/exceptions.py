@@ -43,6 +43,7 @@ from app.modules.llm.exceptions import (
     LlmTimeoutError,
     NoCandidateModelError,
 )
+from app.modules.quotas.exceptions import QuotaExceededError, QuotaRuleNotFoundError
 from app.modules.reader.exceptions import ProgressNotFoundError
 from app.modules.runtime_config.exceptions import (
     OverrideNotFoundError,
@@ -78,6 +79,23 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_llm_handlers(app)
     _register_llm_catalog_handlers(app)
     _register_runtime_config_handlers(app)
+    _register_quota_handlers(app)
+
+
+def _register_quota_handlers(app: FastAPI) -> None:
+    @app.exception_handler(QuotaExceededError)
+    async def _quota_exceeded(
+        _request: Request,
+        exc: QuotaExceededError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+    @app.exception_handler(QuotaRuleNotFoundError)
+    async def _quota_rule_missing(
+        _request: Request,
+        _exc: QuotaRuleNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Quota rule not found"})
 
 
 def _register_auth_handlers(app: FastAPI) -> None:

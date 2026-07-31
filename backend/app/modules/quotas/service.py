@@ -1,0 +1,106 @@
+"""Quota limits resolution and enforcement (caller-metered).
+
+This module is a LEAF: it imports users (identity) and its own code only.
+Callers (orchestration, downloads, scraping, imports) measure their own
+usage via their own repositories and hand the number to enforce() — that is
+what lets domain services enforce quotas without importing the orchestrator.
+Admins are exempt from ALL quota kinds here, in one place (spec §3.4);
+nobody is exempt from per-turn caps (those live in orchestration).
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.quotas.exceptions import QuotaExceededError
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.repository import MembershipQuotaRepository
+from app.modules.users.schemas import UserRead
+from app.modules.users.service import UserService
+
+logger = logging.getLogger(__name__)
+
+_DECEMBER = 12
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaLimits:
+    """Resolved limits for one user. Missing kind = unlimited."""
+
+    exempt: bool
+    values: Mapping[QuotaKind, float]
+
+    def limit(self, kind: QuotaKind) -> float | None:
+        return None if self.exempt else self.values.get(kind)
+
+    def any_limited(self, *kinds: QuotaKind) -> bool:
+        return any(self.limit(kind) is not None for kind in kinds)
+
+
+class QuotaService:
+    """Resolve per-tier quota limits and compare metered usage against them."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._repo = MembershipQuotaRepository(session)
+
+    async def limits_for(self, user: UserRead) -> QuotaLimits:
+        """Limits for a user object (orchestration path). Admins exempt."""
+        if user.is_admin:
+            return QuotaLimits(exempt=True, values={})
+        rows = await self._repo.list_for_membership(user.membership.value)
+        values: dict[QuotaKind, float] = {}
+        for row in rows:
+            try:
+                values[QuotaKind(row.quota_kind)] = row.limit_value
+            except ValueError:
+                logger.warning("ignoring unknown quota kind row", extra={"kind": row.quota_kind})
+        return QuotaLimits(exempt=False, values=values)
+
+    async def limits_for_user_id(self, user_id: UUID) -> QuotaLimits:
+        """Limits for a bare user id (domain-service path: they carry no UserRead)."""
+        user = await UserService(self._session).get_by_id(user_id)
+        return await self.limits_for(user)
+
+    @staticmethod
+    def current_month_window(now: datetime) -> tuple[datetime, datetime]:
+        """[first-of-month, first-of-next-month) in UTC.
+
+        Calendar months only; Stripe billing anchors are out of scope (§3.6).
+        """
+        moment = now.astimezone(UTC)
+        start = datetime(moment.year, moment.month, 1, tzinfo=UTC)
+        if moment.month == _DECEMBER:
+            return start, datetime(moment.year + 1, 1, 1, tzinfo=UTC)
+        return start, datetime(moment.year, moment.month + 1, 1, tzinfo=UTC)
+
+    @staticmethod
+    def enforce(
+        kind: QuotaKind,
+        used: float,
+        limits: QuotaLimits,
+        *,
+        resets_at: datetime | None,
+        user_id: UUID | None = None,
+    ) -> None:
+        """Raise QuotaExceededError when used >= limit. No-op if unlimited/exempt."""
+        limit = limits.limit(kind)
+        if limit is None or used < limit:
+            return
+        logger.info(
+            "quota exceeded",
+            extra={
+                "user_id": str(user_id) if user_id else None,
+                "kind": kind.value,
+                "used": used,
+                "limit": limit,
+                "resets_at": resets_at.isoformat() if resets_at else None,
+            },
+        )
+        raise QuotaExceededError(kind, limit=limit, used=used, resets_at=resets_at)
