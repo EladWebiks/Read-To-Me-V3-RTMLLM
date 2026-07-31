@@ -33,6 +33,7 @@ from app.modules.orchestration.exceptions import BudgetExceededError, Orchestrat
 from app.modules.orchestration.hitl_pause import (
     FreezeRequest,
     apply_budget_snapshot,
+    budget_from_snapshot,
     confirmation_event_data,
     freeze_pending,
     is_expired,
@@ -227,10 +228,7 @@ class OrchestrationService:
         row = await self._require_pending(user.id, conversation_id, call_id)
         messages, usage, budget_raw, hitl_rounds, provider_call_id = restore_snapshot(row)
         ctx = self._make_ctx(user.id, conversation_id, snapshot_run_id(row) or uuid4())
-        budget = RunBudget.from_policy(
-            await PolicyService(self._session, self._settings).resolve(user)
-        )
-        apply_budget_snapshot(budget, budget_raw)
+        budget = await self._restore_budget(user, budget_raw)
         tool = self._registry.resolve(row.tool_name)
         call = ToolCall(
             id=provider_call_id or str(row.id),
@@ -253,6 +251,21 @@ class OrchestrationService:
                 return
         async for event in self._loop(ctx, messages, budget, usage, hitl_rounds):
             yield event
+
+    async def _restore_budget(
+        self,
+        user: UserRead,
+        budget_raw: dict[str, Any],
+    ) -> RunBudget:
+        """Prefer caps frozen at turn start; legacy snapshots re-resolve once."""
+        frozen = budget_from_snapshot(budget_raw)
+        if frozen is not None:
+            return frozen
+        budget = RunBudget.from_policy(
+            await PolicyService(self._session, self._settings).resolve(user)
+        )
+        apply_budget_snapshot(budget, budget_raw)
+        return budget
 
     async def _deny_pending(
         self,
