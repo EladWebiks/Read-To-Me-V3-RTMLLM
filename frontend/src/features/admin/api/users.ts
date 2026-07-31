@@ -15,9 +15,6 @@ export type AdminUser = {
 
 export type AdminUserPatch = { is_admin?: boolean; membership?: string }
 
-/** Mirrors the Membership enum; extend when tiers ship. */
-export const MEMBERSHIPS = ['free'] as const
-
 export function fetchAdminUsers(limit: number, offset: number): Promise<Page<AdminUser>> {
   return apiGet(`/api/admin/users?limit=${limit}&offset=${offset}`)
 }

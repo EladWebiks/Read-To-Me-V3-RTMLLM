@@ -1,7 +1,13 @@
 import type { AdminUser } from '@/features/admin/api/users'
 import { UserRow } from './UserRow'
 
-export function UsersTable({ users }: { users: AdminUser[] }) {
+export function UsersTable({
+  users,
+  memberships,
+}: {
+  users: AdminUser[]
+  memberships: string[]
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -18,7 +24,7 @@ export function UsersTable({ users }: { users: AdminUser[] }) {
         </thead>
         <tbody>
           {users.map((user) => (
-            <UserRow key={user.id} user={user} />
+            <UserRow key={user.id} user={user} memberships={memberships} />
           ))}
         </tbody>
       </table>

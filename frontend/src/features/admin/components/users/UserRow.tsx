@@ -1,8 +1,14 @@
-import { MEMBERSHIPS, type AdminUser } from '@/features/admin/api/users'
+import type { AdminUser } from '@/features/admin/api/users'
 import { usePatchUser } from '@/features/admin/hooks/useAdminUsers'
 import { UserRowActions } from './UserRowActions'
 
-export function UserRow({ user }: { user: AdminUser }) {
+export function UserRow({
+  user,
+  memberships,
+}: {
+  user: AdminUser
+  memberships: string[]
+}) {
   const patch = usePatchUser()
   const deleted = user.deleted_at !== null
 
@@ -42,7 +48,8 @@ export function UserRow({ user }: { user: AdminUser }) {
             patch.mutate({ id: user.id, body: { membership: event.target.value } })
           }
         >
-          {MEMBERSHIPS.map((tier) => (
+          {/* While the registry loads, keep the current tier so it never blanks. */}
+          {(memberships.length > 0 ? memberships : [user.membership]).map((tier) => (
             <option key={tier} value={tier}>
               {tier}
             </option>
