@@ -11,7 +11,7 @@ nobody is exempt from per-turn caps (those live in orchestration).
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.quotas.exceptions import QuotaExceededError, QuotaRuleNotFoundError
 from app.modules.quotas.kinds import QuotaKind
-from app.modules.quotas.models import MembershipQuota
+from app.modules.quotas.models import MembershipQuota, UserQuotaOverride
 from app.modules.quotas.repository import MembershipQuotaRepository
 from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
@@ -29,6 +29,19 @@ from app.modules.users.service import UserService
 logger = logging.getLogger(__name__)
 
 _DECEMBER = 12
+
+
+def _values_from_rows(
+    rows: Sequence[MembershipQuota] | Sequence[UserQuotaOverride],
+) -> dict[QuotaKind, float]:
+    """Keyed rows -> limits, skipping unknown kinds (fail-open, warned)."""
+    values: dict[QuotaKind, float] = {}
+    for row in rows:
+        try:
+            values[QuotaKind(row.quota_kind)] = row.limit_value
+        except ValueError:
+            logger.warning("ignoring unknown quota kind row", extra={"kind": row.quota_kind})
+    return values
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,16 +66,16 @@ class QuotaService:
         self._repo = MembershipQuotaRepository(session)
 
     async def limits_for(self, user: UserRead) -> QuotaLimits:
-        """Limits for a user object (orchestration path). Admins exempt."""
+        """Admin exempt > user override > tier row > unlimited.
+
+        Specificity wins: an override replaces the tier limit for its kind
+        whether it is looser or tighter. Read fresh per check — no cache, so
+        an admin edit applies on the very next attempt.
+        """
         if user.is_admin:
             return QuotaLimits(exempt=True, values={})
-        rows = await self._repo.list_for_membership(user.membership.value)
-        values: dict[QuotaKind, float] = {}
-        for row in rows:
-            try:
-                values[QuotaKind(row.quota_kind)] = row.limit_value
-            except ValueError:
-                logger.warning("ignoring unknown quota kind row", extra={"kind": row.quota_kind})
+        values = _values_from_rows(await self._repo.list_for_membership(user.membership.value))
+        values |= _values_from_rows(await self._repo.list_overrides_for_user(user.id))
         return QuotaLimits(exempt=False, values=values)
 
     async def limits_for_user_id(self, user_id: UUID) -> QuotaLimits:

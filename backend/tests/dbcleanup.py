@@ -28,6 +28,8 @@ CLEAR_ORDER = (
     # Usage rollup (Part D): both reference users; the llm_*_daily tables do not.
     "usage_daily",
     "quota_rejections",
+    # Per-user quota overrides reference users; membership_quotas do not.
+    "user_quota_overrides",
     "users",
 )
 
