@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-31-tier-usage-management.md` §3.2 (meters), §3.5 (enforcement points), §4.3.
 
-**Sequencing:** **Strictly after Part B Tasks 1–2 are merged** (quotas module + admin API). Verify: `backend/app/modules/quotas/service.py` exists and `GET /api/admin/membership-quotas` lists all six kinds. Tasks 1–4 here are independent of each other (any order); Task 5 needs 1–4.
+**Sequencing:** **Strictly after Part B Tasks 1–2 are merged** (quotas module + admin API). Verify: `backend/app/modules/quotas/service.py` exists and `GET /api/admin/membership-quotas` lists all six kinds. Tasks 1, 3, and 4 are independent of each other (any order); Task 2 builds on Task 1 (`deleted_at` + `_enforce_quotas`); Task 5 needs 1–4.
 
 ## Global Constraints
 
