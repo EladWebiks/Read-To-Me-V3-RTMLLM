@@ -10,6 +10,7 @@ def import_all_models() -> None:
     from app.modules.chapters import models as chapters_models
     from app.modules.discovery import models as discovery_models
     from app.modules.downloads import models as downloads_models
+    from app.modules.imports import models as imports_models
     from app.modules.library import models as library_models
     from app.modules.llm import models as llm_models
     from app.modules.orchestration import models as orchestration_models
@@ -25,6 +26,7 @@ def import_all_models() -> None:
         chapters_models,
         discovery_models,
         downloads_models,
+        imports_models,
         library_models,
         llm_models,
         orchestration_models,

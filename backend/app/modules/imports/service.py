@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.imports import chunk_store
 from app.modules.imports.exceptions import ImportJobNotFoundError, InvalidEpubUploadError
 from app.modules.imports.jobs import ImportRequest, cancel_job, get_job, start_job, to_progress
+from app.modules.imports.repository import EpubImportRepository
 from app.modules.imports.schemas import (
     EpubChunkAccepted,
     EpubImportStart,
@@ -15,6 +19,8 @@ from app.modules.imports.schemas import (
     EpubUploadPrepared,
     ImportProgress,
 )
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaService
 
 _MAX_FILES = 20
 _MAX_BYTES_PER_FILE = 80 * 1024 * 1024
@@ -27,6 +33,10 @@ def max_bytes_per_file() -> int:
 
 class ImportService:
     """Owns EPUB import job lifecycle for a user."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._repo = EpubImportRepository(session)
 
     def prepare_upload(self, user_id: UUID, body: EpubUploadPrepare) -> EpubUploadPrepared:
         """Reserve staging space for a chunked EPUB upload."""
@@ -84,15 +94,28 @@ class ImportService:
         author: str | None,
         starting_chapter: int,
     ) -> ImportProgress:
-        """Validate payloads and start a background import job."""
+        """Check quota, validate payloads and start a background import job."""
+        await self._enforce_quota(user_id)
         self._validate(file_payloads, starting_chapter)
+        record = await self._repo.add(user_id)
+        await self._session.commit()
         req = ImportRequest(
             user_id=user_id,
             title=title,
             author=author,
             starting_chapter=starting_chapter,
+            record_id=record.id,
         )
         return await start_job(req, file_payloads)
+
+    async def _enforce_quota(self, user_id: UUID) -> None:
+        """Tier quota gate for new imports; completed imports count (spec §3.5)."""
+        limits = await QuotaService(self._session).limits_for_user_id(user_id)
+        if not limits.any_limited(QuotaKind.EPUB_IMPORTS):
+            return
+        start, end = QuotaService.current_month_window(datetime.now(UTC))
+        used = await self._repo.completed_in_period(user_id, period_start=start, period_end=end)
+        QuotaService.enforce(QuotaKind.EPUB_IMPORTS, used, limits, resets_at=end, user_id=user_id)
 
     def get(self, user_id: UUID, job_id: str) -> ImportProgress:
         """Poll job progress."""

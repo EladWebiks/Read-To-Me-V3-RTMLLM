@@ -3,8 +3,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_db
 from app.modules.imports.schemas import (
     EpubChunkAccepted,
     EpubImportStart,
@@ -19,8 +20,8 @@ from app.modules.users.schemas import UserRead
 router = APIRouter(prefix="/import", tags=["import"])
 
 
-def _imports() -> ImportService:
-    return ImportService()
+def _imports(session: Annotated[AsyncSession, Depends(get_db)]) -> ImportService:
+    return ImportService(session)
 
 
 @router.post("/epub/uploads", response_model=EpubUploadPrepared)
