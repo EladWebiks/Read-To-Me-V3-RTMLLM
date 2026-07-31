@@ -19,6 +19,9 @@ export type UserUsage = UsageBreakdown & {
   month_cost: number
   llm_tokens_limit: number | null
   llm_cost_limit: number | null
+  month_audio_chapters: number
+  month_scrape_chapters: number
+  month_epub_imports: number
 }
 
 export type UsageOverview = UsageBreakdown & {

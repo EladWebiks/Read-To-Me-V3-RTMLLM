@@ -108,6 +108,18 @@ class ImportService:
         )
         return await start_job(req, file_payloads)
 
+    async def month_imports_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Backoffice: per-user completed EPUB imports in a window."""
+        return await self._repo.completed_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+
     async def _enforce_quota(self, user_id: UUID) -> None:
         """Tier quota gate for new imports; completed imports count (spec §3.5)."""
         limits = await QuotaService(self._session).limits_for_user_id(user_id)

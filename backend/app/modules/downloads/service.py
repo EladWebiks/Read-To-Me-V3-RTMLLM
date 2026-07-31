@@ -92,6 +92,18 @@ class DownloadService:
             QuotaKind.AUDIO_CHAPTERS, used, limits, resets_at=end, user_id=user_id
         )
 
+    async def month_chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Backoffice: per-user audio chapters in a window (admin router composes services)."""
+        return await self._repo.chapters_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+
     async def create_single_chapter(
         self,
         user_id: UUID,

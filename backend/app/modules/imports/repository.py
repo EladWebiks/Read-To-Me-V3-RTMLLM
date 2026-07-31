@@ -56,3 +56,26 @@ class EpubImportRepository:
             EpubImportRecord.created_at < period_end,
         )
         return int((await self._session.execute(stmt)).scalar_one())
+
+    async def completed_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Per-user completed-import counts for the backoffice usage table."""
+        if not user_ids:
+            return {}
+        stmt = (
+            select(EpubImportRecord.user_id, func.count(EpubImportRecord.id))
+            .where(
+                EpubImportRecord.user_id.in_(user_ids),
+                EpubImportRecord.status == "completed",
+                EpubImportRecord.created_at >= period_start,
+                EpubImportRecord.created_at < period_end,
+            )
+            .group_by(EpubImportRecord.user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: int(row[1]) for row in rows}

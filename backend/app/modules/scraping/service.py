@@ -109,6 +109,18 @@ class ScrapingService:
             QuotaKind.SCRAPE_CHAPTERS, used, limits, resets_at=end, user_id=user_id
         )
 
+    async def month_chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Backoffice: per-user scraped chapters in a window."""
+        return await self._repo.chapters_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+
     async def get_job(self, user_id: UUID, job_id: UUID) -> ScrapeJobRead:
         job = await self._require(user_id, job_id)
         return await self._read_with_title(job)

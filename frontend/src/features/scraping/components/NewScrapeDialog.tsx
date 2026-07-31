@@ -1,10 +1,18 @@
 import { type FormEvent, useState } from 'react'
+import { ApiError } from '@/shared/lib/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui'
 import { useCreateScrapeJob } from '../hooks'
 import { ScrapeDialogActions } from './ScrapeDialogActions'
 import { ScrapeDialogFields } from './ScrapeDialogFields'
 
 type Props = { open: boolean; onClose: () => void }
+
+/** Show the server's own copy (quota 429s, unsupported source) when we have it. */
+function scrapeErrorMessage(error: unknown): string | null {
+  if (error === null) return null
+  if (error instanceof ApiError) return error.message
+  return 'Could not start scrape — check the URL.'
+}
 
 export function NewScrapeDialog({ open, onClose }: Props) {
   const form = useScrapeForm(onClose)
@@ -16,11 +24,7 @@ export function NewScrapeDialog({ open, onClose }: Props) {
             <DialogTitle>Scrape New Book</DialogTitle>
           </DialogHeader>
           <ScrapeDialogFields {...form.fields} />
-          {form.error ? (
-            <p className="text-sm text-destructive">
-              Could not start scrape — check the URL.
-            </p>
-          ) : null}
+          {form.error ? <p className="text-sm text-destructive">{form.error}</p> : null}
           <ScrapeDialogActions
             pending={form.pending}
             canSubmit={form.canSubmit}
@@ -50,7 +54,7 @@ function useScrapeForm(onClose: () => void) {
   }
   return {
     pending: create.isPending,
-    error: create.isError,
+    error: scrapeErrorMessage(create.error),
     canSubmit: Boolean(url.trim()),
     fields: {
       url,

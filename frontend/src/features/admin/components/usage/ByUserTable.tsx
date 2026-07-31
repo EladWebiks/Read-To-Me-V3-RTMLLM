@@ -12,6 +12,11 @@ function quotaLabel(row: UserUsage): string {
   return `${tokens} tok · ${cost}`
 }
 
+/** Non-LLM work this month: Audio chapters · Scraped chapters · EPUB imports. */
+function jobsLabel(row: UserUsage): string {
+  return `A:${row.month_audio_chapters} · S:${row.month_scrape_chapters} · I:${row.month_epub_imports}`
+}
+
 export function ByUserTable({ period }: { period: Period }) {
   const page = usePageState(25)
   const { data } = useUsageByUser(period, page.limit, page.offset)
@@ -31,6 +36,7 @@ export function ByUserTable({ period }: { period: Period }) {
               <th className="px-2 py-1.5 font-medium">Cost</th>
               <th className="px-2 py-1.5 font-medium">This month</th>
               <th className="px-2 py-1.5 font-medium">Quota</th>
+              <th className="px-2 py-1.5 font-medium">Jobs (month)</th>
               <th className="px-2 py-1.5 font-medium">Execs</th>
             </tr>
           </thead>
@@ -45,6 +51,7 @@ export function ByUserTable({ period }: { period: Period }) {
                   {row.month_tokens.toLocaleString()} tok · ${row.month_cost.toFixed(4)}
                 </td>
                 <td className="px-2 py-1.5">{quotaLabel(row)}</td>
+                <td className="px-2 py-1.5">{jobsLabel(row)}</td>
                 <td className="px-2 py-1.5">{row.execution_count}</td>
               </tr>
             ))}

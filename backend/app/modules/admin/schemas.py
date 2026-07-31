@@ -29,3 +29,6 @@ class AdminUserUsageRead(UserUsageRead):
     month_cost: float = 0.0
     llm_tokens_limit: float | None = None
     llm_cost_limit: float | None = None
+    month_audio_chapters: int = 0
+    month_scrape_chapters: int = 0
+    month_epub_imports: int = 0

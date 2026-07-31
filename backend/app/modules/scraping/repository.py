@@ -63,6 +63,31 @@ class ScrapingRepository:
         )
         return int((await self._session.execute(stmt)).scalar_one())
 
+    async def chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Per-user month chapter totals for the backoffice usage table."""
+        if not user_ids:
+            return {}
+        stmt = (
+            select(
+                ScrapingJob.user_id,
+                func.coalesce(func.sum(ScrapingJob.chapters_done), 0),
+            )
+            .where(
+                ScrapingJob.user_id.in_(user_ids),
+                ScrapingJob.created_at >= period_start,
+                ScrapingJob.created_at < period_end,
+            )
+            .group_by(ScrapingJob.user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: int(row[1]) for row in rows}
+
     async def get_job(self, job_id: UUID) -> ScrapingJob | None:
         stmt = select(ScrapingJob).where(ScrapingJob.id == job_id)
         result = await self._session.execute(stmt)

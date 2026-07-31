@@ -146,6 +146,34 @@ class DownloadRepository:
         )
         return int((await self._session.execute(stmt)).scalar_one())
 
+    async def chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Per-user month chapter totals for the backoffice usage table.
+
+        Same semantics as chapters_in_period: soft-deleted rows included.
+        """
+        if not user_ids:
+            return {}
+        stmt = (
+            select(
+                DownloadJob.user_id,
+                func.coalesce(func.sum(DownloadJob.total_count), 0),
+            )
+            .where(
+                DownloadJob.user_id.in_(user_ids),
+                DownloadJob.created_at >= period_start,
+                DownloadJob.created_at < period_end,
+            )
+            .group_by(DownloadJob.user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: int(row[1]) for row in rows}
+
     async def stored_bytes(self, user_id: UUID) -> int:
         """Currently retained MinIO bytes: complete, non-expired, non-deleted.
 
