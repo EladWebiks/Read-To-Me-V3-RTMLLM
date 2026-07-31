@@ -11,12 +11,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.modules.orchestration.models import MembershipPolicy
 from app.modules.orchestration.repository import MembershipPolicyRepository
+from app.modules.orchestration.schemas import MembershipPolicyPatch
+from app.modules.users.membership import Membership
 from app.modules.users.schemas import UserRead
 
 logger = logging.getLogger(__name__)
@@ -87,6 +90,41 @@ class PolicyService:
             },
         )
         return policy
+
+    async def list_policies(self) -> list[MembershipPolicy]:
+        """All tier rows, ordered by membership."""
+        return await self._repo.list_all()
+
+    def inherited_defaults(self) -> dict[str, float | int]:
+        """Current effective per-turn values (what NULL inherits right now)."""
+        runtime = self._settings.llm_runtime
+        return {field: getattr(runtime, field) for field in _PER_TURN_FIELDS}
+
+    async def patch_policy(
+        self,
+        membership: Membership,
+        patch: MembershipPolicyPatch,
+        *,
+        actor_id: UUID,
+    ) -> MembershipPolicy:
+        """Apply supplied fields (explicit null clears). Self-heals a missing row."""
+        row = await self._repo.get_by_membership(membership.value)
+        if row is None:
+            row = MembershipPolicy(membership=membership.value)
+            self._repo.add(row)
+        changes = patch.model_dump(exclude_unset=True)
+        for field, value in changes.items():
+            setattr(row, field, value)
+        saved = await self._repo.save(row)
+        logger.info(
+            "membership policy updated",
+            extra={
+                "membership": membership.value,
+                "actor": str(actor_id),
+                "changes": changes,
+            },
+        )
+        return saved
 
     def _per_turn_caps(self, row: MembershipPolicy | None) -> tuple[dict[str, Any], list[str]]:
         """Collapse tier row over effective runtime settings. NULL = inherit."""

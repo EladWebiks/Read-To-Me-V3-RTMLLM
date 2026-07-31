@@ -24,6 +24,9 @@ from app.modules.llm.admin_router import router as llm_admin_router
 from app.modules.llm.router import chat_router
 from app.modules.llm.router import router as llm_router
 from app.modules.llm.seed import seed_llm_models
+from app.modules.orchestration.admin_router import (
+    router as membership_admin_router,
+)
 from app.modules.orchestration.seed import seed_membership_policies
 from app.modules.reader.router import router as reader_router
 from app.modules.runtime_config.router import router as runtime_config_router
@@ -56,6 +59,7 @@ def _register_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(llm_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(llm_admin_router, prefix=api_prefix)
+    app.include_router(membership_admin_router, prefix=api_prefix)
     app.include_router(runtime_config_router, prefix=api_prefix)
     app.include_router(admin_router, prefix=api_prefix)
 
