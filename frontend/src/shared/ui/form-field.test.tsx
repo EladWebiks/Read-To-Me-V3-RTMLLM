@@ -4,6 +4,7 @@ import { FormError } from './form-error'
 import { FormField } from './form-field'
 import { Input } from './input'
 import { Select } from './select'
+import { SelectField } from './select-field'
 import { TextField } from './text-field'
 
 // vitest runs with globals:false, so testing-library's auto-cleanup is not registered.
@@ -181,5 +182,89 @@ describe('Select size', () => {
     expect(select.getAttribute('name')).toBe('tier')
     expect(select.hasAttribute('disabled')).toBe(true)
     expect(select.hasAttribute('required')).toBe(true)
+  })
+})
+
+describe('SelectField', () => {
+  const options = (
+    <>
+      <option value="">Default</option>
+      <option value="edge">Edge</option>
+      <option value="sapi">SAPI</option>
+    </>
+  )
+
+  it('associates the label with the select', () => {
+    render(
+      <SelectField id="v" label="Voice" value="edge" onChange={() => {}}>
+        {options}
+      </SelectField>,
+    )
+    expect(screen.getByLabelText('Voice').tagName).toBe('SELECT')
+  })
+
+  it('renders options and selects the current value', () => {
+    render(
+      <SelectField id="v" label="Voice" value="sapi" onChange={() => {}}>
+        {options}
+      </SelectField>,
+    )
+    const select = screen.getByLabelText('Voice') as HTMLSelectElement
+    expect(screen.getAllByRole('option')).toHaveLength(3)
+    expect(select.value).toBe('sapi')
+  })
+
+  it('wires an error to aria-invalid, aria-describedby and an alert', () => {
+    render(
+      <SelectField id="v" label="Voice" error="Bad" value="" onChange={() => {}}>
+        {options}
+      </SelectField>,
+    )
+    const select = screen.getByLabelText('Voice')
+    expect(select.getAttribute('aria-invalid')).toBe('true')
+    expect(select.getAttribute('aria-describedby')).toBe('v-error')
+    expect(screen.getByRole('alert').id).toBe('v-error')
+  })
+
+  it('lists hint and error ids in aria-describedby, hint first', () => {
+    render(
+      <SelectField id="v" label="Voice" hint="H" error="E" value="" onChange={() => {}}>
+        {options}
+      </SelectField>,
+    )
+    expect(screen.getByLabelText('Voice').getAttribute('aria-describedby')).toBe(
+      'v-hint v-error',
+    )
+    expect(document.getElementById('v-hint')?.textContent).toBe('H')
+  })
+
+  it('adds no aria noise when healthy', () => {
+    render(
+      <SelectField id="v" label="Voice" value="" onChange={() => {}}>
+        {options}
+      </SelectField>,
+    )
+    const select = screen.getByLabelText('Voice')
+    expect(select.getAttribute('aria-invalid')).toBeNull()
+    expect(select.getAttribute('aria-describedby')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('forwards native select props', () => {
+    render(
+      <SelectField
+        id="v"
+        label="Voice"
+        name="voice"
+        disabled
+        value=""
+        onChange={() => {}}
+      >
+        {options}
+      </SelectField>,
+    )
+    const select = screen.getByLabelText('Voice')
+    expect(select.getAttribute('name')).toBe('voice')
+    expect(select.hasAttribute('disabled')).toBe(true)
   })
 })
