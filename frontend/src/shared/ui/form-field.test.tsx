@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { FormError } from './form-error'
 import { FormField } from './form-field'
 import { Input } from './input'
+import { Select } from './select'
 import { TextField } from './text-field'
 
 // vitest runs with globals:false, so testing-library's auto-cleanup is not registered.
@@ -135,5 +136,50 @@ describe('FormField', () => {
     )
     expect(document.getElementById('d-hint')).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
+
+describe('Select size', () => {
+  it('defaults to the standard h-9 style', () => {
+    render(
+      <Select aria-label="standard" value="a" onChange={() => {}}>
+        <option value="a">A</option>
+      </Select>,
+    )
+    const select = screen.getByLabelText('standard')
+    expect(select.tagName).toBe('SELECT')
+    expect(select.className).toContain('h-9')
+    expect(select.className).toContain('w-full')
+  })
+
+  it('sm renders the compact inline style', () => {
+    render(
+      <Select size="sm" aria-label="compact" value="a" onChange={() => {}}>
+        <option value="a">A</option>
+      </Select>,
+    )
+    const className = screen.getByLabelText('compact').className
+    expect(className).toContain('h-7')
+    expect(className).toContain('text-xs')
+    expect(className).not.toContain('w-full') // inline editors size themselves
+  })
+
+  it('forwards native select props', () => {
+    render(
+      <Select
+        aria-label="native"
+        name="tier"
+        disabled
+        required
+        value="a"
+        onChange={() => {}}
+      >
+        <option value="a">A</option>
+      </Select>,
+    )
+    const select = screen.getByLabelText('native')
+    expect(select.getAttribute('name')).toBe('tier')
+    expect(select.hasAttribute('disabled')).toBe(true)
+    expect(select.hasAttribute('required')).toBe(true)
   })
 })
