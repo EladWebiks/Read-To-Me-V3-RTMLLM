@@ -3,7 +3,8 @@
 export type MeterState = 'unlimited' | 'ok' | 'warn' | 'over'
 
 export function meterState(used: number, limit: number | null): MeterState {
-  if (limit === null || limit <= 0) return 'unlimited'
+  if (limit === null) return 'unlimited' // only an ABSENT rule is unlimited
+  if (limit <= 0) return 'over' // a 0 limit is no allowance: already spent
   const ratio = used / limit
   if (ratio >= 1) return 'over'
   if (ratio >= 0.8) return 'warn'
@@ -11,7 +12,8 @@ export function meterState(used: number, limit: number | null): MeterState {
 }
 
 export function meterPercent(used: number, limit: number | null): number {
-  if (limit === null || limit <= 0) return 0
+  if (limit === null) return 0
+  if (limit <= 0) return 100 // guards the 0/0 division too
   return Math.min(100, Math.max(0, (used / limit) * 100))
 }
 

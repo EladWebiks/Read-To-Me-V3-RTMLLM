@@ -57,6 +57,11 @@ class UserQuotasResponse(BaseModel):
 
 
 class QuotaLimitWrite(BaseModel):
-    """Body of a quota upsert; a zero/negative limit would block everything."""
+    """Body of a quota upsert.
 
-    limit_value: float = Field(gt=0)
+    0 is a valid limit meaning "no allowance" (the kind is blocked outright);
+    unlimited is the ABSENCE of a rule, so it is expressed by DELETE, never
+    by writing 0. Negatives are meaningless and rejected.
+    """
+
+    limit_value: float = Field(ge=0)

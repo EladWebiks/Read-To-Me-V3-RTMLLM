@@ -74,6 +74,16 @@ def test_enforce_blocks_at_and_over_never_under() -> None:
 
 
 @pytest.mark.unit
+def test_enforce_blocks_everything_at_a_zero_limit() -> None:
+    """A 0 limit means no allowance at all — the first unit is already over."""
+    limits = QuotaLimits(exempt=False, values={QuotaKind.LLM_TOKENS: 0.0})
+    assert limits.limit(QuotaKind.LLM_TOKENS) == 0.0  # not None: 0 != unlimited
+    assert limits.any_limited(QuotaKind.LLM_TOKENS)
+    with pytest.raises(QuotaExceededError):
+        QuotaService.enforce(QuotaKind.LLM_TOKENS, 0, limits, resets_at=None)
+
+
+@pytest.mark.unit
 def test_enforce_skips_unlimited_and_exempt() -> None:
     QuotaService.enforce(
         QuotaKind.LLM_TOKENS,

@@ -32,7 +32,7 @@ export function QuotaSection({ membership, kinds, rows }: Props) {
 
   return (
     <div className="mt-3 border-t border-border/60 pt-3">
-      <p className="mb-2 text-sm font-medium">Quotas (blank = unlimited)</p>
+      <p className="mb-2 text-sm font-medium">Quotas (blank = unlimited, 0 = blocked)</p>
       <div className="grid gap-2 sm:grid-cols-2">
         {kinds.map((meta) => (
           <label key={meta.kind} className="flex flex-col gap-0.5 text-sm">

@@ -66,11 +66,11 @@ Plus `id` (UUID PK), `membership` (String(32), unique, NOT NULL), `created_at`, 
 | `id` | UUID PK | |
 | `membership` | String(32), NOT NULL | app-validated against the enum |
 | `quota_kind` | String(32), NOT NULL | app-validated against `QuotaKind` |
-| `limit_value` | Float, NOT NULL, > 0 | float64 is exact for ints ≤ 2^53 — fine for tokens/chapters/bytes |
+| `limit_value` | Float, NOT NULL, ≥ 0 | float64 is exact for ints ≤ 2^53 — fine for tokens/chapters/bytes. **0 = no allowance (blocked)**, not unlimited |
 | `created_at` / `updated_at` | | |
 | unique | `(membership, quota_kind)` | |
 
-> **NULL/absence semantics, loud and simple after the amendment:** per-turn columns NULL = inherit; a quota **row absent** = unlimited. There is no nullable quota column anymore, so the old dual-NULL footgun is gone.
+> **NULL/absence semantics, loud and simple after the amendment:** per-turn columns NULL = inherit; a quota **row absent** = unlimited. There is no nullable quota column anymore, so the old dual-NULL footgun is gone. A stored `0` is a real limit — it blocks the kind entirely; unlimited is only ever expressed by deleting the row.
 
 ### 3.2 Quota kinds — registry in code, limits in DB
 

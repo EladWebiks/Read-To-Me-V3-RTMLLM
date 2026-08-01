@@ -5,6 +5,10 @@ describe('meterState', () => {
   it('is unlimited when limit is null', () => {
     expect(meterState(999, null)).toBe('unlimited')
   })
+  it('is over — never unlimited — when the limit is 0', () => {
+    expect(meterState(0, 0)).toBe('over')
+    expect(meterState(5, 0)).toBe('over')
+  })
   it('is ok under 80%, warn from 80%, over from 100%', () => {
     expect(meterState(79, 100)).toBe('ok')
     expect(meterState(80, 100)).toBe('warn')
@@ -19,6 +23,9 @@ describe('meterPercent', () => {
     expect(meterPercent(50, 100)).toBe(50)
     expect(meterPercent(150, 100)).toBe(100)
     expect(meterPercent(10, null)).toBe(0)
+  })
+  it('is full at a 0 limit rather than empty', () => {
+    expect(meterPercent(0, 0)).toBe(100)
   })
 })
 

@@ -51,6 +51,22 @@ describe('QuotaSection', () => {
     expect(screen.getAllByPlaceholderText('unlimited').length).toBe(1)
   })
 
+  it('spells out that blank and 0 are different', () => {
+    renderSection()
+    expect(screen.getByText('Quotas (blank = unlimited, 0 = blocked)')).toBeTruthy()
+  })
+
+  it('PUTs 0 as a blocking limit rather than clearing the rule', async () => {
+    vi.mocked(putMembershipQuota).mockResolvedValue({ ...ROWS[0], limit_value: 0 })
+    renderSection()
+    fireEvent.change(screen.getByDisplayValue('500000'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save quotas' }))
+    await waitFor(() => {
+      expect(vi.mocked(putMembershipQuota)).toHaveBeenCalledWith('free', 'llm_tokens', 0)
+    })
+    expect(vi.mocked(deleteMembershipQuota)).not.toHaveBeenCalled()
+  })
+
   it('PUTs changed values and DELETEs blanked ones on save', async () => {
     vi.mocked(putMembershipQuota).mockResolvedValue(ROWS[0])
     vi.mocked(deleteMembershipQuota).mockResolvedValue(undefined)

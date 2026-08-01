@@ -48,8 +48,8 @@ export function PoliciesPage() {
         </button>
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
-        Per-turn caps: blank = inherit the runtime setting. Quotas: blank = unlimited.
-        Changes apply on the user&apos;s next turn — no restart.
+        Per-turn caps: blank = inherit the runtime setting. Quotas: blank = unlimited, 0 =
+        blocked. Changes apply on the user&apos;s next turn — no restart.
       </p>
       <div className="grid gap-4 lg:grid-cols-2">
         {allTiers.map((tier) => {

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UserQuotasDialog } from './UserQuotasDialog'
 import {
   deleteUserQuota,
@@ -40,6 +40,8 @@ function renderDialog() {
 
 // vitest runs with globals:false, so testing-library's auto-cleanup is not registered.
 afterEach(cleanup)
+// ...and no clearMocks config either, so call history would leak between tests.
+beforeEach(() => vi.clearAllMocks())
 
 describe('UserQuotasDialog', () => {
   it('renders registry kinds with tier placeholders and override values', async () => {
@@ -73,5 +75,23 @@ describe('UserQuotasDialog', () => {
     await waitFor(() => {
       expect(vi.mocked(deleteUserQuota)).toHaveBeenCalledWith('u1', 'audio_chapters')
     })
+  })
+
+  it('saves 0 as a real override — it is no allowance, not unlimited', async () => {
+    vi.mocked(fetchUserQuotas).mockResolvedValue(QUOTAS)
+    vi.mocked(putUserQuota).mockResolvedValue({
+      quota_kind: 'llm_tokens',
+      limit_value: 0,
+      updated_at: '',
+    })
+    renderDialog()
+
+    const tokens = await screen.findByPlaceholderText('1,000 (tier)')
+    fireEvent.change(tokens, { target: { value: '0' } })
+    fireEvent.blur(tokens)
+    await waitFor(() => {
+      expect(vi.mocked(putUserQuota)).toHaveBeenCalledWith('u1', 'llm_tokens', 0)
+    })
+    expect(vi.mocked(deleteUserQuota)).not.toHaveBeenCalled()
   })
 })

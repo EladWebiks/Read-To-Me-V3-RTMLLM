@@ -23,7 +23,7 @@ type FieldProps = {
   onCommit: (raw: string) => void
 }
 
-/** Blank = tier default (placeholder shows it); a number = per-user override. */
+/** Blank = tier default (placeholder shows it); a number = per-user override (0 = blocked). */
 function QuotaOverrideField({ kind, override, tierLimit, onCommit }: FieldProps) {
   return (
     <div className="space-y-1">
@@ -61,7 +61,7 @@ export function UserQuotasDialog({ userId, username, open, onOpenChange }: Props
       return
     }
     const value = Number(trimmed)
-    if (Number.isFinite(value) && value > 0 && value !== overrideOf(kind)) {
+    if (Number.isFinite(value) && value >= 0 && value !== overrideOf(kind)) {
       save.mutate({ kind, limit: value })
     }
   }

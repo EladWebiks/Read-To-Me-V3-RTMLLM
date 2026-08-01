@@ -138,10 +138,21 @@ async def test_put_upserts_and_delete_clears(ctx: tuple[AsyncClient, UUID]) -> N
 
 
 @pytest.mark.integration
+async def test_put_accepts_zero_as_a_blocking_override(ctx: tuple[AsyncClient, UUID]) -> None:
+    """0 blocks the kind for this user; unlimited is DELETE, never a 0 write."""
+    client, reader_id = ctx
+    base = f"/api/admin/users/{reader_id}/quotas"
+    put = await client.put(f"{base}/llm_tokens", json={"limit_value": 0})
+    assert put.status_code == 200
+    assert put.json()["limit_value"] == 0
+    assert (await client.get(base)).json()["overrides"][0]["limit_value"] == 0
+
+
+@pytest.mark.integration
 async def test_validation_and_unknown_user(ctx: tuple[AsyncClient, UUID]) -> None:
     client, reader_id = ctx
     base = f"/api/admin/users/{reader_id}/quotas"
-    assert (await client.put(f"{base}/llm_tokens", json={"limit_value": 0})).status_code == 422
+    assert (await client.put(f"{base}/llm_tokens", json={"limit_value": -1})).status_code == 422
     assert (await client.put(f"{base}/not_a_kind", json={"limit_value": 5})).status_code == 422
     unknown = await client.get(f"/api/admin/users/{uuid4()}/quotas")
     assert unknown.status_code == 404  # UserNotFoundError mapping

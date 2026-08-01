@@ -117,9 +117,27 @@ async def test_put_upserts_and_delete_clears(admin_client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
+async def test_put_accepts_zero_as_a_blocking_limit(admin_client: AsyncClient) -> None:
+    """0 is a real limit (no allowance), not a synonym for unlimited."""
+    put = await admin_client.put(f"{BASE}/free/llm_tokens", json={"limit_value": 0})
+    assert put.status_code == 200
+    assert put.json()["limit_value"] == 0
+
+    listed = await admin_client.get(BASE)
+    assert listed.json()["quotas"] == [
+        {
+            "membership": "free",
+            "quota_kind": "llm_tokens",
+            "limit_value": 0.0,
+            "updated_at": listed.json()["quotas"][0]["updated_at"],
+        }
+    ]  # a row exists — unlimited would be no row at all
+
+
+@pytest.mark.integration
 async def test_validation_rejects_bad_inputs(admin_client: AsyncClient) -> None:
     assert (
-        await admin_client.put(f"{BASE}/free/llm_tokens", json={"limit_value": 0})
+        await admin_client.put(f"{BASE}/free/llm_tokens", json={"limit_value": -1})
     ).status_code == 422
     assert (
         await admin_client.put(f"{BASE}/free/not_a_kind", json={"limit_value": 5})
