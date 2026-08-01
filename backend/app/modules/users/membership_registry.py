@@ -84,3 +84,18 @@ def rank_of(slug: str) -> int | None:
         if tier.slug == slug:
             return tier.rank
     return None
+
+
+def label_of(slug: str) -> str | None:
+    """Label of a tier in the current snapshot; None when unknown or cold."""
+    for tier in current_snapshot():
+        if tier.slug == slug:
+            return tier.label
+    return None
+
+
+async def label_for(session: AsyncSession, slug: str) -> str:
+    """Warm label lookup for display; falls back to the raw slug (e.g. a
+    tier deleted from under an in-flight request never surfaces as None)."""
+    await ensure_loaded(session)
+    return label_of(slug) or slug

@@ -93,6 +93,25 @@ async def test_deactivate_migrates_users_and_guards(session: AsyncSession) -> No
 
 
 @pytest.mark.integration
+async def test_crowning_inactive_tier_is_rejected(session: AsyncSession) -> None:
+    """Regression: an inactive tier must never be crownable as default —
+    otherwise default_slug() hands new users a slug active_plans excludes."""
+    service = MembershipService(session)
+    await service.create_tier(_premium(), actor_id=ACTOR)
+    await service.deactivate_tier("premium", "free", actor_id=ACTOR)
+    with pytest.raises(MembershipLifecycleError):
+        await service.update_tier("premium", MembershipPatch(is_default=True), actor_id=ACTOR)
+    assert (await service.require_tier("premium")).is_default is False
+    # A single PATCH may still reactivate-and-crown in one call.
+    row = await service.update_tier(
+        "premium", MembershipPatch(is_active=True, is_default=True), actor_id=ACTOR
+    )
+    assert row.is_active is True
+    assert row.is_default is True
+    assert await service.default_slug() == "premium"
+
+
+@pytest.mark.integration
 async def test_unknown_slug_raises(session: AsyncSession) -> None:
     with pytest.raises(UnknownMembershipError):
         await MembershipService(session).require_tier("ghost")

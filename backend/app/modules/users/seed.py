@@ -19,23 +19,29 @@ async def seed_default_membership(session: AsyncSession | None = None) -> None:
     """Ensure the 'free' tier row exists. Idempotent; a restart never
     reverts admin edits (same contract as the LLM catalog seed)."""
     if session is not None:
-        await _seed(session)
+        inserted = await _seed(session)
         await session.commit()
-        return
-    async with SessionLocal() as owned:
-        await _seed(owned)
-        await owned.commit()
+    else:
+        async with SessionLocal() as owned:
+            inserted = await _seed(owned)
+            await owned.commit()
+    if inserted:
+        # Invalidate only after commit: invalidating first would let a
+        # concurrent coroutine re-warm the snapshot from a pre-insert read
+        # and hold that stale (missing-row) view for the full TTL.
+        membership_registry.invalidate()
 
 
-async def _seed(session: AsyncSession) -> None:
+async def _seed(session: AsyncSession) -> bool:
+    """Insert the 'free' row if missing. Returns whether it inserted."""
     repo = MembershipRepository(session)
     if await repo.get_by_slug(DEFAULT_SLUG) is not None:
-        return
+        return False
     has_default = await repo.get_default() is not None
     repo.add(
         MembershipTier(
             slug=DEFAULT_SLUG, label="Free", rank=0, is_active=True, is_default=not has_default
         )
     )
-    membership_registry.invalidate()  # every memberships write invalidates the snapshot
     logger.info("seeding default membership tier", extra={"slug": DEFAULT_SLUG})
+    return True

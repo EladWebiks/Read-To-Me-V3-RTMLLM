@@ -91,6 +91,8 @@ class MembershipService:
         row = await self.require_tier(slug)
         changes = patch.model_dump(exclude_unset=True)
         if changes.pop("is_default", None):
+            if not (row.is_active or changes.get("is_active")):
+                raise MembershipLifecycleError("Only an active tier can be the default.")
             await self._repo.clear_default()
             row.is_default = True
         for field, value in changes.items():

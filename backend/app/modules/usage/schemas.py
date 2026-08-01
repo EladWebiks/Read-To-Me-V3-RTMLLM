@@ -23,6 +23,7 @@ class MeUsageKindRead(BaseModel):
 
 class MeUsageResponse(BaseModel):
     membership: str
+    membership_label: str  # admin-authored display label for `membership`
     exempt: bool  # admins: limits all None but usage still shown
     as_of: datetime
     resets_at: datetime  # month-window end; standing kinds ignore it

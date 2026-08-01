@@ -74,7 +74,7 @@ class MembershipCreate(BaseModel):
 
     slug: str = Field(pattern=r"^[a-z0-9_-]{1,32}$")
     label: str = Field(min_length=1, max_length=64)
-    rank: int = 0
+    rank: int = Field(default=0, ge=0)
     description: str | None = None
     price_label: str | None = Field(default=None, max_length=32)
 
@@ -89,7 +89,7 @@ class MembershipPatch(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=64)
     description: str | None = None
     price_label: str | None = Field(default=None, max_length=32)
-    rank: int | None = None
+    rank: int | None = Field(default=None, ge=0)
     is_default: Literal[True] | None = None
     is_active: Literal[True] | None = None
 
@@ -146,4 +146,4 @@ class PlansResponse(BaseModel):
 
 
 class MembershipSwitch(BaseModel):
-    membership: str
+    membership: str = Field(max_length=32, pattern=r"^[a-z0-9_-]{1,32}$")

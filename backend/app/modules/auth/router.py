@@ -15,6 +15,7 @@ from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleOAuthClient
 from app.modules.auth.schemas import MeResponse
 from app.modules.auth.service import AuthService
+from app.modules.users import membership_registry
 from app.modules.users.schemas import UserRead
 
 logger = logging.getLogger(__name__)
@@ -221,6 +222,8 @@ async def logout(response: Response) -> None:
 @router.get("/me", response_model=MeResponse)
 async def me(
     current_user: Annotated[UserRead, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MeResponse:
-    """Return the currently authenticated user."""
-    return MeResponse(user=current_user)
+    """Return the currently authenticated user, with the tier's display label."""
+    label = await membership_registry.label_for(session, current_user.membership)
+    return MeResponse(user=current_user, membership_label=label)

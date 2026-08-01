@@ -22,6 +22,7 @@ from app.modules.quotas.service import QuotaService
 from app.modules.scraping.service import ScrapingService
 from app.modules.usage.read_service import UsageReadService
 from app.modules.usage.schemas import MeUsageKindRead, MeUsageResponse
+from app.modules.users import membership_registry
 from app.modules.users.schemas import UserRead
 
 
@@ -49,8 +50,10 @@ class SelfUsageService:
             )
             for kind, meta in KIND_REGISTRY.items()
         ]
+        label = await membership_registry.label_for(self._session, user.membership)
         return MeUsageResponse(
             membership=user.membership,
+            membership_label=label,
             exempt=limits.exempt,
             as_of=now,
             resets_at=month_end,

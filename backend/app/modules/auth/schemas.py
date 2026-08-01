@@ -9,3 +9,4 @@ class MeResponse(BaseModel):
     """Current authenticated user."""
 
     user: UserRead
+    membership_label: str  # admin-authored display label for user.membership
