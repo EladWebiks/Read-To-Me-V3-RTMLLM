@@ -1,5 +1,6 @@
 import type { AdminUser } from '@/features/admin/api/users'
 import { usePatchUser } from '@/features/admin/hooks/useAdminUsers'
+import { Select } from '@/shared/ui'
 import { UserRowActions } from './UserRowActions'
 
 /** Option shown in the operator override dropdown: slug is submitted, label is shown. */
@@ -21,8 +22,8 @@ function MembershipSelect({
       ? memberships
       : [{ slug: user.membership, label: user.membership }]
   return (
-    <select
-      className="rounded border border-border bg-background px-1 py-0.5 text-xs"
+    <Select
+      size="sm"
       value={user.membership}
       aria-label={`Membership for ${user.username} (operator override)`}
       onChange={(event) =>
@@ -34,7 +35,7 @@ function MembershipSelect({
           {tier.label}
         </option>
       ))}
-    </select>
+    </Select>
   )
 }
 

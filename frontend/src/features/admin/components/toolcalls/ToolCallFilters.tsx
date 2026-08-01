@@ -1,4 +1,5 @@
 import { RISK_LEVELS, type ToolCallFilterValues } from '@/features/admin/api/toolCalls'
+import { Select } from '@/shared/ui'
 
 const FIELD = 'rounded border border-border bg-background px-2 py-1 text-sm'
 
@@ -25,8 +26,8 @@ export function ToolCallFilters({
         value={filters.status ?? ''}
         onChange={(event) => onChange({ ...filters, status: event.target.value })}
       />
-      <select
-        className={FIELD}
+      <Select
+        size="sm"
         aria-label="Filter by risk level"
         value={filters.risk_level ?? ''}
         onChange={(event) => onChange({ ...filters, risk_level: event.target.value })}
@@ -37,7 +38,7 @@ export function ToolCallFilters({
             {risk}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }

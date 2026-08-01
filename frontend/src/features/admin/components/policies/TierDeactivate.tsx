@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AdminMembership } from '@/features/admin/api/memberships'
 import { useDeactivateMembership } from '@/features/admin/hooks/useMemberships'
-import { FormError } from '@/shared/ui'
+import { FormError, Select } from '@/shared/ui'
 
 type Props = { tier: AdminMembership; allTiers: AdminMembership[] }
 
@@ -28,9 +28,9 @@ export function TierDeactivate({ tier, allTiers }: Props) {
 
   return (
     <span className="flex items-center gap-1">
-      <select
+      <Select
+        size="sm"
         aria-label={`Migrate ${tier.label} users to`}
-        className="rounded border border-border bg-background px-1 py-0.5"
         value={value}
         onChange={(event) => setTarget(event.target.value)}
       >
@@ -39,7 +39,7 @@ export function TierDeactivate({ tier, allTiers }: Props) {
             {t.label}
           </option>
         ))}
-      </select>
+      </Select>
       <button
         type="button"
         className="underline disabled:opacity-50"
