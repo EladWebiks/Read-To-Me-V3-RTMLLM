@@ -5,6 +5,7 @@ import type {
 } from '@/features/admin/api/membershipQuotas'
 import { useSaveQuota } from '@/features/admin/hooks/useMembershipQuotas'
 import { parseQuotaInput } from '@/features/admin/logic/quotaFields'
+import { FormError, TextField } from '@/shared/ui'
 
 type Props = { membership: string; kinds: QuotaKindInfo[]; rows: MembershipQuotaRow[] }
 
@@ -13,6 +14,11 @@ function initialDrafts(kinds: QuotaKindInfo[], rows: MembershipQuotaRow[]) {
   return Object.fromEntries(
     kinds.map((k) => [k.kind, byKind.has(k.kind) ? String(byKind.get(k.kind)) : '']),
   )
+}
+
+function labelFor(meta: QuotaKindInfo) {
+  const window = meta.window === 'month' ? ' / month' : ', standing'
+  return `${meta.label} (${meta.unit}${window})`
 }
 
 export function QuotaSection({ membership, kinds, rows }: Props) {
@@ -43,25 +49,18 @@ export function QuotaSection({ membership, kinds, rows }: Props) {
       <p className="mb-2 text-sm font-medium">Quotas (blank = unlimited, 0 = blocked)</p>
       <div className="grid gap-2 sm:grid-cols-2">
         {kinds.map((meta) => (
-          <label key={meta.kind} className="flex flex-col gap-0.5 text-sm">
-            <span className="text-muted-foreground">
-              {meta.label} ({meta.unit}
-              {meta.window === 'month' ? ' / month' : ', standing'})
-            </span>
-            <input
-              className="rounded-md border border-border bg-background px-2 py-1 tabular-nums"
-              inputMode="decimal"
-              value={drafts[meta.kind] ?? ''}
-              placeholder={current.has(meta.kind) ? '' : 'unlimited'}
-              aria-invalid={errorFor(meta.kind) !== null}
-              onChange={(event) =>
-                setDrafts((prev) => ({ ...prev, [meta.kind]: event.target.value }))
-              }
-            />
-            {errorFor(meta.kind) ? (
-              <span className="text-xs text-destructive">{errorFor(meta.kind)}</span>
-            ) : null}
-          </label>
+          <TextField
+            key={meta.kind}
+            id={`quota-${membership}-${meta.kind}`}
+            label={labelFor(meta)}
+            numeric
+            value={drafts[meta.kind] ?? ''}
+            placeholder={current.has(meta.kind) ? '' : 'unlimited'}
+            error={errorFor(meta.kind)}
+            onChange={(event) =>
+              setDrafts((prev) => ({ ...prev, [meta.kind]: event.target.value }))
+            }
+          />
         ))}
       </div>
       <button
@@ -72,9 +71,7 @@ export function QuotaSection({ membership, kinds, rows }: Props) {
       >
         {save.isPending ? 'Saving…' : 'Save quotas'}
       </button>
-      {save.error ? (
-        <p className="mt-2 text-xs text-destructive">{save.error.message}</p>
-      ) : null}
+      <FormError className="mt-2" error={save.error} />
     </div>
   )
 }

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { QuotaKindInfo } from '@/features/admin/api/membershipQuotas'
 import { useSetUserQuota, useUserQuotas } from '@/features/admin/hooks/useUserQuotas'
 import { parseQuotaInput } from '@/features/admin/logic/quotaFields'
 import {
@@ -7,8 +6,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
+  FormError,
+  TextField,
 } from '@/shared/ui'
 
 type Props = {
@@ -18,36 +17,8 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
-type FieldProps = {
-  kind: QuotaKindInfo
-  override: number | undefined
-  tierLimit: number | undefined
-  onCommit: (raw: string) => void
-}
-
-/** Blank = tier default (placeholder shows it); a number = per-user override (0 = blocked). */
-function QuotaOverrideField({ kind, override, tierLimit, onCommit }: FieldProps) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={`quota-${kind.kind}`}>
-        {kind.label} ({kind.unit})
-      </Label>
-      <Input
-        id={`quota-${kind.kind}`}
-        inputMode="decimal"
-        defaultValue={override ?? ''}
-        placeholder={
-          tierLimit === undefined
-            ? 'Unlimited (tier)'
-            : `${tierLimit.toLocaleString('en-US')} (tier)`
-        }
-        onBlur={(event) => onCommit(event.target.value)}
-      />
-    </div>
-  )
-}
-
-/** Registry-driven per-user overrides; they win over the user's tier limits. */
+/** Registry-driven per-user overrides; they win over the user's tier limits.
+ * Blank = tier default (placeholder shows it); a number = override (0 = blocked). */
 export function UserQuotasDialog({ userId, username, open, onOpenChange }: Props) {
   const { data } = useUserQuotas(userId, open)
   const save = useSetUserQuota(userId)
@@ -69,7 +40,9 @@ export function UserQuotasDialog({ userId, username, open, onOpenChange }: Props
       save.mutate({ kind, limit: parsed.value })
     }
   }
-  const message = invalid ?? save.error?.message ?? null
+
+  const tierPlaceholder = (limit: number | undefined) =>
+    limit === undefined ? 'Unlimited (tier)' : `${limit.toLocaleString('en-US')} (tier)`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,16 +55,18 @@ export function UserQuotasDialog({ userId, username, open, onOpenChange }: Props
         </p>
         <div className="space-y-3">
           {data?.kinds.map((kind) => (
-            <QuotaOverrideField
+            <TextField
               key={kind.kind}
-              kind={kind}
-              override={overrideOf(kind.kind)}
-              tierLimit={data.tier_limits[kind.kind]}
-              onCommit={(raw) => commit(kind.kind, raw)}
+              id={`quota-${kind.kind}`}
+              label={`${kind.label} (${kind.unit})`}
+              numeric
+              defaultValue={overrideOf(kind.kind) ?? ''}
+              placeholder={tierPlaceholder(data.tier_limits[kind.kind])}
+              onBlur={(event) => commit(kind.kind, event.target.value)}
             />
           ))}
         </div>
-        {message ? <p className="text-xs text-destructive">{message}</p> : null}
+        <FormError error={invalid ?? save.error} />
       </DialogContent>
     </Dialog>
   )
