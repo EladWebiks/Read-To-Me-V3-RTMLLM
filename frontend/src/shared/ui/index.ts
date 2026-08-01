@@ -1,5 +1,6 @@
 export { Button } from './button'
 export { buttonVariants } from './button-variants'
+export { FormError } from './form-error'
 export { Input } from './input'
 export { Label } from './label'
 export { Card, CardContent, CardHeader, CardTitle } from './card'
