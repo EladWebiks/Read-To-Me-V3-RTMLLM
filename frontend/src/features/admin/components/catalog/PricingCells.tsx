@@ -1,9 +1,7 @@
 import { useState } from 'react'
 import type { ModelAdmin } from '@/features/admin/api/catalog'
 import { usePatchModel } from '@/features/admin/hooks/useCatalog'
-
-const PRICE_INPUT =
-  'w-20 rounded border border-border bg-background px-1.5 py-0.5 text-xs'
+import { FormError, Input } from '@/shared/ui'
 
 /** The two pricing cells of a model row; saves both values together. */
 export function PricingCells({
@@ -31,16 +29,18 @@ export function PricingCells({
   return (
     <>
       <td className="px-3 py-1.5">
-        <input
-          className={PRICE_INPUT}
+        <Input
+          size="sm"
+          className="w-20"
           value={costIn}
           onChange={(event) => setCostIn(event.target.value)}
           aria-label={`Input cost for ${model.model_name}`}
         />
       </td>
       <td className="px-3 py-1.5">
-        <input
-          className={PRICE_INPUT}
+        <Input
+          size="sm"
+          className="w-20"
           value={costOut}
           onChange={(event) => setCostOut(event.target.value)}
           aria-label={`Output cost for ${model.model_name}`}
@@ -50,9 +50,7 @@ export function PricingCells({
             Save
           </button>
         )}
-        {patch.error ? (
-          <p className="text-xs text-destructive">{patch.error.message}</p>
-        ) : null}
+        <FormError error={patch.error} />
       </td>
     </>
   )

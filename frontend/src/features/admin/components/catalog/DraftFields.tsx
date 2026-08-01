@@ -1,3 +1,5 @@
+import { Input } from '@/shared/ui'
+
 export type ModelDraft = {
   provider: string
   model_name: string
@@ -14,8 +16,6 @@ const FIELDS: { key: keyof ModelDraft; label: string }[] = [
   { key: 'output_cost_per_1m', label: 'Output cost per 1M' },
 ]
 
-const FIELD = 'rounded border border-border bg-background px-2 py-1 text-sm'
-
 export function DraftFields({
   draft,
   onChange,
@@ -26,9 +26,9 @@ export function DraftFields({
   return (
     <div className="flex flex-wrap gap-2">
       {FIELDS.map((field) => (
-        <input
+        <Input
           key={field.key}
-          className={FIELD}
+          size="sm"
           value={draft[field.key]}
           aria-label={field.label}
           placeholder={field.label}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { EffectiveSetting } from '@/features/admin/api/settings'
 import { useClearSetting } from '@/features/admin/hooks/useAdminSettings'
 import { formatValue } from '@/features/admin/logic/settingValue'
+import { FormError } from '@/shared/ui'
 import { ValueEditor } from './ValueEditor'
 
 export function SettingRow({ setting }: { setting: EffectiveSetting }) {
@@ -49,9 +50,7 @@ export function SettingRow({ setting }: { setting: EffectiveSetting }) {
             Clear
           </button>
         )}
-        {clear.error ? (
-          <p className="text-xs text-destructive">{clear.error.message}</p>
-        ) : null}
+        <FormError error={clear.error} />
       </td>
     </tr>
   )

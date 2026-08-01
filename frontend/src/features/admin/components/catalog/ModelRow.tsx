@@ -1,5 +1,6 @@
 import type { ModelAdmin } from '@/features/admin/api/catalog'
 import { usePatchModel } from '@/features/admin/hooks/useCatalog'
+import { FormError } from '@/shared/ui'
 import { PricingCells } from './PricingCells'
 
 export function ModelRow({ provider, model }: { provider: string; model: ModelAdmin }) {
@@ -26,9 +27,7 @@ export function ModelRow({ provider, model }: { provider: string; model: ModelAd
             })
           }
         />
-        {patch.error ? (
-          <p className="text-xs text-destructive">{patch.error.message}</p>
-        ) : null}
+        <FormError error={patch.error} />
       </td>
     </tr>
   )

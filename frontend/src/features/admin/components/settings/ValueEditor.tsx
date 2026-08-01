@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { EffectiveSetting } from '@/features/admin/api/settings'
 import { useSetSetting } from '@/features/admin/hooks/useAdminSettings'
 import { formatValue, parseValue } from '@/features/admin/logic/settingValue'
+import { FormError, Input } from '@/shared/ui'
 
 export function ValueEditor({
   setting,
@@ -19,8 +20,9 @@ export function ValueEditor({
 
   return (
     <div className="flex flex-col gap-1">
-      <input
-        className="w-48 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-xs"
+      <Input
+        size="sm"
+        className="w-48 font-mono"
         value={text}
         onChange={(event) => setText(event.target.value)}
         aria-label={`Value for ${setting.key}`}
@@ -38,9 +40,7 @@ export function ValueEditor({
           Cancel
         </button>
       </div>
-      {save.error ? (
-        <p className="text-xs text-destructive">{save.error.message}</p>
-      ) : null}
+      <FormError error={save.error} />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import type { ProviderAdmin } from '@/features/admin/api/catalog'
 import { usePatchProvider } from '@/features/admin/hooks/useCatalog'
+import { FormError } from '@/shared/ui'
 import { ModelRow } from './ModelRow'
 
 export function ProviderSection({ provider }: { provider: ProviderAdmin }) {
@@ -24,9 +25,7 @@ export function ProviderSection({ provider }: { provider: ProviderAdmin }) {
           Enabled
         </label>
       </div>
-      {patch.error ? (
-        <p className="px-3 py-1 text-xs text-destructive">{patch.error.message}</p>
-      ) : null}
+      <FormError className="px-3 py-1" error={patch.error} />
       <table className="w-full text-left text-sm">
         <thead className="text-muted-foreground">
           <tr>

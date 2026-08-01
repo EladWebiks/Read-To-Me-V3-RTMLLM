@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AdminUser } from '@/features/admin/api/users'
 import { useDeleteUser, useRestoreUser } from '@/features/admin/hooks/useAdminUsers'
+import { FormError } from '@/shared/ui'
 import { UserQuotasDialog } from './UserQuotasDialog'
 
 /** Per-row controls: quota overrides, soft-delete/restore, and error text. */
@@ -52,7 +53,7 @@ export function UserRowActions({
           Delete
         </button>
       )}
-      {error ? <p className="text-xs text-destructive">{error.message}</p> : null}
+      <FormError error={error} />
     </td>
   )
 }

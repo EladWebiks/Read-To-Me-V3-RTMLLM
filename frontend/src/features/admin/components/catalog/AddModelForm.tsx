@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useCreateModel } from '@/features/admin/hooks/useCatalog'
+import { FormError } from '@/shared/ui'
 import { CapabilityPicker } from './CapabilityPicker'
 import { DraftFields, type ModelDraft } from './DraftFields'
 
@@ -50,9 +51,7 @@ export function AddModelForm({ onDone }: { onDone: () => void }) {
       >
         Create model
       </button>
-      {create.error ? (
-        <p className="text-xs text-destructive">{create.error.message}</p>
-      ) : null}
+      <FormError error={create.error} />
     </div>
   )
 }
