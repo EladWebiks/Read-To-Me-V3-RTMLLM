@@ -9,6 +9,7 @@ export { Select } from './select'
 export { Label } from './label'
 export { Skeleton, SkeletonText } from './skeleton'
 export { SkeletonCards, SkeletonRows, SkeletonTable } from './skeleton-layouts'
+export { QueryState } from './query-state'
 export { InlineLoader, Spinner } from './spinner'
 export { Card, CardContent, CardHeader, CardTitle } from './card'
 export {
