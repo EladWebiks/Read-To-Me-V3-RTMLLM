@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.modules.llm.chat_service import ChatService, ChatSseEvent
 from app.modules.llm.repository import LlmRepository
 from app.modules.llm.types import ToolCallingRequest, ToolCallingResponse, Usage
@@ -15,6 +15,7 @@ from app.modules.users.schemas import UserCreate, UserRead
 from app.modules.users.service import UserService
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
 from tests.llm.stream_fakes import stream_from_call
 
 
@@ -28,7 +29,7 @@ def test_chat_sse_event_encode() -> None:
 @pytest.fixture
 async def chat_session() -> AsyncIterator[AsyncSession]:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session
@@ -38,7 +39,7 @@ async def chat_session() -> AsyncIterator[AsyncSession]:
 async def _user(session: AsyncSession) -> UserRead:
     svc = UserService(session)
     return await svc.ensure_user(
-        UserCreate(username=f"chat_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"chat_{uuid4().hex[:8]}", password="test-pass-123")
     )
 
 
@@ -65,7 +66,7 @@ async def test_stream_chat_persists_with_fake_llm(
     chat_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(
+    settings = make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",
@@ -90,7 +91,7 @@ async def test_stream_chat_persists_with_fake_llm(
     monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_fake_call_tools))
 
     events: list[ChatSseEvent] = []
-    async for event in service.stream_chat(user.id, "Say hi", None):
+    async for event in service.stream_chat(user, "Say hi", None):
         events.append(event)
 
     kinds = [e.event for e in events]

@@ -4,6 +4,7 @@ import json
 import re
 import time
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qsl
 from uuid import uuid4
@@ -16,6 +17,7 @@ from app.core.deps import get_db
 from app.main import app
 from app.modules.auth.google import GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL, reset_jwks_cache
 from app.modules.auth.service import AuthService
+from app.modules.users.service import UserService
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient, Response
@@ -99,11 +101,11 @@ async def _clear_users(engine: AsyncEngine) -> None:
 @pytest.fixture
 async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     settings = get_settings()
-    monkeypatch.setattr(settings, "google_client_id", CLIENT_ID)
-    monkeypatch.setattr(settings, "google_client_secret", CLIENT_SECRET)
-    monkeypatch.setattr(settings, "google_redirect_uri", REDIRECT_URI)
+    monkeypatch.setattr(settings.google, "client_id", CLIENT_ID)
+    monkeypatch.setattr(settings.google, "client_secret", CLIENT_SECRET)
+    monkeypatch.setattr(settings.google, "redirect_uri", REDIRECT_URI)
     reset_jwks_cache()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     await _clear_users(engine)
     app.dependency_overrides[get_db] = _make_db_override(session_factory)
@@ -293,40 +295,57 @@ async def test_google_callback_unexpected_error_is_still_a_popup(
     assert "rtm_token" not in response.cookies
 
 
-async def _insert_google_sub_squatter(google_sub: str) -> None:
-    """Soft-delete a user holding `google_sub`, invisible to every repository read.
+async def _insert_google_sub_squatter(google_sub: str, *, deleted: bool) -> None:
+    """Insert a user holding `google_sub` on its own committed connection.
 
-    The unique index on google_sub is not partial, so provisioning still
-    collides — the same IntegrityError two concurrent first-logins would hit,
-    reachable deterministically through the real code path.
+    `deleted=True` models a backoffice soft-delete: the row keeps the sub (the
+    unique index is not partial) and sign-in must be refused. `deleted=False`
+    is used to stage a genuine race — see the two tests below.
     """
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "INSERT INTO users (id, username, email, google_sub, role, deleted_at)"
-                " VALUES (:id, 'ghost', 'ghost@example.com', :sub, 'user', now())"
+                # is_admin / membership come from their server defaults.
+                "INSERT INTO users (id, username, email, google_sub, deleted_at)"
+                " VALUES (:id, 'ghost', 'ghost@example.com', :sub, :deleted_at)"
             ),
-            {"id": str(uuid4()), "sub": google_sub},
+            {
+                "id": str(uuid4()),
+                "sub": google_sub,
+                "deleted_at": datetime.now(UTC) if deleted else None,
+            },
         )
     await engine.dispose()
 
 
 @pytest.mark.integration
 @respx.mock
-async def test_google_callback_db_error_is_still_a_popup(client: AsyncClient) -> None:
+async def test_google_callback_db_error_is_still_a_popup(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An IntegrityError must not resurface as a bare 500 during teardown.
 
     A failed flush poisons the request transaction; the catch-all returns a
     popup, and then the request-scoped session commits in dependency teardown.
     Unless the aborted transaction is rolled back first, that commit raises
     *after* the popup was produced and the client sees a plain 500 instead.
+
+    The collision is staged as the real race it models: a second connection
+    claims the incoming `google_sub` *after* this request's identity lookups
+    missed and *before* its INSERT. (A pre-existing soft-deleted holder no
+    longer reaches the flush — it is a decided outcome now; see the next test.)
     """
     respx.post(GOOGLE_TOKEN_URL).mock(
         return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
     )
     respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
-    await _insert_google_sub_squatter("google-sub-e2e")
+
+    async def _claim_sub_mid_flight(_self: UserService, base: str) -> str:
+        await _insert_google_sub_squatter("google-sub-e2e", deleted=False)
+        return base
+
+    monkeypatch.setattr(UserService, "_unique_username", _claim_sub_mid_flight)
 
     start = await client.get("/api/auth/google/login")
     state = start.cookies["rtm_oauth_state"]
@@ -336,6 +355,31 @@ async def test_google_callback_db_error_is_still_a_popup(client: AsyncClient) ->
     assert response.status_code == 500
     assert response.headers["content-type"].startswith("text/html")
     _assert_popup(response, ok=False, reason="internal_error")
+
+
+@pytest.mark.integration
+@respx.mock
+async def test_google_callback_rejects_a_soft_deleted_identity(client: AsyncClient) -> None:
+    """A soft-deleted account signing in again is a decided popup, not a 500.
+
+    The row still owns its `google_sub`, so before the any-scoped lookups this
+    fell through to provisioning and died on the unique index — reported as
+    `internal_error`. It must now be refused, with no session cookie issued.
+    """
+    respx.post(GOOGLE_TOKEN_URL).mock(
+        return_value=Response(200, json={"id_token": _id_token(CLIENT_ID)})
+    )
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    await _insert_google_sub_squatter("google-sub-e2e", deleted=True)
+
+    start = await client.get("/api/auth/google/login")
+    state = start.cookies["rtm_oauth_state"]
+    response = await client.get(
+        "/api/auth/google/callback", params={"code": "auth-code", "state": state}
+    )
+    assert response.status_code == 400
+    _assert_popup(response, ok=False, reason="account_disabled")
+    assert "rtm_token" not in response.cookies
 
 
 @pytest.mark.integration
@@ -383,6 +427,6 @@ async def test_popup_reason_cannot_break_out_of_the_script_block(client: AsyncCl
 async def test_google_login_unconfigured_returns_503(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(get_settings(), "google_client_id", None)
+    monkeypatch.setattr(get_settings().google, "client_id", None)
     response = await client.get("/api/auth/google/login")
     assert response.status_code == 503

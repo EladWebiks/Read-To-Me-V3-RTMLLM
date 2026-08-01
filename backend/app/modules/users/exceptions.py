@@ -20,3 +20,33 @@ class GoogleIdentityConflictError(UserError):
     `UserService`; `users` must never import from `auth`. `AuthService`
     translates it back into the wire-level `google_identity_conflict` reason.
     """
+
+
+class UserAccountDisabledError(UserError):
+    """A soft-deleted account tried to sign in again.
+
+    Soft-deleted identities stay *reserved*: the row keeps its username, email
+    and google_sub (the unique constraints are full, not partial), so sign-in
+    must be refused rather than silently re-provisioning a parallel account or
+    dying on a unique index. Only an explicit admin restore re-opens it.
+    """
+
+
+class AdminSelfActionError(UserError):
+    """An admin tried to demote or soft-delete their own account."""
+
+
+class LastAdminError(UserError):
+    """The operation would leave zero active (non-deleted) admins."""
+
+
+class UnknownMembershipError(UserError):
+    """A membership slug that does not exist (or is not assignable)."""
+
+
+class DuplicateMembershipError(UserError):
+    """Creating a tier whose slug is already taken."""
+
+
+class MembershipLifecycleError(UserError):
+    """A create/edit/deactivate rule was violated. str(exc) is user-facing."""

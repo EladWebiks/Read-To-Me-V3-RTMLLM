@@ -12,16 +12,16 @@ from app.modules.llm.exceptions import LlmProviderError, NoCandidateModelError
 from app.modules.llm.model_router import ModelRouter, _BreakerState
 from app.modules.llm.registry import ModelSpec
 
+from tests.factories import make_settings
 
-def _settings(**kwargs: object) -> Settings:
-    base: dict[str, object] = {
-        "llm_enabled": True,
-        "llm_provider": "gemini",
-        "llm_model": "gemini-3.5-flash-lite",
-        "gemini_api_key": "test-key",
-    }
-    base.update(kwargs)
-    return Settings.model_validate(base)
+
+def _settings() -> Settings:
+    return make_settings(
+        llm_enabled=True,
+        llm_provider="gemini",
+        llm_model="gemini-3.5-flash-lite",
+        gemini_api_key="test-key",
+    )
 
 
 @pytest.mark.unit

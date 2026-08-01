@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useBook, useChapters, useCreateChapter } from '@/features/library/hooks'
 import { libraryBookHref } from '@/features/library/logic/libraryPaths'
+import { InlineLoader, QueryState } from '@/shared/ui'
 import { ChapterNewFields } from './ChapterNewFields'
 import { ChapterNewLayout } from './ChapterNewLayout'
 import { useChapterDraft } from './useChapterDraft'
@@ -19,8 +20,21 @@ export function ChapterNewPage() {
   const saveAndNext = useSaveAndNext(createChapter, draft, setSavedCount)
   useArrowRightSave(fastCopy, draft.content, createChapter.isPending, saveAndNext)
 
-  if (bookQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>
+  // The whole page depends on the book, so both unsettled states short-circuit
+  // it. Without the error branch a failed fetch fell through to an editor
+  // titled 'Book' with no indication anything had gone wrong.
+  if (bookQuery.isLoading || bookQuery.isError) {
+    return (
+      <QueryState
+        isPending={bookQuery.isLoading}
+        isError={bookQuery.isError}
+        loading={<InlineLoader label="Loading…" />}
+        errorLabel="Couldn't load the book."
+        onRetry={() => void bookQuery.refetch()}
+      >
+        {null}
+      </QueryState>
+    )
   }
 
   function handleSubmit(event: FormEvent) {

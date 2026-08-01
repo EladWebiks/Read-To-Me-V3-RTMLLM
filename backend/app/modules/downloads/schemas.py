@@ -53,3 +53,24 @@ class DownloadCleanResult(BaseModel):
     """Result of cleaning jobs for a book."""
 
     deleted: int
+
+
+class DownloadJobAdminRead(BaseModel):
+    """Backoffice view of one download job (cross-user, read-only)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    book_id: UUID
+    chapter_from: int
+    chapter_to: int
+    provider: str
+    voice: str
+    status: str
+    ready_count: int
+    total_count: int
+    error: str | None
+    expires_at: datetime | None
+    created_at: datetime
+    updated_at: datetime

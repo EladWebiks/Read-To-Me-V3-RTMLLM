@@ -33,6 +33,8 @@ export function LibraryPage() {
         <LibraryGrid
           isLoading={state.isLoading}
           isError={state.isError}
+          pageSize={state.pageSize}
+          onRetry={() => void state.refetch()}
           empty={state.books.length === 0}
           books={state.pageBooks}
           onOpen={state.onOpen}

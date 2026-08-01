@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.imports import chunk_store
 from app.modules.imports.exceptions import ImportJobNotFoundError, InvalidEpubUploadError
 from app.modules.imports.jobs import ImportRequest, cancel_job, get_job, start_job, to_progress
+from app.modules.imports.repository import EpubImportRepository
 from app.modules.imports.schemas import (
     EpubChunkAccepted,
     EpubImportStart,
@@ -15,6 +19,10 @@ from app.modules.imports.schemas import (
     EpubUploadPrepared,
     ImportProgress,
 )
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaService
+from app.modules.usage.kinds import UsageFact
+from app.modules.usage.read_service import UsageReadService
 
 _MAX_FILES = 20
 _MAX_BYTES_PER_FILE = 80 * 1024 * 1024
@@ -27,6 +35,10 @@ def max_bytes_per_file() -> int:
 
 class ImportService:
     """Owns EPUB import job lifecycle for a user."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._repo = EpubImportRepository(session)
 
     def prepare_upload(self, user_id: UUID, body: EpubUploadPrepare) -> EpubUploadPrepared:
         """Reserve staging space for a chunked EPUB upload."""
@@ -84,15 +96,60 @@ class ImportService:
         author: str | None,
         starting_chapter: int,
     ) -> ImportProgress:
-        """Validate payloads and start a background import job."""
+        """Check quota, validate payloads and start a background import job."""
+        await self._enforce_quota(user_id)
         self._validate(file_payloads, starting_chapter)
+        record = await self._repo.add(user_id)
+        await self._session.commit()
         req = ImportRequest(
             user_id=user_id,
             title=title,
             author=author,
             starting_chapter=starting_chapter,
+            record_id=record.id,
         )
         return await start_job(req, file_payloads)
+
+    async def month_imports_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Backoffice: per-user completed EPUB imports in a window."""
+        return await self._repo.completed_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+
+    async def completed_in_period(
+        self, user_id: UUID, *, period_start: datetime, period_end: datetime
+    ) -> int:
+        """Month completed-EPUB-imports meter for usage composition."""
+        return await self._repo.completed_in_period(
+            user_id, period_start=period_start, period_end=period_end
+        )
+
+    async def _enforce_quota(self, user_id: UUID) -> None:
+        """Tier quota gate for new imports; completed imports count (spec §3.5).
+
+        Hybrid read (usage spec §7): rolled closed days + today live.
+        """
+        limits = await QuotaService(self._session).limits_for_user_id(user_id)
+        if not limits.any_limited(QuotaKind.EPUB_IMPORTS):
+            return
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        rolled = await UsageReadService(self._session).rolled_month_amount(
+            user_id, QuotaKind.EPUB_IMPORTS, now
+        )
+        tail = await self._repo.completed_in_period(
+            user_id, period_start=today_start, period_end=end
+        )
+        QuotaService.enforce(
+            QuotaKind.EPUB_IMPORTS, rolled + tail, limits, resets_at=end, user_id=user_id
+        )
 
     def get(self, user_id: UUID, job_id: str) -> ImportProgress:
         """Poll job progress."""
@@ -121,6 +178,10 @@ class ImportService:
             raise InvalidEpubUploadError("starting_chapter must be >= 1")
         for name, data in file_payloads:
             self._validate_file(name, data)
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
 
     def _validate_file(self, name: str, data: bytes) -> None:
         if not name.lower().endswith(".epub"):

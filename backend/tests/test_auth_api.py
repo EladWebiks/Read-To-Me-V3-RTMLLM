@@ -57,9 +57,8 @@ async def _seed_admin(session_factory: async_sessionmaker[AsyncSession]) -> None
     async with session_factory() as session:
         await UserService(session).ensure_user(
             UserCreate(
-                username=settings.admin_username,
-                password=settings.admin_password,
-                role="admin",
+                username=settings.auth.admin_username,
+                password=settings.auth.admin_password,
             )
         )
         await session.commit()
@@ -69,7 +68,7 @@ async def _seed_admin(session_factory: async_sessionmaker[AsyncSession]) -> None
 async def client() -> AsyncIterator[AsyncClient]:
     """ASGI client against the migrated database (clears users per test)."""
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     session_factory = async_sessionmaker(
         engine,
         expire_on_commit=False,
@@ -100,10 +99,10 @@ async def test_me_and_logout_with_minted_token(client: AsyncClient) -> None:
     from app.modules.users.service import UserService
 
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(settings.database.url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
-        user = await UserService(session).get_entity_by_username(settings.admin_username)
+        user = await UserService(session).get_entity_by_username(settings.auth.admin_username)
         assert user is not None
         token = create_access_token(user_id=user.id, username=user.username, settings=settings)
     await engine.dispose()
@@ -118,7 +117,7 @@ async def test_me_and_logout_with_minted_token(client: AsyncClient) -> None:
     client.cookies.set("rtm_token", token, domain="test.local", path="/")
     me = await client.get("/api/auth/me")
     assert me.status_code == 200
-    assert me.json()["user"]["username"] == settings.admin_username
+    assert me.json()["user"]["username"] == settings.auth.admin_username
 
     logout = await client.post("/api/auth/logout")
     assert logout.status_code == 204
@@ -135,8 +134,8 @@ async def test_password_login_is_gone(client: AsyncClient) -> None:
     response = await client.post(
         "/api/auth/login",
         json={
-            "username": settings.admin_username,
-            "password": settings.admin_password,
+            "username": settings.auth.admin_username,
+            "password": settings.auth.admin_password,
         },
     )
     assert response.status_code == 404

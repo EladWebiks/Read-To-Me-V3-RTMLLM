@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,8 +41,19 @@ class DownloadJob(Base):
     ready_count: Mapped[int] = mapped_column(Integer, default=0)
     total_count: Mapped[int] = mapped_column(Integer, default=0)
     object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Bytes stored in MinIO for this job (combined MP3 + chapter parts),
+    # recorded at completion. NULL for jobs from before this column existed.
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    # Soft delete (golden rule 6): delete/clean/TTL-purge free the MinIO
+    # assets but KEEP the row — the monthly audio_chapters meter must not
+    # shrink when jobs disappear. Reads filter this; the meter does not.
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         index=True,

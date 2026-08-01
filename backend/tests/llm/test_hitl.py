@@ -24,6 +24,7 @@ from app.modules.users.service import UserService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
 from tests.llm.stream_fakes import stream_from_call
 
 _URL = "https://novelfull.net/book/foo.html"
@@ -32,7 +33,7 @@ _URL = "https://novelfull.net/book/foo.html"
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         yield db
@@ -41,12 +42,12 @@ async def session() -> AsyncIterator[AsyncSession]:
 
 async def _user(session: AsyncSession) -> UserRead:
     return await UserService(session).ensure_user(
-        UserCreate(username=f"hitl_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"hitl_{uuid4().hex[:8]}", password="test-pass-123")
     )
 
 
 def _settings() -> Settings:
-    return Settings(
+    return make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",
@@ -142,7 +143,7 @@ async def test_hitl_pause_and_approve(
         stream_from_call(_fake_scrape_then_reply()),
     )
 
-    events = [e async for e in service.stream_chat(user.id, "scrape this", None)]
+    events = [e async for e in service.stream_chat(user, "scrape this", None)]
     assert "confirmation_request" in [e.event for e in events]
     assert events[-1].data.get("status") == "awaiting_confirmation"
     call_id = UUID(str(events[-1].data["call_id"]))
@@ -154,7 +155,7 @@ async def test_hitl_pause_and_approve(
     resume = [
         e
         async for e in service.stream_confirm(
-            user.id,
+            user,
             conv_id,
             call_id,
             approved=True,
@@ -180,14 +181,12 @@ async def test_hitl_reject(
         "stream_tools",
         stream_from_call(_fake_scrape_then_reply()),
     )
-    events = [e async for e in service.stream_chat(user.id, "scrape url", None)]
+    events = [e async for e in service.stream_chat(user, "scrape url", None)]
     call_id = UUID(str(events[-1].data["call_id"]))
     conv_id = UUID(str(events[0].data["conversation_id"]))
     resume = [
         e
-        async for e in service.stream_confirm(
-            user.id, conv_id, call_id, approved=False, values=None
-        )
+        async for e in service.stream_confirm(user, conv_id, call_id, approved=False, values=None)
     ]
     tool_event = next(e for e in resume if e.event == "tool_result")
     assert tool_event.data["ok"] is False

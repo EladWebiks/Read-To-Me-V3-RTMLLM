@@ -17,6 +17,7 @@ export type ChatRole =
   | 'confirmation'
   | 'choice'
   | 'cancelled'
+  | 'quota_refusal'
 
 export type ConfirmationFormField = {
   name: string
@@ -88,5 +89,5 @@ export type ChatStreamHandlers = {
   onConfirmation?: (payload: ConfirmationPayload) => void
   onChoiceRequest?: (payload: ChoicePayload) => void
   onDone: (payload: DonePayload) => void
-  onError: (detail: string) => void
+  onError: (detail: string, code?: string, resetsAt?: string) => void
 }

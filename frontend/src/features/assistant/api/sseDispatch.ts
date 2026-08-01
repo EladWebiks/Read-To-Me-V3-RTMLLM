@@ -15,7 +15,11 @@ export function dispatchSseBlock(block: string, handlers: ChatStreamHandlers): v
     handleToolish(event, data, handlers) ||
     handleTerminal(event, data, handlers)
   if (!handled && event === 'error') {
-    handlers.onError(String(data.detail ?? 'Chat error'))
+    handlers.onError(
+      String(data.detail ?? 'Chat error'),
+      typeof data.code === 'string' ? data.code : undefined,
+      typeof data.resets_at === 'string' ? data.resets_at : undefined,
+    )
   }
 }
 

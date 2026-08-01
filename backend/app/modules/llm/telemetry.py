@@ -83,6 +83,7 @@ class TelemetryContext:
     task: str
     model: ModelSpec
     fallback_used: bool
+    user_id: uuid.UUID
     conversation_id: uuid.UUID | None = None
 
 
@@ -181,6 +182,7 @@ class LlmTelemetry:
                 error=error,
                 unit_cost_in=ctx.model.input_cost_per_1m,
                 unit_cost_out=ctx.model.output_cost_per_1m,
+                user_id=ctx.user_id,
                 conversation_id=ctx.conversation_id,
             )
         )

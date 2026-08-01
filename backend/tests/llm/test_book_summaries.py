@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(get_settings().database_url)
+    engine = create_async_engine(get_settings().database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         yield db
@@ -35,7 +35,6 @@ async def _user(session: AsyncSession, prefix: str) -> UserRead:
         UserCreate(
             username=f"{prefix}_{uuid4().hex[:8]}",
             password="test-pass-123",
-            role="user",
         )
     )
 

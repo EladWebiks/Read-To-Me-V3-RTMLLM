@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.downloads.models import DownloadJob
+from app.modules.usage.kinds import UsageFact, UsageMetric
+from app.modules.usage.repository import day_window
 
 
 class DownloadRepository:
@@ -27,11 +29,14 @@ class DownloadRepository:
         stmt = select(DownloadJob).where(
             DownloadJob.id == job_id,
             DownloadJob.user_id == user_id,
+            DownloadJob.deleted_at.is_(None),
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_by_id(self, job_id: UUID) -> DownloadJob | None:
+        # Worker-internal lookup: deliberately unfiltered, so a job soft-deleted
+        # mid-run is still updatable by the arq task that owns it.
         stmt = select(DownloadJob).where(DownloadJob.id == job_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -46,7 +51,7 @@ class DownloadRepository:
     ) -> list[DownloadJob]:
         stmt = (
             select(DownloadJob)
-            .where(DownloadJob.user_id == user_id)
+            .where(DownloadJob.user_id == user_id, DownloadJob.deleted_at.is_(None))
             .order_by(DownloadJob.created_at.desc())
             .limit(limit)
         )
@@ -66,6 +71,7 @@ class DownloadRepository:
         now = datetime.now(UTC)
         stmt = select(DownloadJob).where(
             DownloadJob.user_id == user_id,
+            DownloadJob.deleted_at.is_(None),
             DownloadJob.expires_at.is_not(None),
             DownloadJob.expires_at <= now,
         )
@@ -80,6 +86,7 @@ class DownloadRepository:
         stmt = (
             select(DownloadJob)
             .where(
+                DownloadJob.deleted_at.is_(None),
                 DownloadJob.expires_at.is_not(None),
                 DownloadJob.expires_at <= now,
             )
@@ -90,7 +97,120 @@ class DownloadRepository:
         return list(result.scalars().all())
 
     async def delete(self, job: DownloadJob) -> None:
-        await self._session.delete(job)
+        """Soft delete: stamp deleted_at, keep the row for quota metering.
+
+        Callers still purge the MinIO assets first (_delete_assets) — only
+        the DB row survives, so the monthly audio meter cannot erode.
+        """
+        job.deleted_at = datetime.now(UTC)
+        await self._session.flush()
 
     async def flush(self) -> None:
         await self._session.flush()
+
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[DownloadJob], int]:
+        """Backoffice page over ALL users' jobs, newest first (no expiry purge)."""
+        conditions: list[ColumnElement[bool]] = [DownloadJob.deleted_at.is_(None)]
+        if status is not None:
+            conditions.append(DownloadJob.status == status)
+        total_stmt = select(func.count()).select_from(DownloadJob).where(*conditions)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(DownloadJob)
+            .where(*conditions)
+            .order_by(DownloadJob.created_at.desc(), DownloadJob.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total
+
+    async def chapters_in_period(
+        self,
+        user_id: UUID,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> int:
+        """Chapters covered by this user's jobs created in the window.
+
+        Soft-deleted rows are INCLUDED on purpose: the synth work was already
+        done, so deleting or TTL-purging a job never refunds the quota.
+        total_count is stamped at creation, so pending/running jobs count
+        immediately (no double-charge on retry — retries reuse the job row).
+        """
+        stmt = select(func.coalesce(func.sum(DownloadJob.total_count), 0)).where(
+            DownloadJob.user_id == user_id,
+            DownloadJob.created_at >= period_start,
+            DownloadJob.created_at < period_end,
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Per-user month chapter totals for the backoffice usage table.
+
+        Same semantics as chapters_in_period: soft-deleted rows included.
+        """
+        if not user_ids:
+            return {}
+        stmt = (
+            select(
+                DownloadJob.user_id,
+                func.coalesce(func.sum(DownloadJob.total_count), 0),
+            )
+            .where(
+                DownloadJob.user_id.in_(user_ids),
+                DownloadJob.created_at >= period_start,
+                DownloadJob.created_at < period_end,
+            )
+            .group_by(DownloadJob.user_id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: int(row[1]) for row in rows}
+
+    async def stored_bytes(self, user_id: UUID) -> int:
+        """Currently retained MinIO bytes: complete, non-expired, non-deleted.
+
+        Soft-deleted jobs are EXCLUDED here (their assets were purged) — the
+        opposite of the audio meter, which is a flow meter and keeps them.
+        """
+        now = datetime.now(UTC)
+        stmt = select(func.coalesce(func.sum(DownloadJob.size_bytes), 0)).where(
+            DownloadJob.user_id == user_id,
+            DownloadJob.status == "complete",
+            DownloadJob.deleted_at.is_(None),
+            or_(DownloadJob.expires_at.is_(None), DownloadJob.expires_at > now),
+        )
+        # size_bytes is nullable, so SUM's static type is int | None even
+        # though COALESCE guarantees a value at runtime.
+        return int((await self._session.execute(stmt)).scalar_one() or 0)
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user audio facts for one UTC day. Soft-deleted rows INCLUDED
+        (flow-meter semantics — deletion never refunds work)."""
+        start, end = day_window(day)
+        failed = func.count(DownloadJob.id).filter(DownloadJob.status == "failed")
+        stmt = (
+            select(
+                DownloadJob.user_id,
+                func.coalesce(func.sum(DownloadJob.total_count), 0),
+                func.count(DownloadJob.id),
+                failed,
+            )
+            .where(DownloadJob.created_at >= start, DownloadJob.created_at < end)
+            .group_by(DownloadJob.user_id)
+        )
+        facts: list[UsageFact] = []
+        for user_id, chapters, jobs, failed_count in (await self._session.execute(stmt)).all():
+            facts.append(UsageFact(user_id, UsageMetric.AUDIO_CHAPTERS, float(chapters)))
+            facts.append(UsageFact(user_id, UsageMetric.AUDIO_JOBS, float(jobs)))
+            facts.append(UsageFact(user_id, UsageMetric.AUDIO_JOBS_FAILED, float(failed_count)))
+        return facts

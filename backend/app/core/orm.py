@@ -10,11 +10,16 @@ def import_all_models() -> None:
     from app.modules.chapters import models as chapters_models
     from app.modules.discovery import models as discovery_models
     from app.modules.downloads import models as downloads_models
+    from app.modules.imports import models as imports_models
     from app.modules.library import models as library_models
     from app.modules.llm import models as llm_models
+    from app.modules.orchestration import models as orchestration_models
+    from app.modules.quotas import models as quotas_models
     from app.modules.reader import models as reader_models
+    from app.modules.runtime_config import models as runtime_config_models
     from app.modules.scraping import models as scraping_models
     from app.modules.summaries import models as summaries_models
+    from app.modules.usage import models as usage_models
     from app.modules.users import models as users_models
 
     _ = (
@@ -22,10 +27,15 @@ def import_all_models() -> None:
         chapters_models,
         discovery_models,
         downloads_models,
+        imports_models,
         library_models,
         llm_models,
+        orchestration_models,
+        quotas_models,
         reader_models,
+        runtime_config_models,
         scraping_models,
         summaries_models,
+        usage_models,
         users_models,
     )

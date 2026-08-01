@@ -6,7 +6,7 @@ import type { Book, LibrarySort } from '@/features/library/types'
 import { useLibraryBookActions } from './useLibraryBookActions'
 
 export function useLibraryPageState(pageSize: number) {
-  const { data, isLoading, isError } = useBooks()
+  const { data, isLoading, isError, refetch } = useBooks()
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<LibrarySort>('read')
@@ -30,6 +30,7 @@ export function useLibraryPageState(pageSize: number) {
   return {
     isLoading,
     isError,
+    refetch,
     search,
     sort,
     page: safePage,

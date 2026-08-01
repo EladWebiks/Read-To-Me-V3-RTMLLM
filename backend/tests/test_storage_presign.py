@@ -6,14 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from app.core import storage
-from app.core.config import Settings
+
+from tests.factories import make_settings
 
 
 @pytest.mark.unit
 def test_presign_uses_public_endpoint_not_internal() -> None:
     storage.get_minio_client.cache_clear()
     storage.get_minio_presign_client.cache_clear()
-    settings = Settings(
+    settings = make_settings(
         minio_endpoint="minio:9000",
         minio_public_endpoint="localhost:9000",
         minio_access_key="rtm",

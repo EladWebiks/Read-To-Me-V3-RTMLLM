@@ -8,7 +8,11 @@ from app.modules.audio.exceptions import (
     TextTooLongError,
     UnknownProviderError,
 )
-from app.modules.auth.exceptions import GoogleNotConfiguredError, NotAuthenticatedError
+from app.modules.auth.exceptions import (
+    GoogleNotConfiguredError,
+    NotAuthenticatedError,
+    NotAuthorizedError,
+)
 from app.modules.books.exceptions import BookNotFoundError
 from app.modules.chapters.exceptions import (
     ChapterNotFoundError,
@@ -26,8 +30,12 @@ from app.modules.downloads.exceptions import (
 from app.modules.imports.exceptions import ImportJobNotFoundError, InvalidEpubUploadError
 from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.llm.exceptions import (
+    AdapterNotRegisteredError,
     CapabilityNotSupportedError,
+    CatalogModelNotFoundError,
+    CatalogProviderNotFoundError,
     ConversationNotFoundError,
+    DuplicateCatalogModelError,
     LlmConfigError,
     LlmDisabledError,
     LlmProviderError,
@@ -35,7 +43,13 @@ from app.modules.llm.exceptions import (
     LlmTimeoutError,
     NoCandidateModelError,
 )
+from app.modules.quotas.exceptions import QuotaExceededError, QuotaRuleNotFoundError
 from app.modules.reader.exceptions import ProgressNotFoundError
+from app.modules.runtime_config.exceptions import (
+    OverrideNotFoundError,
+    SettingValueInvalidError,
+    UnknownSettingKeyError,
+)
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
@@ -43,12 +57,23 @@ from app.modules.scraping.exceptions import (
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
-from app.modules.users.exceptions import UserAlreadyExistsError, UserNotFoundError
+from app.modules.usage.read_service import record_rejection_detached
+from app.modules.users.exceptions import (
+    AdminSelfActionError,
+    DuplicateMembershipError,
+    LastAdminError,
+    MembershipLifecycleError,
+    UnknownMembershipError,
+    UserAccountDisabledError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach domain-exception → HTTP status mappings."""
     _register_auth_handlers(app)
+    _register_admin_user_handlers(app)
     _register_library_handlers(app)
     _register_audio_handlers(app)
     _register_download_handlers(app)
@@ -56,6 +81,26 @@ def register_exception_handlers(app: FastAPI) -> None:
     _register_import_handlers(app)
     _register_discovery_handlers(app)
     _register_llm_handlers(app)
+    _register_llm_catalog_handlers(app)
+    _register_runtime_config_handlers(app)
+    _register_quota_handlers(app)
+
+
+def _register_quota_handlers(app: FastAPI) -> None:
+    @app.exception_handler(QuotaExceededError)
+    async def _quota_exceeded(
+        _request: Request,
+        exc: QuotaExceededError,
+    ) -> JSONResponse:
+        await record_rejection_detached(exc.user_id, exc.kind, "api")
+        return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+    @app.exception_handler(QuotaRuleNotFoundError)
+    async def _quota_rule_missing(
+        _request: Request,
+        _exc: QuotaRuleNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Quota rule not found"})
 
 
 def _register_auth_handlers(app: FastAPI) -> None:
@@ -65,6 +110,13 @@ def _register_auth_handlers(app: FastAPI) -> None:
         _exc: NotAuthenticatedError,
     ) -> JSONResponse:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    @app.exception_handler(NotAuthorizedError)
+    async def _not_authorized(
+        _request: Request,
+        _exc: NotAuthorizedError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": "Not authorized"})
 
     @app.exception_handler(UserNotFoundError)
     async def _user_not_found(
@@ -80,6 +132,18 @@ def _register_auth_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "User already exists"})
 
+    @app.exception_handler(UserAccountDisabledError)
+    async def _user_disabled(
+        _request: Request,
+        _exc: UserAccountDisabledError,
+    ) -> JSONResponse:
+        # 403, not 401: the caller's identity is established (a verified Google
+        # identity, or a valid session) — it is the account that is not allowed
+        # to be used, which is the same shape as NotAuthorizedError above. A 401
+        # would invite the client to retry with credentials, and no credential
+        # can help until an admin restores the account.
+        return JSONResponse(status_code=403, content={"detail": "This account is disabled"})
+
     @app.exception_handler(GoogleNotConfiguredError)
     async def _google_not_configured(
         _request: Request,
@@ -89,6 +153,49 @@ def _register_auth_handlers(app: FastAPI) -> None:
             status_code=503,
             content={"detail": "Google sign-in is not configured"},
         )
+
+
+def _register_admin_user_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AdminSelfActionError)
+    async def _admin_self_action(
+        _request: Request,
+        _exc: AdminSelfActionError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Admins cannot demote or delete their own account"},
+        )
+
+    @app.exception_handler(LastAdminError)
+    async def _last_admin(
+        _request: Request,
+        _exc: LastAdminError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "At least one active admin must remain"},
+        )
+
+    @app.exception_handler(UnknownMembershipError)
+    async def _unknown_membership(
+        _request: Request,
+        _exc: UnknownMembershipError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Membership tier not found"})
+
+    @app.exception_handler(DuplicateMembershipError)
+    async def _duplicate_membership(
+        _request: Request,
+        _exc: DuplicateMembershipError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": "Membership tier already exists"})
+
+    @app.exception_handler(MembershipLifecycleError)
+    async def _membership_lifecycle(
+        _request: Request,
+        exc: MembershipLifecycleError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 def _register_library_handlers(app: FastAPI) -> None:
@@ -305,3 +412,59 @@ def _register_llm_handlers(app: FastAPI) -> None:
         exc: LlmProviderError,
     ) -> JSONResponse:
         return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+def _register_runtime_config_handlers(app: FastAPI) -> None:
+    @app.exception_handler(UnknownSettingKeyError)
+    async def _unknown_setting(
+        _request: Request,
+        exc: UnknownSettingKeyError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(OverrideNotFoundError)
+    async def _override_missing(
+        _request: Request,
+        exc: OverrideNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(SettingValueInvalidError)
+    async def _setting_invalid(
+        _request: Request,
+        exc: SettingValueInvalidError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+def _register_llm_catalog_handlers(app: FastAPI) -> None:
+    @app.exception_handler(CatalogProviderNotFoundError)
+    async def _catalog_provider_missing(
+        _request: Request,
+        exc: CatalogProviderNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": f"Unknown provider: {exc}"})
+
+    @app.exception_handler(CatalogModelNotFoundError)
+    async def _catalog_model_missing(
+        _request: Request,
+        exc: CatalogModelNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": f"Unknown model: {exc}"})
+
+    @app.exception_handler(AdapterNotRegisteredError)
+    async def _catalog_no_adapter(
+        _request: Request,
+        exc: AdapterNotRegisteredError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": f"No adapter registered for provider: {exc}"},
+        )
+
+    @app.exception_handler(DuplicateCatalogModelError)
+    async def _catalog_duplicate(
+        _request: Request,
+        exc: DuplicateCatalogModelError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": f"Model already exists: {exc}"})

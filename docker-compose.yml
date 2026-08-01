@@ -1,3 +1,16 @@
+# Only values compose itself produces or provisions. Everything else has a
+# dev default in backend/app/core/config.py; real secrets (GOOGLE_*,
+# GEMINI_API_KEY) live in .env and arrive via env_file below.
+x-app-env: &app-env
+  DATABASE_URL: postgresql+asyncpg://${DB_USER:-rtm}:${DB_PASSWORD:-rtm}@postgres:5432/${DB_NAME:-rtm}
+  REDIS_URL: redis://redis:6379/0
+  MINIO_ENDPOINT: minio:9000
+  MINIO_PUBLIC_ENDPOINT: localhost:9000
+  # Must match the MinIO server's root credentials, provisioned from the
+  # same two variables in the `minio` service.
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-rtm}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-rtmsecret}
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -74,36 +87,10 @@ services:
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - .env
     environment:
-      APP_ENV: local
-      DATABASE_URL: postgresql+asyncpg://${DB_USER:-rtm}:${DB_PASSWORD:-rtm}@postgres:5432/${DB_NAME:-rtm}
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_ENDPOINT: localhost:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-rtm}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-rtmsecret}
-      MINIO_BUCKET: ${MINIO_BUCKET:-rtm}
-      MINIO_SECURE: "false"
-      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost"]'
-      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-to-a-long-random-secret}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google/callback}
-      COOKIE_SECURE: "false"
-      SAPI_PROXY_ENABLED: "true"
-      LLM_ENABLED: ${LLM_ENABLED:-false}
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
-      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-2048}
-      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
-      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
-      LLM_ASSISTANT_MODE: ${LLM_ASSISTANT_MODE:-internal_only}
-      LLM_HITL_TTL_SECONDS: ${LLM_HITL_TTL_SECONDS:-900}
-      LLM_MAX_HITL_ROUNDS: ${LLM_MAX_HITL_ROUNDS:-3}
+      <<: *app-env
     depends_on:
       postgres:
         condition: service_healthy
@@ -130,31 +117,10 @@ services:
     container_name: rtm-worker
     restart: unless-stopped
     command: ["arq", "app.jobs.worker.WorkerSettings"]
+    env_file:
+      - .env
     environment:
-      APP_ENV: local
-      DATABASE_URL: postgresql+asyncpg://${DB_USER:-rtm}:${DB_PASSWORD:-rtm}@postgres:5432/${DB_NAME:-rtm}
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_ENDPOINT: localhost:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-rtm}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-rtmsecret}
-      MINIO_BUCKET: ${MINIO_BUCKET:-rtm}
-      MINIO_SECURE: "false"
-      SAPI_PROXY_ENABLED: "true"
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/google/callback}
-      LLM_ENABLED: ${LLM_ENABLED:-false}
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
-      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-2048}
-      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
-      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
-      LLM_ASSISTANT_MODE: ${LLM_ASSISTANT_MODE:-internal_only}
-      LLM_HITL_TTL_SECONDS: ${LLM_HITL_TTL_SECONDS:-900}
-      LLM_MAX_HITL_ROUNDS: ${LLM_MAX_HITL_ROUNDS:-3}
+      <<: *app-env
     depends_on:
       postgres:
         condition: service_healthy

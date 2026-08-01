@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 
 import pytest
+from app.core.bootstrap import seed_admin_user
 from app.core.config import get_settings
 from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleClaims, GoogleOAuthClient
@@ -26,7 +27,7 @@ async def _clear_users(sess: AsyncSession) -> None:
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as sess:
         await _clear_users(sess)
@@ -62,13 +63,13 @@ async def test_first_google_login_claims_admin(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = get_settings()
-    await UserService(session).create(
-        UserCreate(username=settings.admin_username, password="password123", role="admin")
-    )
+    await seed_admin_user(session)  # exactly how the row exists in production
     _patch_google(monkeypatch, "sub-admin", "owner@example.com")
     user, token = await _service(session).login_with_google("code")
-    assert user.username == settings.admin_username
+    assert user.username == settings.auth.admin_username
     assert user.email == "owner@example.com"
+    assert user.is_admin is True
+    assert user.membership == "free"
     assert token
 
 
@@ -113,7 +114,7 @@ async def test_first_login_stores_picture_on_admin_claim(
 ) -> None:
     settings = get_settings()
     await UserService(session).create(
-        UserCreate(username=settings.admin_username, password="password123", role="admin")
+        UserCreate(username=settings.auth.admin_username, password="password123")
     )
     _patch_google(
         monkeypatch, "sub-admin", "owner@example.com", picture="https://p.example.com/me"
@@ -133,7 +134,6 @@ async def test_email_match_links_existing_user(
             username="emailuser",
             password="password123",
             email="match@example.com",
-            role="user",
         )
     )
     _patch_google(monkeypatch, "sub-linked", "match@example.com")
@@ -146,14 +146,13 @@ async def test_second_google_account_provisions_new_user(
     session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = get_settings()
-    await UserService(session).create(
-        UserCreate(username=settings.admin_username, password="password123", role="admin")
-    )
+    await seed_admin_user(session)
     await UserService(session).create_from_google("sub-one", "one@example.com")
     _patch_google(monkeypatch, "sub-two", "two@example.com")
     user, _ = await _service(session).login_with_google("code")
     assert user.username == "two"
-    assert user.username != settings.admin_username
+    assert user.username != settings.auth.admin_username
+    assert user.is_admin is False
 
 
 @pytest.mark.integration
@@ -173,7 +172,6 @@ async def test_email_match_is_case_insensitive(
             username="mixedcase",
             password="password123",
             email="Owner@Example.com",
-            role="user",
         )
     )
     _patch_google(monkeypatch, "sub-mixed", "owner@example.com")
@@ -193,7 +191,7 @@ async def test_resolve_google_identity_raises_users_domain_conflict(
     """
     users = UserService(session)
     await users.create(
-        UserCreate(username="direct", password="password123", email="d@example.com", role="user")
+        UserCreate(username="direct", password="password123", email="d@example.com")
     )
     entity = await users.get_entity_by_email("d@example.com")
     assert entity is not None
@@ -202,6 +200,26 @@ async def test_resolve_google_identity_raises_users_domain_conflict(
         await users.resolve_google_identity(
             google_sub="sub-new", email="d@example.com", admin_username="admin"
         )
+
+
+@pytest.mark.integration
+async def test_soft_deleted_user_cannot_sign_in_again(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A backoffice soft-delete disables sign-in; only an admin restore undoes it.
+
+    Without the any-scoped lookups the deleted row is invisible, the flow falls
+    through to provisioning and dies on the `google_sub` unique index — a 500
+    dressed up as `internal_error` instead of a decided outcome.
+    """
+    users = UserService(session)
+    admin = await users.create(UserCreate(username="boss", password="password123", is_admin=True))
+    ghost = await users.create_from_google("sub-ghost", "ghost@example.com")
+    await users.soft_delete_user_admin(actor_id=admin.id, user_id=ghost.id)
+    _patch_google(monkeypatch, "sub-ghost", "ghost@example.com")
+    with pytest.raises(GoogleAuthError) as exc_info:
+        await _service(session).login_with_google("code")
+    assert exc_info.value.reason == "account_disabled"
 
 
 @pytest.mark.integration
@@ -215,7 +233,6 @@ async def test_email_match_conflicting_google_sub_rejected(
             username="conflictuser",
             password="password123",
             email="x@example.com",
-            role="user",
         )
     )
     entity = await users.get_entity_by_email("x@example.com")

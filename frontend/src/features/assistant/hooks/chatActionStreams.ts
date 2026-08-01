@@ -13,6 +13,7 @@ export type ChatActionArgs = {
   setPendingConfirm: (v: ConfirmationPayload | null) => void
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>
   setError: (v: string | null) => void
+  setQuotaResetsAt: (v: string | null) => void
   setLiveStatus: (v: string | null) => void
   setConversationId: (id: string | null) => void
   abortRef: MutableRefObject<AbortController | null>
@@ -27,6 +28,7 @@ function localId(prefix: string): string {
 /** Stream a user text turn. */
 export async function streamUserText(args: ChatActionArgs, text: string): Promise<void> {
   args.setError(null)
+  args.setQuotaResetsAt(null)
   args.setLiveStatus('Thinking…')
   args.setSending(true)
   const assistantId = localId('assistant')
@@ -42,6 +44,7 @@ export async function streamUserText(args: ChatActionArgs, text: string): Promis
       setConversationId: args.setConversationId,
       setMessages: args.setMessages,
       setError: args.setError,
+      setQuotaResetsAt: args.setQuotaResetsAt,
       setLiveStatus: args.setLiveStatus,
       setSending: args.setSending,
       abortRef: args.abortRef,
@@ -75,6 +78,7 @@ export async function streamConfirmResolve(
     setConversationId: args.setConversationId,
     setMessages: args.setMessages,
     setError: args.setError,
+    setQuotaResetsAt: args.setQuotaResetsAt,
     setLiveStatus: args.setLiveStatus,
     setSending: args.setSending,
     abortRef: args.abortRef,

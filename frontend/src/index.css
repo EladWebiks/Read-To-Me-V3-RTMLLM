@@ -144,6 +144,30 @@ body {
   animation: fade-in-up 220ms ease-out;
 }
 
+@keyframes rtm-skeleton-sweep {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* Loading stand-in blocks. Tint derives from --muted-foreground (14%, the
+   inline-code tint), so it is correct in both themes with no dark: variant.
+   1.6s sits in the app's calm ambient range (assistant-pulse is 2.2s). */
+.rtm-skeleton {
+  background-color: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--muted-foreground) 12%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: rtm-skeleton-sweep 1.6s ease-in-out infinite;
+}
+
 /* Floating / fullscreen assistant shell — lifts off reader in dark mode */
 .assistant-panel {
   border-color: color-mix(in srgb, #a78bfa 28%, var(--border));
@@ -316,6 +340,13 @@ body {
   .assistant-stream-caret {
     animation: none;
     opacity: 1;
+  }
+
+  /* Degrade to the flat tint — no sweep. The Spinner intentionally keeps
+     spinning under reduced motion; it is the only signal during a wait. */
+  .rtm-skeleton {
+    animation: none;
+    background-image: none;
   }
 }
 

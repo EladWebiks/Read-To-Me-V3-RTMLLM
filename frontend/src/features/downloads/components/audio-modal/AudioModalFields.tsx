@@ -20,6 +20,7 @@ export function AudioModalFields({ chapters, form, voices, busy, onChange }: Pro
   return (
     <div className="space-y-3 text-sm">
       <ChapterSelect
+        id="download-from-chapter"
         label="From chapter"
         value={form.from}
         options={sorted}
@@ -27,6 +28,7 @@ export function AudioModalFields({ chapters, form, voices, busy, onChange }: Pro
         onChange={(from) => onChange({ from, to: Math.max(from, form.to) })}
       />
       <ChapterSelect
+        id="download-to-chapter"
         label="To chapter"
         value={form.to}
         options={endOptions}
@@ -40,6 +42,7 @@ export function AudioModalFields({ chapters, form, voices, busy, onChange }: Pro
       />
       {form.provider === 'edge' ? (
         <VoiceSelect
+          id="download-voice"
           value={form.voice}
           voices={voices}
           disabled={busy}

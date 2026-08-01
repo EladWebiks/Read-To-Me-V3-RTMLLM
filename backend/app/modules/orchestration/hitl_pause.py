@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -53,6 +54,18 @@ async def freeze_pending(req: FreezeRequest) -> ToolCallRecord:
             "external_calls": req.budget.external_calls,
             "tokens_in": req.budget.tokens_in,
             "tokens_out": req.budget.tokens_out,
+            # Frozen caps: a resumed turn must use the policy resolved at
+            # turn start, never a fresh resolve (spec §3.4).
+            "caps": {
+                "max_iters": req.budget.max_iters,
+                "max_external_calls": req.budget.max_external_calls,
+                "max_tokens_in": req.budget.max_tokens_in,
+                "max_tokens_out": req.budget.max_tokens_out,
+                "max_cost_usd": req.budget.max_cost_usd,
+                "run_deadline_seconds": req.budget.run_deadline_seconds,
+                "max_hitl_rounds": req.budget.max_hitl_rounds,
+                "membership": req.budget.membership,
+            },
         },
         "hitl_rounds": req.hitl_rounds,
         "expires_at": expires.isoformat(),
@@ -87,7 +100,7 @@ def confirmation_event_data(row: ToolCallRecord, tool: BaseTool) -> dict[str, An
 
 def restore_snapshot(
     row: ToolCallRecord,
-) -> tuple[list[Message], Usage, dict[str, float | int], int, str]:
+) -> tuple[list[Message], Usage, dict[str, Any], int, str]:
     """Load messages, usage, budget counters, hitl_rounds, provider_call_id."""
     snap = row.output or {}
     if snap.get("kind") != "hitl_pending":
@@ -103,13 +116,41 @@ def restore_snapshot(
     return messages, usage, budget_raw, hitl_rounds, provider_call_id
 
 
-def apply_budget_snapshot(budget: RunBudget, raw: dict[str, float | int]) -> None:
+def apply_budget_snapshot(budget: RunBudget, raw: dict[str, Any]) -> None:
     """Restore counters so resume continues under the same caps."""
     budget.cost_usd = float(raw.get("cost_usd") or 0.0)
     budget.iters = int(raw.get("iters") or 0)
     budget.external_calls = int(raw.get("external_calls") or 0)
     budget.tokens_in = int(raw.get("tokens_in") or 0)
     budget.tokens_out = int(raw.get("tokens_out") or 0)
+
+
+def budget_from_snapshot(raw: dict[str, Any]) -> RunBudget | None:
+    """Rebuild the frozen budget (caps + counters) from a pause snapshot.
+
+    Returns None for pre-caps legacy snapshots — the caller resolves policy
+    fresh (one-time fallback). The wall-clock window RESTARTS here: the
+    frozen run_deadline_seconds value applies from now, not from the
+    original turn start, or every resume after a long pause would expire
+    instantly (spec §3.4). The cap is frozen; the clock is per segment.
+    """
+    caps = raw.get("caps")
+    if not isinstance(caps, dict):
+        return None
+    seconds = int(caps["run_deadline_seconds"])
+    budget = RunBudget(
+        max_iters=int(caps["max_iters"]),
+        max_external_calls=int(caps["max_external_calls"]),
+        max_tokens_in=int(caps["max_tokens_in"]),
+        max_tokens_out=int(caps["max_tokens_out"]),
+        max_cost_usd=float(caps["max_cost_usd"]),
+        deadline_mono=time.monotonic() + seconds,
+        run_deadline_seconds=seconds,
+        max_hitl_rounds=int(caps["max_hitl_rounds"]),
+        membership=str(caps.get("membership") or "unknown"),
+    )
+    apply_budget_snapshot(budget, raw)
+    return budget
 
 
 def is_expired(row: ToolCallRecord) -> bool:

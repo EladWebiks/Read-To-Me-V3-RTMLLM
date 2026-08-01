@@ -7,13 +7,17 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
     ForeignKey,
+    Identity,
+    Index,
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -56,6 +60,10 @@ class ConversationMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Insertion-order tiebreaker. created_at comes from the Python clock, whose
+    # resolution is ~15ms on Windows, so a batch appended in one request ties;
+    # the UUID PK sorts randomly, so history order needs a monotonic column.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), index=True)
 
 
 class ConversationSummary(Base):
@@ -115,6 +123,9 @@ class LlmExecution(Base):
     """One provider call (tokens, cost, latency)."""
 
     __tablename__ = "llm_executions"
+    # Composite (user_id, created_at): billing-month aggregation does one
+    # index range scan; leftmost prefix also covers user_id-only lookups.
+    __table_args__ = (Index("ix_llm_executions_user_id_created_at", "user_id", "created_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -122,6 +133,13 @@ class LlmExecution(Base):
         ForeignKey("conversations.id"),
         nullable=True,
         index=True,
+    )
+    # Plain FK, no cascade: usage rows must survive user soft-deletion for
+    # billing/audit. No index=True — the composite index above covers it.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
     )
     task: Mapped[str] = mapped_column(String(64), index=True)
     provider: Mapped[str] = mapped_column(String(32), index=True)
@@ -171,12 +189,20 @@ class ModelProvider(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ModelConfiguration(Base):
     """Per-model capabilities and feature flags."""
 
     __tablename__ = "model_configurations"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_id", "model_name", name="uq_model_configurations_provider_model"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     provider_id: Mapped[uuid.UUID] = mapped_column(
@@ -189,6 +215,12 @@ class ModelConfiguration(Base):
     supports_structured: Mapped[bool] = mapped_column(Boolean, default=False)
     supports_streaming: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # USD per 1M tokens; runtime truth for cost records (code catalog is seed-only).
+    input_cost_per_1m: Mapped[float] = mapped_column(Float, default=0.0)
+    output_cost_per_1m: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

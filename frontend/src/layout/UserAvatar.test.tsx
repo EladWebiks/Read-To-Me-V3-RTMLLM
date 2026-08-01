@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { User } from '@/features/auth/types'
 import { TooltipProvider } from '@/shared/ui'
@@ -9,14 +10,26 @@ const user: User = {
   username: 'idan',
   email: 'idan.avin@gmail.com',
   picture_url: 'https://lh3.example.com/photo.jpg',
-  role: 'admin',
+  is_admin: true,
+  membership: 'free',
   created_at: '2026-07-30T00:00:00Z',
 }
 
+/** The avatar is a dropdown trigger, so it needs router context to navigate. */
 function renderAvatar(overrides: Partial<User> = {}) {
   return render(
     <TooltipProvider>
-      <UserAvatar user={{ ...user, ...overrides }} />
+      <MemoryRouter initialEntries={['/library']}>
+        <Routes>
+          <Route
+            path="/library"
+            element={
+              <UserAvatar user={{ ...user, ...overrides }} membershipLabel="Free Tier" />
+            }
+          />
+          <Route path="/usage" element={<div>usage-page-marker</div>} />
+        </Routes>
+      </MemoryRouter>
     </TooltipProvider>,
   )
 }
@@ -44,5 +57,15 @@ describe('UserAvatar', () => {
     fireEvent.error(img as HTMLImageElement)
     expect(container.querySelector('img')).toBeNull()
     expect(container.textContent).toContain('i')
+  })
+
+  it('opens a menu with the email, tier, and a Plan & usage link', async () => {
+    renderAvatar()
+    fireEvent.keyDown(screen.getByLabelText('Account menu'), { key: 'Enter' })
+    expect(await screen.findByText('idan.avin@gmail.com')).toBeTruthy()
+    expect(screen.getByText('Free Tier plan')).toBeTruthy()
+
+    fireEvent.click(screen.getByText('Plan & usage'))
+    expect(await screen.findByText('usage-page-marker')).toBeTruthy()
   })
 })

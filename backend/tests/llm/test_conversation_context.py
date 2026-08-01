@@ -20,10 +20,12 @@ from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.factories import make_settings
+
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(get_settings().database_url)
+    engine = create_async_engine(get_settings().database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         yield db
@@ -31,7 +33,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 
 
 def _settings(trigger: int) -> Settings:
-    return Settings(
+    return make_settings(
         llm_enabled=True,
         gemini_api_key="test-key",
         llm_provider="gemini",
@@ -43,7 +45,7 @@ def _settings(trigger: int) -> Settings:
 
 async def _conversation(session: AsyncSession) -> tuple[Any, Any, LlmRepository]:
     user = await UserService(session).ensure_user(
-        UserCreate(username=f"context_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"context_{uuid4().hex[:8]}", password="test-pass-123")
     )
     repo = LlmRepository(session)
     conversation = await repo.create_conversation(user.id)
@@ -97,7 +99,7 @@ async def test_summary_access_checks_conversation_ownership(
 ) -> None:
     _user, conversation, repo = await _conversation(session)
     other = await UserService(session).ensure_user(
-        UserCreate(username=f"other_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"other_{uuid4().hex[:8]}", password="test-pass-123")
     )
 
     with pytest.raises(ConversationNotFoundError):

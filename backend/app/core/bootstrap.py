@@ -18,9 +18,9 @@ async def seed_admin_user(session: AsyncSession | None = None) -> None:
     """Ensure the configured admin user exists (idempotent)."""
     settings = get_settings()
     data = UserCreate(
-        username=settings.admin_username,
-        password=settings.admin_password,
-        role="admin",
+        username=settings.auth.admin_username,
+        password=settings.auth.admin_password,
+        is_admin=True,
     )
     if session is not None:
         user = await UserService(session).ensure_user(data)

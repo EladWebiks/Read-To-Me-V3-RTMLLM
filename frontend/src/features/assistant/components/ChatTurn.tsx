@@ -1,8 +1,16 @@
 import type { ChatMessage } from '../api/chatApi'
 import { ChoiceChips } from './ChoiceChips'
 import { ConfirmationCard } from './ConfirmationCard'
-import { AssistantProse, CancelledNote, UserBubble } from './chatTurnParts'
+import {
+  AssistantProse,
+  CancelledNote,
+  QuotaRefusalNote,
+  UserBubble,
+} from './chatTurnParts'
 import { ToolResultCard } from './ToolResultCard'
+
+/** Roles rendered as assistant prose; anything else degrades to a muted note. */
+const PROSE_ROLES = new Set<string>(['assistant', 'system', 'step'])
 
 type Props = {
   message: ChatMessage
@@ -24,6 +32,8 @@ export function ChatTurn({
 }: Props) {
   if (message.role === 'user') return <UserBubble content={message.content} />
   if (message.role === 'cancelled') return <CancelledNote content={message.content} />
+  if (message.role === 'quota_refusal')
+    return <QuotaRefusalNote content={message.content} />
   if (message.role === 'confirmation' && message.confirmation) {
     return (
       <ConfirmationCard
@@ -52,5 +62,8 @@ export function ChatTurn({
       />
     )
   }
+  // Future persisted roles must degrade visibly, not vanish.
+  if (!PROSE_ROLES.has(message.role))
+    return <QuotaRefusalNote content={message.content} />
   return <AssistantProse content={message.content} streaming={streaming} />
 }

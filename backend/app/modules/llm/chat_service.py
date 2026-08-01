@@ -16,6 +16,7 @@ from app.modules.llm.sse import ChatSseEvent
 from app.modules.llm.types import Role
 from app.modules.orchestration.exceptions import OrchestrationError
 from app.modules.orchestration.service import OrchestrationService
+from app.modules.users.schemas import UserRead
 
 _TITLE_MAX = 80
 
@@ -54,26 +55,26 @@ class ChatService:
 
     async def stream_chat(
         self,
-        user_id: UUID,
+        user: UserRead,
         message: str,
         conversation_id: UUID | None,
         ui_context: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChatSseEvent]:
         """Persist user turn, run orchestrated assistant turn."""
-        self._llm.ensure_enabled()
+        await self._llm.ensure_ready()
         text = message.strip()
         try:
-            conv_id = await self._prepare_conversation(user_id, text, conversation_id)
+            conv_id = await self._prepare_conversation(user.id, text, conversation_id)
             yield ChatSseEvent("meta", {"conversation_id": str(conv_id)})
             orch = self._orchestration()
-            async for event in orch.run(user_id, conv_id, ui_context=ui_context):
+            async for event in orch.run(user, conv_id, ui_context=ui_context):
                 yield event
         except (LlmError, OrchestrationError) as exc:
             yield ChatSseEvent("error", {"detail": str(exc)})
 
     async def stream_confirm(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         call_id: UUID,
         *,
@@ -81,9 +82,9 @@ class ChatService:
         values: dict[str, Any] | None,
     ) -> AsyncIterator[ChatSseEvent]:
         """Resume a turn after HITL confirmation (new SSE stream)."""
-        self._llm.ensure_enabled()
+        await self._llm.ensure_ready()
         try:
-            conv = await self._repo.get_conversation_for_user(conversation_id, user_id)
+            conv = await self._repo.get_conversation_for_user(conversation_id, user.id)
             if conv is None:
                 raise ConversationNotFoundError(str(conversation_id))
             yield ChatSseEvent(
@@ -92,7 +93,7 @@ class ChatService:
             )
             orch = self._orchestration()
             async for event in orch.resume_confirm(
-                user_id,
+                user,
                 conversation_id,
                 call_id,
                 approved=approved,

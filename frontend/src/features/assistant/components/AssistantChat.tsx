@@ -1,12 +1,16 @@
+import { useMeUsage } from '@/features/usage'
 import { ASSISTANT_CHAT_COLUMN } from '../assistantGeometry'
 import { useAssistantChat } from '../hooks/useAssistantChat'
+import { quotaLock } from '../logic/quotaState'
 import { AssistantComposer } from './AssistantComposer'
 import { AssistantMessageList } from './AssistantMessageList'
 
 /** Live assistant chat with tools + HITL form cards. */
 export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
   const chat = useAssistantChat()
+  const usage = useMeUsage()
   const blocked = Boolean(chat.pendingConfirm)
+  const quotaNotice = quotaLock(usage.data, chat.quotaResetsAt)
 
   return (
     <div
@@ -41,6 +45,7 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
             sending={chat.sending}
             status={chat.liveStatus}
             blocked={blocked}
+            quotaNotice={quotaNotice}
             onSend={() => void chat.send()}
             onCancel={chat.cancel}
           />

@@ -1,9 +1,14 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { useLocation, useNavigate } from 'react-router'
 import type { ChatMessage, ClientAction, ConfirmationPayload } from '../api/chatApi'
 import { useAssistantStore } from '../assistantStore'
 import { useHydrateConversation, useNewChatReset } from './chatLifecycle'
+import {
+  useCancelAssistant,
+  useChatFeedbackState,
+  useClearLocalChat,
+} from './chatSessionState'
 import { applyClientAction } from './clientActions'
 import { useChatActions } from './useChatActions'
 import { uiContextPayload, useUiContext } from './useUiContext'
@@ -19,21 +24,21 @@ export function useAssistantChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [liveStatus, setLiveStatus] = useState<string | null>(null)
+  const feedback = useChatFeedbackState()
+  const { setError, setLiveStatus, setQuotaResetsAt } = feedback
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmationPayload | null>(null)
   const [abortRef] = useState(() => ({ current: null as AbortController | null }))
 
   useHydrateConversation(setMessages, setConversationId)
 
-  const clearLocal = useCallback(() => {
-    setMessages([])
-    setDraft('')
-    setError(null)
-    setSending(false)
-    setLiveStatus(null)
-    setPendingConfirm(null)
-  }, [])
+  const clearLocal = useClearLocalChat({
+    setMessages,
+    setDraft,
+    setSending,
+    setPendingConfirm,
+    setError,
+    setLiveStatus,
+  })
   useNewChatReset(newChatNonce, abortRef, clearLocal)
 
   const cancel = useCancelAssistant(abortRef, setMessages, setSending, setLiveStatus)
@@ -53,6 +58,7 @@ export function useAssistantChat() {
     setPendingConfirm,
     setMessages,
     setError,
+    setQuotaResetsAt,
     setLiveStatus,
     setConversationId,
     abortRef,
@@ -65,8 +71,7 @@ export function useAssistantChat() {
     draft,
     setDraft,
     sending,
-    error,
-    liveStatus,
+    ...feedback,
     pendingConfirm,
     send,
     sendText,
@@ -79,27 +84,4 @@ function useAssistantNavigation() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   return [navigate, pathname] as const
-}
-
-function useCancelAssistant(
-  abortRef: { current: AbortController | null },
-  setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
-  setSending: (value: boolean) => void,
-  setLiveStatus: (value: string | null) => void,
-) {
-  return useCallback(() => {
-    if (!abortRef.current) return
-    abortRef.current.abort()
-    abortRef.current = null
-    setSending(false)
-    setLiveStatus(null)
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `cancelled-${crypto.randomUUID()}`,
-        role: 'cancelled',
-        content: 'Response canceled.',
-      },
-    ])
-  }, [abortRef, setLiveStatus, setMessages, setSending])
 }

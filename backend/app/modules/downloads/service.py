@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,10 +22,15 @@ from app.modules.downloads.repository import DownloadRepository
 from app.modules.downloads.schemas import (
     DownloadCleanResult,
     DownloadCreate,
+    DownloadJobAdminRead,
     DownloadJobRead,
     DownloadUrlRead,
 )
 from app.modules.library.service import LibraryService
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaLimits, QuotaService
+from app.modules.usage.kinds import UsageFact
+from app.modules.usage.read_service import UsageReadService
 
 
 class DownloadService:
@@ -38,7 +43,8 @@ class DownloadService:
         self._chapters = ChapterService(session)
 
     async def create(self, user_id: UUID, data: DownloadCreate) -> DownloadJobRead:
-        """Create a pending job after ownership + range checks."""
+        """Create a pending job after quota, ownership + range checks."""
+        await self._enforce_quotas(user_id)
         if data.chapter_to < data.chapter_from:
             raise InvalidChapterRangeError("chapter_to < chapter_from")
         await self._library.assert_access(user_id, data.book_id)
@@ -69,6 +75,56 @@ class DownloadService:
         await self._session.commit()
         await self._enqueue(created.id)
         return DownloadJobRead.model_validate(created)
+
+    async def _enforce_quotas(self, user_id: UUID) -> None:
+        """Tier quota gate for new MP3 work (monthly chapters + standing storage)."""
+        limits = await QuotaService(self._session).limits_for_user_id(user_id)
+        if limits.any_limited(QuotaKind.AUDIO_CHAPTERS):
+            await self._enforce_audio_chapters(user_id, limits)
+        if limits.any_limited(QuotaKind.STORAGE_BYTES):
+            stored = await self._repo.stored_bytes(user_id)
+            QuotaService.enforce(
+                QuotaKind.STORAGE_BYTES, stored, limits, resets_at=None, user_id=user_id
+            )
+
+    async def _enforce_audio_chapters(self, user_id: UUID, limits: QuotaLimits) -> None:
+        """Hybrid read (usage spec §7): rolled closed days + today live."""
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        rolled = await UsageReadService(self._session).rolled_month_amount(
+            user_id, QuotaKind.AUDIO_CHAPTERS, now
+        )
+        tail = await self._repo.chapters_in_period(
+            user_id, period_start=today_start, period_end=end
+        )
+        QuotaService.enforce(
+            QuotaKind.AUDIO_CHAPTERS, rolled + tail, limits, resets_at=end, user_id=user_id
+        )
+
+    async def month_chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Backoffice: per-user audio chapters in a window (admin router composes services)."""
+        return await self._repo.chapters_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+
+    async def chapters_in_period(
+        self, user_id: UUID, *, period_start: datetime, period_end: datetime
+    ) -> int:
+        """Month audio-chapter meter (soft-deleted included) for usage composition."""
+        return await self._repo.chapters_in_period(
+            user_id, period_start=period_start, period_end=period_end
+        )
+
+    async def stored_bytes(self, user_id: UUID) -> int:
+        """Live retained-MP3 bytes (level meter) for usage composition."""
+        return await self._repo.stored_bytes(user_id)
 
     async def create_single_chapter(
         self,
@@ -193,7 +249,7 @@ class DownloadService:
 
     async def _presign(self, object_key: str, filename: str) -> DownloadUrlRead:
         settings = get_settings()
-        expires = settings.signed_url_expires_seconds
+        expires = settings.storage.signed_url_expires_seconds
         url = await presigned_get(object_key, expires)
         return DownloadUrlRead(
             url=url,
@@ -223,7 +279,18 @@ class DownloadService:
 
         await enqueue_download_job(job_id)
 
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[DownloadJobAdminRead], int]:
+        """Backoffice: all users' jobs, read-only — deliberately no purge."""
+        jobs, total = await self._repo.list_jobs_admin(status=status, limit=limit, offset=offset)
+        return [DownloadJobAdminRead.model_validate(job) for job in jobs], total
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
+
 
 def _ttl_deadline() -> datetime:
-    hours = get_settings().download_job_ttl_hours
+    hours = get_settings().storage.download_job_ttl_hours
     return datetime.now(UTC) + timedelta(hours=hours)

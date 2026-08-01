@@ -15,6 +15,7 @@ from app.modules.auth.exceptions import GoogleAuthError
 from app.modules.auth.google import GoogleOAuthClient
 from app.modules.auth.schemas import MeResponse
 from app.modules.auth.service import AuthService
+from app.modules.users import membership_registry
 from app.modules.users.schemas import UserRead
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,9 @@ def _set_auth_cookie(response: Response, token: str, settings: Settings) -> None
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
-        max_age=settings.jwt_expire_days * 24 * 60 * 60,
+        secure=settings.auth.cookie_secure,
+        samesite=settings.auth.cookie_samesite,
+        max_age=settings.auth.jwt_expire_days * 24 * 60 * 60,
         path="/",
     )
 
@@ -125,8 +126,8 @@ async def google_login(
         key=STATE_COOKIE_NAME,
         value=state,
         httponly=True,
-        secure=settings.cookie_secure,
-        # Hardcoded, not settings.cookie_samesite: the callback is a cross-site
+        secure=settings.auth.cookie_secure,
+        # Hardcoded, not settings.auth.cookie_samesite: the callback is a cross-site
         # top-level navigation from accounts.google.com, which "Strict" cookies
         # are not sent on. If cookie_samesite were ever set to "strict", every
         # Google login would break with an opaque state_mismatch. "Lax" is
@@ -221,6 +222,8 @@ async def logout(response: Response) -> None:
 @router.get("/me", response_model=MeResponse)
 async def me(
     current_user: Annotated[UserRead, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MeResponse:
-    """Return the currently authenticated user."""
-    return MeResponse(user=current_user)
+    """Return the currently authenticated user, with the tier's display label."""
+    label = await membership_registry.label_for(session, current_user.membership)
+    return MeResponse(user=current_user, membership_label=label)

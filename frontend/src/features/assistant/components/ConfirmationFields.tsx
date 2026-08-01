@@ -3,6 +3,7 @@ import {
   defaultDownloadRate,
   defaultVoice,
 } from '@/features/downloads/logic/audioModalUtils'
+import { Select } from '@/shared/ui'
 import type { ConfirmationFormField } from '../api/chatApi'
 import { coerce, stringValue } from './confirmFormUtils'
 import { ConfirmationVoiceControl } from './ConfirmationVoiceControl'
@@ -60,18 +61,17 @@ function FieldControl(props: {
   }
   if (props.field.options?.length) {
     return (
-      <select
+      <Select
         disabled={props.busy}
         value={stringValue(props.values[props.field.name])}
         onChange={(event) => props.onChange(props.field.name, event.target.value)}
-        className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm"
       >
         {props.field.options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
+      </Select>
     )
   }
   return (

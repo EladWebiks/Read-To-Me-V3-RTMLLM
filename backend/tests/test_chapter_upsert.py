@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         yield db
@@ -29,7 +29,7 @@ async def session() -> AsyncIterator[AsyncSession]:
 @pytest.mark.asyncio
 async def test_upsert_update_returns_chapter_read(session: AsyncSession) -> None:
     user = await UserService(session).ensure_user(
-        UserCreate(username=f"ch_{uuid4().hex[:8]}", password="test-pass-123", role="user")
+        UserCreate(username=f"ch_{uuid4().hex[:8]}", password="test-pass-123")
     )
     book = await LibraryService(session).add_book(
         user.id, BookCreate(title="Upsert Book", author="A", description="")

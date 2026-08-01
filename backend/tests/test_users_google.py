@@ -13,7 +13,7 @@ from sqlalchemy.pool import NullPool
 
 @pytest.fixture
 async def session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as sess:
         await sess.execute(text("DELETE FROM users"))
@@ -34,13 +34,14 @@ async def test_create_from_google_sets_identity(session: AsyncSession) -> None:
     assert user.email == "casual.reader@example.com"
     assert user.username == "casual.reader"
     assert user.password_hash is None
-    assert user.role == "user"
+    assert user.is_admin is False
+    assert user.membership == "free"
 
 
 @pytest.mark.integration
 async def test_create_from_google_dedupes_username(session: AsyncSession) -> None:
     service = UserService(session)
-    await service.create(UserCreate(username="reader", password="password123", role="admin"))
+    await service.create(UserCreate(username="reader", password="password123"))
     user = await service.create_from_google("sub-2", "reader@example.com")
     assert user.username == "reader2"
 
@@ -50,9 +51,7 @@ async def test_link_google_stamps_sub_and_backfills_email(
     session: AsyncSession,
 ) -> None:
     service = UserService(session)
-    created = await service.create(
-        UserCreate(username="admin", password="password123", role="admin")
-    )
+    created = await service.create(UserCreate(username="admin", password="password123"))
     entity = await service.get_entity_by_id(created.id)
     assert entity is not None
     linked = await service.link_google(entity, "sub-3", "admin@example.com")
@@ -74,9 +73,7 @@ async def test_create_from_google_stores_picture(session: AsyncSession) -> None:
 @pytest.mark.integration
 async def test_link_google_stores_picture(session: AsyncSession) -> None:
     service = UserService(session)
-    created = await service.create(
-        UserCreate(username="pictured", password="password123", role="admin")
-    )
+    created = await service.create(UserCreate(username="pictured", password="password123"))
     entity = await service.get_entity_by_id(created.id)
     assert entity is not None
     linked = await service.link_google(

@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.modules.books.schemas import BookCreate
 from app.modules.chapters.service import ChapterService
 from app.modules.imports.epub import ParsedEpub, parse_epub
+from app.modules.imports.repository import EpubImportRepository
 from app.modules.imports.schemas import (
     EpubImportFileSummary,
     EpubImportResult,
@@ -37,6 +38,7 @@ class ImportRequest:
     title: str | None
     author: str | None
     starting_chapter: int
+    record_id: UUID | None = None
 
 
 def get_job(job_id: str, user_id: UUID) -> dict[str, Any] | None:
@@ -108,7 +110,7 @@ async def _run_import(
 ) -> None:
     job = _jobs[job_id]
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     try:
         await _import_with_session(factory, job, req, file_payloads)
@@ -117,7 +119,36 @@ async def _run_import(
         job["status"] = "failed"
         job["message"] = str(exc)
     finally:
+        # Single terminal point: the job dict is "completed", "cancelled" or
+        # "failed" by now, whichever branch above got us here.
+        await _finish_record(factory, req.record_id, job)
         await engine.dispose()
+
+
+_TERMINAL_STATUSES = frozenset({"completed", "cancelled", "failed"})
+
+
+async def _finish_record(
+    factory: async_sessionmaker[AsyncSession],
+    record_id: UUID | None,
+    job: dict[str, Any],
+) -> None:
+    """Stamp the durable epub_imports row; progress stays in-memory (v2 parity)."""
+    if record_id is None:
+        return
+    status = job["status"]
+    if status not in _TERMINAL_STATUSES:
+        status = "failed"
+    result = job.get("result")
+    book_id = UUID(result.book_id) if result is not None else None
+    async with factory() as session:
+        await EpubImportRepository(session).set_terminal(
+            record_id,
+            status=status,
+            chapter_count=int(job["chapters_imported"] or 0),
+            book_id=book_id,
+        )
+        await session.commit()
 
 
 async def _import_with_session(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.fetcher import FetchError, fetch_html
 from app.modules.books.schemas import BookCreate
 from app.modules.library.service import LibraryService
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaService
 from app.modules.scraping.exceptions import (
     PreviewError,
     ScrapeJobAlreadyCancelledError,
@@ -21,11 +24,14 @@ from app.modules.scraping.models import ScrapingJob
 from app.modules.scraping.registry import ALL_ALLOWED_HOSTS, get_adapter
 from app.modules.scraping.repository import ScrapingRepository
 from app.modules.scraping.schemas import (
+    ScrapeJobAdminRead,
     ScrapeJobCreate,
     ScrapeJobRead,
     ScrapePreviewResponse,
 )
 from app.modules.scraping.types import BookMetadata
+from app.modules.usage.kinds import UsageFact
+from app.modules.usage.read_service import UsageReadService
 
 _TERMINAL = {"complete", "failed", "cancelled"}
 
@@ -56,6 +62,7 @@ class ScrapingService:
 
     async def create_job(self, user_id: UUID, data: ScrapeJobCreate) -> ScrapeJobRead:
         """Create a pending scrape job and enqueue it."""
+        await self._enforce_quota(user_id)
         adapter = get_adapter(data.url)
         source = await self._repo.get_source_by_name(adapter.name)
         if source is None or not source.enabled:
@@ -88,6 +95,50 @@ class ScrapingService:
         await _enqueue(created.id)
         title = (meta.title or book_url or "Untitled").strip() or "Untitled"
         return _to_read(created, title)
+
+    async def _enforce_quota(self, user_id: UUID) -> None:
+        """Tier quota gate for new scrape work. Runs before any network fetch.
+
+        Enforced at creation only: a running job may finish past the line
+        (bounded by its own chapter range) — accepted, spec §3.5.
+
+        Hybrid read (usage spec §7): rolled closed days + today live.
+        """
+        limits = await QuotaService(self._session).limits_for_user_id(user_id)
+        if not limits.any_limited(QuotaKind.SCRAPE_CHAPTERS):
+            return
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        rolled = await UsageReadService(self._session).rolled_month_amount(
+            user_id, QuotaKind.SCRAPE_CHAPTERS, now
+        )
+        tail = await self._repo.chapters_in_period(
+            user_id, period_start=today_start, period_end=end
+        )
+        QuotaService.enforce(
+            QuotaKind.SCRAPE_CHAPTERS, rolled + tail, limits, resets_at=end, user_id=user_id
+        )
+
+    async def month_chapters_for_users(
+        self,
+        user_ids: list[UUID],
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> dict[UUID, int]:
+        """Backoffice: per-user scraped chapters in a window."""
+        return await self._repo.chapters_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+
+    async def chapters_in_period(
+        self, user_id: UUID, *, period_start: datetime, period_end: datetime
+    ) -> int:
+        """Month scraped-chapter meter for usage composition."""
+        return await self._repo.chapters_in_period(
+            user_id, period_start=period_start, period_end=period_end
+        )
 
     async def get_job(self, user_id: UUID, job_id: UUID) -> ScrapeJobRead:
         job = await self._require(user_id, job_id)
@@ -157,6 +208,26 @@ class ScrapingService:
             return {}
         books = await BookService(self._session).list_read(book_ids, {})
         return {book.id: book.title for book in books}
+
+    # ── backoffice reads ─────────────────────────────────
+
+    async def list_jobs_admin(
+        self, *, status: str | None, limit: int, offset: int
+    ) -> tuple[list[ScrapeJobAdminRead], int]:
+        """Backoffice: all users' jobs with book titles; no pruning, raw errors."""
+        jobs, total = await self._repo.list_jobs_admin(status=status, limit=limit, offset=offset)
+        titles = await self._book_titles(jobs)
+        items = [
+            ScrapeJobAdminRead.model_validate(job).model_copy(
+                update={"book_title": titles.get(job.book_id) if job.book_id else None}
+            )
+            for job in jobs
+        ]
+        return items, total
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
 
 
 def _to_read(job: ScrapingJob, book_title: str | None = None) -> ScrapeJobRead:

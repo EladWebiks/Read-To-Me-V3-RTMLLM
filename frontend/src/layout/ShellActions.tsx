@@ -27,7 +27,9 @@ export function ShellActions() {
         </Button>
       </IconTooltip>
       <SettingsSheet />
-      {data ? <UserAvatar user={data.user} /> : null}
+      {data ? (
+        <UserAvatar user={data.user} membershipLabel={data.membership_label} />
+      ) : null}
       <IconTooltip label="Log out">
         <Button
           type="button"

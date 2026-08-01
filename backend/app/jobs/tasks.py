@@ -22,7 +22,7 @@ async def run_download_job(_ctx: object, job_id: str) -> None:
 
     import_all_models()
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     try:
         async with factory() as session:
@@ -46,12 +46,18 @@ async def _process(session: AsyncSession, job_id: UUID) -> None:
         key = combined_object_key(job.user_id, job.id)
         await put_bytes(key, combined, "audio/mpeg")
         job.object_key = key
+        job.size_bytes = _total_bytes(combined, parts)
         job.status = "complete"
         job.error = None
     except Exception as exc:
         job.status = "failed"
         job.error = str(exc)[:2000]
     await repo.flush()
+
+
+def _total_bytes(combined: bytes, parts: list[bytes]) -> int:
+    """MinIO footprint of a finished job: combined MP3 + per-chapter parts."""
+    return len(combined) + sum(len(part) for part in parts)
 
 
 async def _synth_chapters(session: AsyncSession, job: DownloadJob) -> list[bytes]:

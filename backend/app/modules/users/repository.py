@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -73,3 +74,63 @@ class UserRepository:
         await self._session.flush()
         await self._session.refresh(user)
         return user
+
+    async def list_all(self, *, limit: int, offset: int) -> tuple[list[User], int]:
+        """Backoffice page over ALL users, newest first, soft-deleted included."""
+        total_stmt = select(func.count()).select_from(User)
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = select(User).order_by(User.created_at.desc(), User.id).limit(limit).offset(offset)
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total
+
+    async def get_by_id_any(self, user_id: UUID) -> User | None:
+        """Backoffice lookup that also returns soft-deleted users."""
+        result = await self._session.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_username_any(self, username: str) -> User | None:
+        """Identity-collision lookup: soft-deleted rows included.
+
+        `users.username` is UNIQUE over the whole table, not just over live
+        rows, so a soft-deleted row still owns its username. The
+        deleted-filtered `get_by_username` cannot see it and would let an
+        insert fail on the index instead of on a typed domain error.
+        """
+        result = await self._session.execute(select(User).where(User.username == username))
+        return result.scalar_one_or_none()
+
+    async def get_by_email_any(self, email: str) -> User | None:
+        """Identity-collision lookup by email (case-insensitive), deleted included."""
+        stmt = select(User).where(func.lower(User.email) == email.lower())
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_google_sub_any(self, google_sub: str) -> User | None:
+        """Identity-collision lookup by Google subject id, deleted included."""
+        result = await self._session.execute(select(User).where(User.google_sub == google_sub))
+        return result.scalar_one_or_none()
+
+    async def usernames_for_ids(self, user_ids: Sequence[UUID]) -> dict[UUID, str]:
+        """Map ids → usernames, soft-deleted included (backoffice attribution)."""
+        if not user_ids:
+            return {}
+        stmt = select(User.id, User.username).where(User.id.in_(user_ids))
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: row[1] for row in rows}
+
+    async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
+        """ids -> membership tier, soft-deleted included (attribution)."""
+        if not user_ids:
+            return {}
+        stmt = select(User.id, User.membership).where(User.id.in_(user_ids))
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: row[1] for row in rows}
+
+    async def count_active_admins(self) -> int:
+        """Non-deleted users with the admin flag."""
+        stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.is_admin.is_(True), User.deleted_at.is_(None))
+        )
+        return int((await self._session.execute(stmt)).scalar_one())

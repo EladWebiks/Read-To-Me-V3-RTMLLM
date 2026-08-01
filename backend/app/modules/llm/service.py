@@ -6,6 +6,8 @@ import asyncio
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import aclosing
+from dataclasses import asdict
+from datetime import date, datetime
 from typing import TypeVar
 from uuid import UUID
 
@@ -13,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.modules.llm import catalog
 from app.modules.llm.capabilities import ModelCapability
 from app.modules.llm.exceptions import (
     LlmConfigError,
@@ -22,8 +25,20 @@ from app.modules.llm.exceptions import (
 )
 from app.modules.llm.model_router import ModelRouter
 from app.modules.llm.providers.gemini_provider import GeminiProvider
-from app.modules.llm.registry import ModelSpec, list_models
-from app.modules.llm.schemas import ModelListResponse, ModelRead
+from app.modules.llm.registry import ModelSpec
+from app.modules.llm.repository import LlmRepository
+from app.modules.llm.schemas import (
+    AdminUsageOverview,
+    LlmExecutionRead,
+    ModelListResponse,
+    ModelRead,
+    ModelUsageRead,
+    TaskUsageRead,
+    ToolCallAdminFilters,
+    ToolCallAdminRead,
+    UserUsageRead,
+    UserUsageSummary,
+)
 from app.modules.llm.telemetry import LlmTelemetry, TelemetryContext, build_tracer
 from app.modules.llm.types import (
     EmbeddingRequest,
@@ -37,6 +52,7 @@ from app.modules.llm.types import (
     ToolCallingStreamChunk,
     Usage,
 )
+from app.modules.usage.kinds import LlmModelFact, LlmTaskFact, UsageFact
 
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R")
@@ -46,12 +62,14 @@ class LlmService:
     """Entry point for capability-based LLM calls."""
 
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
         self._settings = settings
         self._router = ModelRouter(settings)
         self._telemetry = LlmTelemetry(
             session,
-            build_tracer(langfuse_enabled=settings.langfuse_enabled),
+            build_tracer(langfuse_enabled=settings.llm.langfuse_enabled),
         )
+        self._repo = LlmRepository(session)
 
     @property
     def router(self) -> ModelRouter:
@@ -65,13 +83,21 @@ class LlmService:
 
     def ensure_enabled(self) -> None:
         """Raise if LLM is off or misconfigured."""
-        if not self._settings.llm_enabled:
+        if not self._settings.llm.enabled:
             raise LlmDisabledError("LLM_ENABLED is false")
-        if self._settings.llm_provider == "gemini" and not self._settings.gemini_api_key:
+        if self._settings.llm.provider == "gemini" and not self._settings.llm.gemini_api_key:
             raise LlmConfigError("GEMINI_API_KEY is required when LLM is enabled")
 
-    def list_public_models(self) -> ModelListResponse:
+    async def ensure_ready(self) -> None:
+        """Raise if LLM is off, misconfigured, or no catalog model is enabled."""
+        self.ensure_enabled()
+        await catalog.ensure_loaded(self._session)
+        if not catalog.list_models(enabled_only=True):
+            raise NoCandidateModelError("no enabled models in catalog")
+
+    async def list_public_models(self) -> ModelListResponse:
         """Catalog for GET /api/llm/models (no secrets)."""
+        await catalog.ensure_loaded(self._session)
         models = [
             ModelRead(
                 provider=m.provider,
@@ -83,12 +109,12 @@ class LlmService:
                 supports_streaming=m.supports_streaming,
                 enabled=m.enabled,
             )
-            for m in list_models(enabled_only=False)
+            for m in catalog.list_models(enabled_only=False)
         ]
         return ModelListResponse(
-            llm_enabled=self._settings.llm_enabled,
-            default_provider=self._settings.llm_provider,
-            default_model=self._settings.llm_model,
+            llm_enabled=self._settings.llm.enabled,
+            default_provider=self._settings.llm.provider,
+            default_model=self._settings.llm.model,
             models=models,
         )
 
@@ -96,11 +122,12 @@ class LlmService:
         self,
         req: GenerateTextRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.FAST_CHAT,
         conversation_id: UUID | None = None,
     ) -> GenerateTextResponse:
         """Generate text via routed provider."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(
             provider: GeminiProvider,
@@ -109,17 +136,25 @@ class LlmService:
             return await provider.generate_text(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, conversation_id, result, result.usage)
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return await self._record(ctx, result, result.usage)
 
     async def call_tools(
         self,
         req: ToolCallingRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.TOOL_CALLING,
         conversation_id: UUID | None = None,
     ) -> ToolCallingResponse:
         """Tool-calling completion via routed provider."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(
             provider: GeminiProvider,
@@ -128,17 +163,25 @@ class LlmService:
             return await provider.call_tools(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, conversation_id, result, result.usage)
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return await self._record(ctx, result, result.usage)
 
     async def stream_tools(
         self,
         req: ToolCallingRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.TOOL_CALLING,
         conversation_id: UUID | None = None,
     ) -> AsyncGenerator[ToolCallingStreamChunk, None]:
         """Stream a tool-capable round from one provider; no mid-stream fallback."""
-        self.ensure_enabled()
+        await self.ensure_ready()
         matches = self._router.candidates(capability)
         if not matches:
             raise NoCandidateModelError(capability.value)
@@ -148,6 +191,7 @@ class LlmService:
             task=req.task,
             model=model,
             fallback_used=False,
+            user_id=user_id,
             conversation_id=conversation_id,
         )
         async with aclosing(self._stream_tools_from(provider, req, context)) as stream:
@@ -184,12 +228,14 @@ class LlmService:
         self,
         req: StructuredOutputRequest[T],
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.STRUCTURED_EXTRACTION,
         conversation_id: UUID | None = None,
     ) -> T:
         """Structured output via routed provider."""
         result, _provider, _model = await self.generate_structured_with_model(
             req,
+            user_id=user_id,
             capability=capability,
             conversation_id=conversation_id,
         )
@@ -199,24 +245,25 @@ class LlmService:
         self,
         req: StructuredOutputRequest[T],
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.STRUCTURED_EXTRACTION,
         conversation_id: UUID | None = None,
     ) -> tuple[T, str, str]:
         """Structured output plus provider/model provenance."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(provider: GeminiProvider, _model: ModelSpec) -> T:
             return await provider.generate_structured_output(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        recorded = await self._record(
-            req.task,
-            model,
-            fallback,
-            conversation_id,
-            result,
-            Usage(0, 0),
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=conversation_id,
         )
+        recorded = await self._record(ctx, result, Usage(0, 0))
         return recorded, model.provider, model.model_name
 
     async def stream_text(
@@ -226,7 +273,7 @@ class LlmService:
         capability: ModelCapability = ModelCapability.FAST_CHAT,
     ) -> AsyncIterator[StreamChunk]:
         """Stream from the first candidate (no mid-stream fallback)."""
-        self.ensure_enabled()
+        await self.ensure_ready()
         matches = self._router.candidates(capability)
         if not matches:
             raise NoCandidateModelError(capability.value)
@@ -238,10 +285,11 @@ class LlmService:
         self,
         req: EmbeddingRequest,
         *,
+        user_id: UUID,
         capability: ModelCapability = ModelCapability.EMBEDDING,
     ) -> EmbeddingResponse:
         """Embeddings via routed provider (may be unsupported in B1)."""
-        self.ensure_enabled()
+        await self.ensure_ready()
 
         async def _call(
             provider: GeminiProvider,
@@ -250,29 +298,117 @@ class LlmService:
             return await provider.create_embeddings(req)
 
         result, model, fallback = await self._router.run(capability, _call)
-        return await self._record(req.task, model, fallback, None, result, result.usage)
+        ctx = TelemetryContext(
+            task=req.task,
+            model=model,
+            fallback_used=fallback,
+            user_id=user_id,
+            conversation_id=None,
+        )
+        return await self._record(ctx, result, result.usage)
 
-    async def _record(
+    async def usage_summary(
         self,
-        task: str,
-        model: ModelSpec,
-        fallback: bool,
-        conversation_id: UUID | None,
-        result: R,
-        usage: Usage,
-    ) -> R:
+        user_id: UUID,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+    ) -> UserUsageSummary:
+        """Per-user usage aggregate over [period_start, period_end); no HTTP route yet."""
+        totals = await self._repo.usage_summary_for_user(
+            user_id,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        return UserUsageSummary(
+            user_id=user_id,
+            period_start=period_start,
+            period_end=period_end,
+            tokens_in=totals.tokens_in,
+            tokens_out=totals.tokens_out,
+            total_cost=totals.total_cost,
+            execution_count=totals.execution_count,
+        )
+
+    async def usage_overview_admin(
+        self, *, period_start: datetime, period_end: datetime
+    ) -> AdminUsageOverview:
+        """Backoffice cross-user usage totals with model/task breakdowns."""
+        totals = await self._repo.usage_totals_admin(
+            period_start=period_start, period_end=period_end
+        )
+        by_model = await self._repo.usage_by_model_admin(
+            period_start=period_start, period_end=period_end
+        )
+        by_task = await self._repo.usage_by_task_admin(
+            period_start=period_start, period_end=period_end
+        )
+        return AdminUsageOverview(
+            period_start=period_start,
+            period_end=period_end,
+            tokens_in=totals.tokens_in,
+            tokens_out=totals.tokens_out,
+            total_cost=totals.total_cost,
+            execution_count=totals.execution_count,
+            by_model=[ModelUsageRead(**asdict(row)) for row in by_model],
+            by_task=[TaskUsageRead(**asdict(row)) for row in by_task],
+        )
+
+    async def usage_by_user_admin(
+        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+    ) -> tuple[list[UserUsageRead], int]:
+        """Backoffice per-user usage rows (usernames resolved by the caller)."""
+        rows, total = await self._repo.usage_by_user_admin(
+            period_start=period_start, period_end=period_end, limit=limit, offset=offset
+        )
+        return [UserUsageRead(**asdict(row)) for row in rows], total
+
+    async def usage_for_users_admin(
+        self, user_ids: list[UUID], *, period_start: datetime, period_end: datetime
+    ) -> dict[UUID, UserUsageRead]:
+        """Backoffice: per-user totals for a fixed id set (quota column)."""
+        totals = await self._repo.usage_for_users(
+            user_ids, period_start=period_start, period_end=period_end
+        )
+        return {uid: UserUsageRead(user_id=uid, **asdict(t)) for uid, t in totals.items()}
+
+    async def list_executions_admin(
+        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+    ) -> tuple[list[LlmExecutionRead], int]:
+        """Backoffice recent-executions page, newest first."""
+        rows, total = await self._repo.list_executions_admin(
+            period_start=period_start, period_end=period_end, limit=limit, offset=offset
+        )
+        return [LlmExecutionRead.model_validate(row) for row in rows], total
+
+    async def list_tool_calls_admin(
+        self, filters: ToolCallAdminFilters, *, limit: int, offset: int
+    ) -> tuple[list[ToolCallAdminRead], int]:
+        """Backoffice tool-call audit page with per-row user attribution."""
+        rows, total = await self._repo.list_tool_calls_admin(filters, limit=limit, offset=offset)
+        items = [
+            ToolCallAdminRead(
+                id=record.id,
+                tool_name=record.tool_name,
+                status=record.status,
+                risk_level=record.risk_level,
+                confirmed_by_user=record.confirmed_by_user,
+                duration_ms=record.duration_ms,
+                input=record.input,
+                output=record.output,
+                error=record.error,
+                user_id=user_id,
+                created_at=record.created_at,
+            )
+            for record, user_id in rows
+        ]
+        return items, total
+
+    async def _record(self, ctx: TelemetryContext, result: R, usage: Usage) -> R:
         async def _once() -> tuple[R, Usage]:
             return result, usage
 
-        return await self._telemetry.record_call(
-            TelemetryContext(
-                task=task,
-                model=model,
-                fallback_used=fallback,
-                conversation_id=conversation_id,
-            ),
-            _once,
-        )
+        return await self._telemetry.record_call(ctx, _once)
 
     async def _record_stream(
         self,
@@ -289,6 +425,18 @@ class LlmService:
             status=status,
             error=error,
         )
+
+    async def daily_usage_facts(self, day: date) -> list[UsageFact]:
+        """Per-user usage-rollup facts for one UTC day (builder-facing, spec §6)."""
+        return await self._repo.daily_usage_facts(day)
+
+    async def daily_model_facts(self, day: date) -> list[LlmModelFact]:
+        """Cross-user (provider, model) aggregates for one UTC day."""
+        return await self._repo.daily_model_facts(day)
+
+    async def daily_task_facts(self, day: date) -> list[LlmTaskFact]:
+        """Cross-user per-task aggregates for one UTC day."""
+        return await self._repo.daily_task_facts(day)
 
 
 def _require_terminal(response: ToolCallingResponse | None) -> ToolCallingResponse:

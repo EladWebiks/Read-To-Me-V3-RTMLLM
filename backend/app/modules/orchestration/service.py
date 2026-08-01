@@ -6,6 +6,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -33,6 +34,7 @@ from app.modules.orchestration.exceptions import BudgetExceededError, Orchestrat
 from app.modules.orchestration.hitl_pause import (
     FreezeRequest,
     apply_budget_snapshot,
+    budget_from_snapshot,
     confirmation_event_data,
     freeze_pending,
     is_expired,
@@ -40,12 +42,16 @@ from app.modules.orchestration.hitl_pause import (
     snapshot_conversation_id,
     snapshot_run_id,
 )
+from app.modules.orchestration.policy import PolicyService
 from app.modules.orchestration.prompts import SYSTEM_PROMPT
 from app.modules.orchestration.ui_context import (
     choice_request_for_tool,
     client_action_for_tool,
     format_ui_context_block,
 )
+from app.modules.quotas.exceptions import QuotaExceededError
+from app.modules.quotas.kinds import QuotaKind
+from app.modules.quotas.service import QuotaService
 from app.modules.tools.base import BaseTool, Mode, RiskLevel, ToolContext
 from app.modules.tools.catalog import build_default_registry
 from app.modules.tools.exceptions import (
@@ -57,8 +63,16 @@ from app.modules.tools.exceptions import (
 from app.modules.tools.executor import ExecuteOptions, execute_tool_call, prepare_gated_call
 from app.modules.tools.hitl import merge_confirmed_args
 from app.modules.tools.registry import ToolRegistry
+from app.modules.usage.read_service import UsageReadService
+from app.modules.users.schemas import UserRead
 
 _MAX_TOOL_RESULT_CHARS = 6_000
+
+# Persisted role for quota refusals. NOT a member of llm.types.Role on
+# purpose: _to_llm_messages drops roles Role() cannot parse, which is what
+# keeps refusal copy out of future prompts (spec §3.3). If Role ever grows
+# this value, add an explicit skip there.
+QUOTA_REFUSAL_ROLE = "quota_refusal"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,10 +135,15 @@ class _StreamedRound:
         self,
         llm: LlmService,
         request: ToolCallingRequest,
-        conversation_id: UUID,
+        ctx: ToolContext,
     ) -> AsyncIterator[ChatSseEvent]:
-        async with aclosing(llm.stream_tools(request, conversation_id=conversation_id)) as stream:
-            async for chunk in stream:
+        stream = llm.stream_tools(
+            request,
+            user_id=ctx.user_id,
+            conversation_id=ctx.conversation_id,
+        )
+        async with aclosing(stream) as chunks:
+            async for chunk in chunks:
                 if chunk.text:
                     if self.prefix and not self.started:
                         yield ChatSseEvent("delta", {"text": "\n\n"})
@@ -158,18 +177,32 @@ class OrchestrationService:
 
     async def run(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         ui_context: dict[str, Any] | None = None,
     ) -> AsyncIterator[ChatSseEvent]:
         """Yield SSE events for one tool-using assistant turn."""
-        ctx = self._make_ctx(user_id, conversation_id, uuid4())
-        budget = RunBudget.from_settings(self._settings)
+        policy = await PolicyService(self._session, self._settings).resolve(user)
+        try:
+            await self._check_llm_quota(user)
+        except QuotaExceededError as exc:
+            # Same-session write: refusal marker + rejection row (Part D), one
+            # commit, then the SSE error. The user's message is already
+            # persisted; the marker is what explains it after a reload.
+            await self._repo.add_message(
+                conversation_id, role=QUOTA_REFUSAL_ROLE, content=str(exc)
+            )
+            await UsageReadService(self._session).record_rejection(user.id, exc.kind, "chat")
+            await self._session.commit()
+            yield _quota_error_event(exc)
+            return
+        ctx = self._make_ctx(user.id, conversation_id, uuid4())
+        budget = RunBudget.from_policy(policy)
         context = await ConversationContextService(
             self._repo,
             self._llm,
             self._settings,
-        ).build(user_id, conversation_id)
+        ).build(user.id, conversation_id)
         messages = _to_llm_messages(
             context.messages,
             summary=context.summary,
@@ -180,7 +213,7 @@ class OrchestrationService:
 
     async def resume_confirm(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         call_id: UUID,
         *,
@@ -190,7 +223,7 @@ class OrchestrationService:
         """Resume after POST /confirm — new SSE stream for the same turn."""
         try:
             async for event in self._resume_confirm(
-                user_id,
+                user,
                 conversation_id,
                 call_id,
                 approved=approved,
@@ -209,18 +242,17 @@ class OrchestrationService:
 
     async def _resume_confirm(
         self,
-        user_id: UUID,
+        user: UserRead,
         conversation_id: UUID,
         call_id: UUID,
         *,
         approved: bool,
         values: dict[str, Any] | None,
     ) -> AsyncIterator[ChatSseEvent]:
-        row = await self._require_pending(user_id, conversation_id, call_id)
+        row = await self._require_pending(user.id, conversation_id, call_id)
         messages, usage, budget_raw, hitl_rounds, provider_call_id = restore_snapshot(row)
-        ctx = self._make_ctx(user_id, conversation_id, snapshot_run_id(row) or uuid4())
-        budget = RunBudget.from_settings(self._settings)
-        apply_budget_snapshot(budget, budget_raw)
+        ctx = self._make_ctx(user.id, conversation_id, snapshot_run_id(row) or uuid4())
+        budget = await self._restore_budget(user, budget_raw)
         tool = self._registry.resolve(row.tool_name)
         call = ToolCall(
             id=provider_call_id or str(row.id),
@@ -243,6 +275,21 @@ class OrchestrationService:
                 return
         async for event in self._loop(ctx, messages, budget, usage, hitl_rounds):
             yield event
+
+    async def _restore_budget(
+        self,
+        user: UserRead,
+        budget_raw: dict[str, Any],
+    ) -> RunBudget:
+        """Prefer caps frozen at turn start; legacy snapshots re-resolve once."""
+        frozen = budget_from_snapshot(budget_raw)
+        if frozen is not None:
+            return frozen
+        budget = RunBudget.from_policy(
+            await PolicyService(self._session, self._settings).resolve(user)
+        )
+        apply_budget_snapshot(budget, budget_raw)
+        return budget
 
     async def _deny_pending(
         self,
@@ -336,7 +383,7 @@ class OrchestrationService:
             async for event in streamed.events(
                 self._llm,
                 self._tool_request(state.messages, state.ctx),
-                state.ctx.conversation_id,
+                state.ctx,
             ):
                 yield event
             resp = streamed.require_response()
@@ -369,7 +416,7 @@ class OrchestrationService:
         return ToolCallingRequest(
             messages=messages,
             tools=self._registry.list_specs(ctx.mode),
-            max_output_tokens=self._settings.llm_max_output_tokens,
+            max_output_tokens=self._settings.llm.max_output_tokens,
             task="chat_tools",
         )
 
@@ -427,7 +474,7 @@ class OrchestrationService:
             yield event
 
     async def _pause_for_confirm(self, pack: _PausePack) -> AsyncIterator[ChatSseEvent]:
-        if pack.hitl_rounds >= self._settings.llm_max_hitl_rounds:
+        if pack.hitl_rounds >= pack.budget.max_hitl_rounds:
             async for event in _fail_tool(
                 pack.messages, pack.call, "max confirmation rounds exceeded"
             ):
@@ -451,7 +498,7 @@ class OrchestrationService:
                 budget=pack.budget,
                 usage=pack.usage,
                 hitl_rounds=pack.hitl_rounds + 1,
-                ttl_seconds=self._settings.llm_hitl_ttl_seconds,
+                ttl_seconds=self._settings.llm_runtime.hitl_ttl_seconds,
                 proposed=proposed,
                 provided_fields=set(pack.call.arguments),
                 summary=summary,
@@ -502,12 +549,43 @@ class OrchestrationService:
             },
         )
 
+    async def _check_llm_quota(self, user: UserRead) -> None:
+        """Reject the turn BEFORE any provider call when a monthly LLM quota is hit.
+
+        Sits before conversation-context build on purpose: context building can
+        itself trigger a summarization provider call. Resume-confirm does not
+        re-check — it is the same turn (spec §3.5).
+
+        Hybrid read (usage spec §7): closed days come from usage_daily, today
+        live from llm_executions — so the raw scan is one day, not one month.
+        """
+        quotas = QuotaService(self._session)
+        limits = await quotas.limits_for(user)
+        if not limits.any_limited(QuotaKind.LLM_TOKENS, QuotaKind.LLM_COST_USD):
+            return
+        now = datetime.now(UTC)
+        _, end = QuotaService.current_month_window(now)
+        _, today_start = UsageReadService.hybrid_split(now)
+        usage = UsageReadService(self._session)
+        summary = await self._llm.usage_summary(user.id, period_start=today_start, period_end=end)
+        tokens = (
+            await usage.rolled_month_amount(user.id, QuotaKind.LLM_TOKENS, now)
+            + summary.tokens_in
+            + summary.tokens_out
+        )
+        QuotaService.enforce(QuotaKind.LLM_TOKENS, tokens, limits, resets_at=end, user_id=user.id)
+        cost = (
+            await usage.rolled_month_amount(user.id, QuotaKind.LLM_COST_USD, now)
+            + summary.total_cost
+        )
+        QuotaService.enforce(QuotaKind.LLM_COST_USD, cost, limits, resets_at=end, user_id=user.id)
+
     def _make_ctx(self, user_id: UUID, conversation_id: UUID, run_id: UUID) -> ToolContext:
         return ToolContext(
             user_id=user_id,
             conversation_id=conversation_id,
             run_id=run_id,
-            mode=_parse_mode(self._settings.llm_assistant_mode),
+            mode=_parse_mode(self._settings.llm_runtime.assistant_mode),
             session=self._session,
         )
 
@@ -655,6 +733,19 @@ def _accumulate(
     return Usage(
         usage_total.tokens_in + resp.usage.tokens_in,
         usage_total.tokens_out + resp.usage.tokens_out,
+    )
+
+
+def _quota_error_event(exc: QuotaExceededError) -> ChatSseEvent:
+    """Structured SSE error the frontend maps to user copy (spec §6)."""
+    return ChatSseEvent(
+        "error",
+        {
+            "code": "quota_exceeded",
+            "kind": exc.kind.value,
+            "detail": str(exc),
+            "resets_at": exc.resets_at.isoformat() if exc.resets_at else None,
+        },
     )
 
 

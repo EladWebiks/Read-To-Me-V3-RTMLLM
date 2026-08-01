@@ -53,6 +53,13 @@ export function DownloadForm({ bookId, minChapter, maxChapter }: DownloadFormPro
           Start
         </button>
       </div>
+      {create.error ? (
+        <p className="text-sm text-destructive">
+          {create.error instanceof Error
+            ? create.error.message
+            : 'Could not start the download.'}
+        </p>
+      ) : null}
       <JobStatus
         jobId={jobId}
         status={job?.status}

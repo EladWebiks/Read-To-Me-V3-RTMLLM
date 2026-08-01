@@ -17,10 +17,10 @@ def get_minio_client() -> Minio:
     """Return a cached MinIO client for server-side put/get (internal endpoint)."""
     settings = get_settings()
     return Minio(
-        settings.minio_endpoint,
-        access_key=settings.minio_access_key,
-        secret_key=settings.minio_secret_key,
-        secure=settings.minio_secure,
+        settings.storage.endpoint,
+        access_key=settings.storage.access_key,
+        secret_key=settings.storage.secret_key,
+        secure=settings.storage.secure,
     )
 
 
@@ -35,12 +35,12 @@ def get_minio_presign_client() -> Minio:
     inside the compose network).
     """
     settings = get_settings()
-    endpoint = settings.minio_public_endpoint or settings.minio_endpoint
+    endpoint = settings.storage.public_endpoint or settings.storage.endpoint
     return Minio(
         endpoint,
-        access_key=settings.minio_access_key,
-        secret_key=settings.minio_secret_key,
-        secure=settings.minio_secure,
+        access_key=settings.storage.access_key,
+        secret_key=settings.storage.secret_key,
+        secure=settings.storage.secure,
         region="us-east-1",
     )
 
@@ -52,7 +52,7 @@ async def put_bytes(key: str, data: bytes, content_type: str) -> None:
 
     def _put() -> None:
         client.put_object(
-            settings.minio_bucket,
+            settings.storage.bucket,
             key,
             BytesIO(data),
             length=len(data),
@@ -69,12 +69,12 @@ async def delete_prefix(prefix: str) -> None:
 
     def _delete() -> None:
         for obj in client.list_objects(
-            settings.minio_bucket,
+            settings.storage.bucket,
             prefix=prefix,
             recursive=True,
         ):
             if obj.object_name:
-                client.remove_object(settings.minio_bucket, obj.object_name)
+                client.remove_object(settings.storage.bucket, obj.object_name)
 
     await asyncio.to_thread(_delete)
 
@@ -86,7 +86,7 @@ async def presigned_get(key: str, expires_seconds: int = 3600) -> str:
 
     def _presign() -> str:
         return client.presigned_get_object(
-            settings.minio_bucket,
+            settings.storage.bucket,
             key,
             expires=timedelta(seconds=expires_seconds),
         )

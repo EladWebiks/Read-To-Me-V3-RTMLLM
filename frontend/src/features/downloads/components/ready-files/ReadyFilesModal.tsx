@@ -49,6 +49,7 @@ export function ReadyFilesModal(props: Props) {
           errored={jobsQuery.isError}
           canListen={canListen}
           onListen={onListen}
+          onRetry={() => void jobsQuery.refetch()}
         />
       </DialogContent>
     </Dialog>

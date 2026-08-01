@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
-import { BookOpen, Library, Wand2 } from 'lucide-react'
+import { BookOpen, Library, ShieldCheck, Wand2 } from 'lucide-react'
 import { NavLink } from 'react-router'
+import { useIsAdmin } from '@/features/auth/hooks'
 
 export function ShellNavLinks({ readerActive }: { readerActive: boolean }) {
+  const isAdmin = useIsAdmin()
   return (
     <nav className="mr-1 flex items-center gap-1 text-sm">
       <ShellNav to="/library" label="Library" icon={<Library className="h-4 w-4" />} />
@@ -13,6 +15,9 @@ export function ShellNavLinks({ readerActive }: { readerActive: boolean }) {
         active={readerActive}
       />
       <ShellNav to="/scraper" label="Scraper" icon={<Wand2 className="h-4 w-4" />} />
+      {isAdmin && (
+        <ShellNav to="/admin" label="Admin" icon={<ShieldCheck className="h-4 w-4" />} />
+      )}
     </nav>
   )
 }

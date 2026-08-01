@@ -16,6 +16,14 @@ export function CancelledNote({ content }: { content: string }) {
   return <p className="px-1 text-xs text-muted-foreground/70">{content}</p>
 }
 
+export function QuotaRefusalNote({ content }: { content: string }) {
+  return (
+    <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+      {content}
+    </p>
+  )
+}
+
 export function AssistantProse({
   content,
   streaming,

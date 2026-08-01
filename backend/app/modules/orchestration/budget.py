@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from app.core.config import Settings
 from app.modules.llm.types import Usage
 from app.modules.orchestration.exceptions import BudgetExceededError
+from app.modules.orchestration.policy import ResolvedPolicy
 
 
 @dataclass
@@ -20,6 +21,9 @@ class RunBudget:
     max_tokens_out: int
     max_cost_usd: float
     deadline_mono: float
+    run_deadline_seconds: int
+    max_hitl_rounds: int
+    membership: str = "unknown"
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
@@ -28,14 +32,32 @@ class RunBudget:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> RunBudget:
-        """Build budget from app settings."""
+        """Build budget from app settings (tests / non-tier callers)."""
+        runtime = settings.llm_runtime
         return cls(
-            max_iters=settings.llm_max_tool_iters,
-            max_external_calls=settings.llm_max_external_calls,
-            max_tokens_in=settings.llm_max_turn_tokens_in,
-            max_tokens_out=settings.llm_max_turn_tokens_out,
-            max_cost_usd=settings.llm_max_turn_cost_usd,
-            deadline_mono=time.monotonic() + settings.llm_run_deadline_seconds,
+            max_iters=runtime.max_tool_iters,
+            max_external_calls=runtime.max_external_calls,
+            max_tokens_in=runtime.max_turn_tokens_in,
+            max_tokens_out=runtime.max_turn_tokens_out,
+            max_cost_usd=runtime.max_turn_cost_usd,
+            deadline_mono=time.monotonic() + runtime.run_deadline_seconds,
+            run_deadline_seconds=runtime.run_deadline_seconds,
+            max_hitl_rounds=runtime.max_hitl_rounds,
+        )
+
+    @classmethod
+    def from_policy(cls, policy: ResolvedPolicy) -> RunBudget:
+        """Build budget from a frozen per-tier policy (the production path)."""
+        return cls(
+            max_iters=policy.max_tool_iters,
+            max_external_calls=policy.max_external_calls,
+            max_tokens_in=policy.max_turn_tokens_in,
+            max_tokens_out=policy.max_turn_tokens_out,
+            max_cost_usd=policy.max_turn_cost_usd,
+            deadline_mono=time.monotonic() + policy.run_deadline_seconds,
+            run_deadline_seconds=policy.run_deadline_seconds,
+            max_hitl_rounds=policy.max_hitl_rounds,
+            membership=policy.membership,
         )
 
     def begin_iter(self) -> None:
@@ -80,12 +102,13 @@ class RunBudget:
         if self.external_calls > self.max_external_calls:
             raise BudgetExceededError("external call budget exceeded")
 
-    def summary(self) -> dict[str, float | int]:
-        """Payload for the done event."""
+    def summary(self) -> dict[str, float | int | str]:
+        """Payload for the done event (the run record — spec §4.3)."""
         return {
             "iters": self.iters,
             "tokens_in": self.tokens_in,
             "tokens_out": self.tokens_out,
             "cost_usd": round(self.cost_usd, 6),
             "external_calls": self.external_calls,
+            "membership": self.membership,
         }

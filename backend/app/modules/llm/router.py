@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_current_user, get_db
+from app.core.deps import get_current_user, get_db, get_effective_settings
 from app.modules.llm.chat_service import ChatService
 from app.modules.llm.schemas import (
     ChatRequest,
@@ -35,7 +35,7 @@ def _llm_service(
 
 def _chat_service(
     session: Annotated[AsyncSession, Depends(get_db)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_effective_settings)],
 ) -> ChatService:
     return ChatService(session, settings)
 
@@ -58,7 +58,7 @@ async def list_models(
     service: Annotated[LlmService, Depends(_llm_service)],
 ) -> ModelListResponse:
     """List enabled/catalog models and capabilities (no secrets)."""
-    return service.list_public_models()
+    return await service.list_public_models()
 
 
 @chat_router.post("")
@@ -71,7 +71,7 @@ async def stream_chat(
 
     async def _events() -> AsyncIterator[str]:
         async for event in service.stream_chat(
-            user.id,
+            user,
             body.message,
             body.conversation_id,
             ui_context=body.ui_context.model_dump(mode="json") if body.ui_context else None,
@@ -92,7 +92,7 @@ async def stream_confirm(
 
     async def _events() -> AsyncIterator[str]:
         async for event in service.stream_confirm(
-            user.id,
+            user,
             conversation_id,
             body.call_id,
             approved=body.approved,
