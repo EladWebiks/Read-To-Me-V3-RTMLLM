@@ -12,7 +12,7 @@ export function PlayerControls(props: PlayerControlsProps) {
       <label className="flex items-center gap-1">
         Engine
         <Select
-          className="w-auto"
+          className="w-auto text-foreground"
           value={props.engine}
           onChange={(event) => props.onEngine(event.target.value as PlaybackEngine)}
         >

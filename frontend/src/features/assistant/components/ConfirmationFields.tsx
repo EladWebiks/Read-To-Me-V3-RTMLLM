@@ -3,10 +3,10 @@ import {
   defaultDownloadRate,
   defaultVoice,
 } from '@/features/downloads/logic/audioModalUtils'
+import { Select } from '@/shared/ui'
 import type { ConfirmationFormField } from '../api/chatApi'
 import { coerce, stringValue } from './confirmFormUtils'
 import { ConfirmationVoiceControl } from './ConfirmationVoiceControl'
-import { Select } from '@/shared/ui'
 
 type Props = {
   tool: string

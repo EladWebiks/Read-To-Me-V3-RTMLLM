@@ -9,7 +9,7 @@ export function VoicePickers(props: PlayerControlsProps) {
         <label className="flex items-center gap-1">
           Provider
           <Select
-            className="w-auto"
+            className="w-auto text-foreground"
             value={props.provider}
             onChange={(event) => props.onProvider(event.target.value as TtsProviderName)}
           >
@@ -20,7 +20,7 @@ export function VoicePickers(props: PlayerControlsProps) {
         <label className="flex items-center gap-1">
           Voice
           <Select
-            className="w-auto max-w-48"
+            className="w-auto max-w-48 text-foreground"
             value={props.serverVoice ?? ''}
             onChange={(event) => props.onServerVoice(event.target.value || null)}
           >
@@ -39,7 +39,7 @@ export function VoicePickers(props: PlayerControlsProps) {
     <label className="flex items-center gap-1">
       Voice
       <Select
-        className="w-auto max-w-48"
+        className="w-auto max-w-48 text-foreground"
         value={props.voiceURI ?? ''}
         onChange={(event) => props.onVoice(event.target.value || null)}
       >
