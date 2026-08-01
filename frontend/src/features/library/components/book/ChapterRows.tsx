@@ -4,20 +4,24 @@ import type { ChapterSummary } from '@/features/library/types'
 
 type Props = {
   loading: boolean
+  errored: boolean
   chapters: ChapterSummary[]
   lastRead: number | null
   onPlay: (id: string) => void
   onEdit: (id: string) => void
   onDelete: (id: string) => void
+  onRetry: () => void
 }
 
 export function ChapterRows(props: Props) {
   return (
     <QueryState
       isPending={props.loading}
+      isError={props.errored}
       loading={<InlineLoader label="Loading chapters…" />}
       errorLabel="Couldn't load chapters."
       label="Loading chapters…"
+      onRetry={props.onRetry}
     >
       <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
         <table className="w-full text-sm">

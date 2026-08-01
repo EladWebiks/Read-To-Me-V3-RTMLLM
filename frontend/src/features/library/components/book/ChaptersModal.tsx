@@ -45,6 +45,8 @@ function ChaptersModalBody({ book, onClose }: { book: Book; onClose: () => void 
       />
       <ChapterRows
         loading={chaptersQuery.isLoading}
+        errored={chaptersQuery.isError}
+        onRetry={() => void chaptersQuery.refetch()}
         chapters={filtered}
         lastRead={book.last_read_chapter_number ?? null}
         onPlay={(id) => {

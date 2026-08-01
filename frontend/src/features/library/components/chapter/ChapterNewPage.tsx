@@ -20,12 +20,17 @@ export function ChapterNewPage() {
   const saveAndNext = useSaveAndNext(createChapter, draft, setSavedCount)
   useArrowRightSave(fastCopy, draft.content, createChapter.isPending, saveAndNext)
 
-  if (bookQuery.isLoading) {
+  // The whole page depends on the book, so both unsettled states short-circuit
+  // it. Without the error branch a failed fetch fell through to an editor
+  // titled 'Book' with no indication anything had gone wrong.
+  if (bookQuery.isLoading || bookQuery.isError) {
     return (
       <QueryState
-        isPending
+        isPending={bookQuery.isLoading}
+        isError={bookQuery.isError}
         loading={<InlineLoader label="Loading…" />}
         errorLabel="Couldn't load the book."
+        onRetry={() => void bookQuery.refetch()}
       >
         {null}
       </QueryState>
