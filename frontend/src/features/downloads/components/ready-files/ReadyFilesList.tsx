@@ -1,4 +1,5 @@
 import type { DownloadJob } from '@/features/downloads/types'
+import { QueryState, SkeletonRows } from '@/shared/ui'
 import { ReadyJobRow } from './ReadyJobRow'
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
   errored: boolean
   canListen: boolean
   onListen: (job: DownloadJob) => void
+  onRetry: () => void
 }
 
 export function ReadyFilesList({
@@ -17,25 +19,34 @@ export function ReadyFilesList({
   errored,
   canListen,
   onListen,
+  onRetry,
 }: Props) {
   return (
     <div className="mt-4 space-y-2">
-      {loading ? <p className="text-sm text-muted-foreground">Loading jobs…</p> : null}
-      {errored ? <p className="text-sm text-destructive">Could not load jobs.</p> : null}
-      {!loading && jobs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No jobs yet for this book.</p>
-      ) : null}
-      <ul className="space-y-2">
-        {jobs.map((job) => (
-          <ReadyJobRow
-            key={job.id}
-            bookId={bookId}
-            job={job}
-            canListen={canListen}
-            onListen={() => onListen(job)}
-          />
-        ))}
-      </ul>
+      <QueryState
+        isPending={loading}
+        isError={errored}
+        isEmpty={jobs.length === 0}
+        loading={<SkeletonRows count={3} height="h-10" />}
+        errorLabel="Couldn't load jobs."
+        emptyLabel={
+          <p className="text-sm text-muted-foreground">No jobs yet for this book.</p>
+        }
+        label="Loading jobs…"
+        onRetry={onRetry}
+      >
+        <ul className="space-y-2">
+          {jobs.map((job) => (
+            <ReadyJobRow
+              key={job.id}
+              bookId={bookId}
+              job={job}
+              canListen={canListen}
+              onListen={() => onListen(job)}
+            />
+          ))}
+        </ul>
+      </QueryState>
     </div>
   )
 }

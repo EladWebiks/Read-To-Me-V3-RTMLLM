@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useBook, useChapters, useCreateChapter } from '@/features/library/hooks'
 import { libraryBookHref } from '@/features/library/logic/libraryPaths'
+import { InlineLoader, QueryState } from '@/shared/ui'
 import { ChapterNewFields } from './ChapterNewFields'
 import { ChapterNewLayout } from './ChapterNewLayout'
 import { useChapterDraft } from './useChapterDraft'
@@ -20,7 +21,15 @@ export function ChapterNewPage() {
   useArrowRightSave(fastCopy, draft.content, createChapter.isPending, saveAndNext)
 
   if (bookQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>
+    return (
+      <QueryState
+        isPending
+        loading={<InlineLoader label="Loading…" />}
+        errorLabel="Couldn't load the book."
+      >
+        {null}
+      </QueryState>
+    )
   }
 
   function handleSubmit(event: FormEvent) {
