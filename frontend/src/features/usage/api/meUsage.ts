@@ -12,6 +12,7 @@ export type MeUsageKind = {
 
 export type MeUsage = {
   membership: string
+  membership_label: string
   exempt: boolean
   as_of: string
   resets_at: string

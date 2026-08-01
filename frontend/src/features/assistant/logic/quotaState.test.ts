@@ -5,6 +5,7 @@ import { quotaLock } from './quotaState'
 function usage(overrides: Partial<MeUsage['kinds'][number]>[]): MeUsage {
   return {
     membership: 'free',
+    membership_label: 'Free',
     exempt: false,
     as_of: '',
     resets_at: '2026-08-01T00:00:00+00:00',

@@ -10,7 +10,9 @@ export function UsersPage() {
   // Tiers come from the memberships registry — never a hardcoded list.
   const { data: membershipsData } = useMemberships()
   const memberships =
-    membershipsData?.memberships.filter((m) => m.is_active).map((m) => m.slug) ?? []
+    membershipsData?.memberships
+      .filter((m) => m.is_active)
+      .map((m) => ({ slug: m.slug, label: m.label })) ?? []
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading users…</p>
   }

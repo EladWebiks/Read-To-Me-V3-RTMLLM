@@ -8,15 +8,20 @@ type Props = { tier: AdminMembership; allTiers: AdminMembership[] }
 export function TierDeactivate({ tier, allTiers }: Props) {
   const others = allTiers.filter((t) => t.slug !== tier.slug && t.is_active)
   const [target, setTarget] = useState(others[0]?.slug ?? '')
+  // Derived during render (not synced via effect): a refetch that changes
+  // the tier set can leave `target` pointing at a slug no longer in
+  // `others`, which would otherwise render a blank <select> while still
+  // submitting the stale slug.
+  const value = others.some((t) => t.slug === target) ? target : (others[0]?.slug ?? '')
   const deactivate = useDeactivateMembership()
 
   const onDeactivate = () => {
-    if (!target) return
+    if (!value) return
     const confirmed = window.confirm(
-      `Deactivate ${tier.label}? ${tier.user_count} user(s) will move to ${target}.`,
+      `Deactivate ${tier.label}? ${tier.user_count} user(s) will move to ${value}.`,
     )
     if (confirmed) {
-      deactivate.mutate({ slug: tier.slug, migrateTo: target })
+      deactivate.mutate({ slug: tier.slug, migrateTo: value })
     }
   }
 
@@ -25,7 +30,7 @@ export function TierDeactivate({ tier, allTiers }: Props) {
       <select
         aria-label={`Migrate ${tier.label} users to`}
         className="rounded border border-border bg-background px-1 py-0.5"
-        value={target}
+        value={value}
         onChange={(event) => setTarget(event.target.value)}
       >
         {others.map((t) => (
@@ -37,7 +42,7 @@ export function TierDeactivate({ tier, allTiers }: Props) {
       <button
         type="button"
         className="underline disabled:opacity-50"
-        disabled={!target}
+        disabled={!value}
         onClick={onDeactivate}
       >
         Deactivate

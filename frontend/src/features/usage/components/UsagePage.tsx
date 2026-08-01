@@ -17,7 +17,7 @@ export function UsagePage() {
       <header className="space-y-1">
         <h1 className="text-lg font-semibold">Plan &amp; usage</h1>
         <p className="text-sm text-muted-foreground">
-          <span className="capitalize">{data.membership}</span> plan · Usage resets{' '}
+          <span>{data.membership_label}</span> plan · Usage resets{' '}
           {resetLabel(data.resets_at)}
         </p>
         {data.exempt && (

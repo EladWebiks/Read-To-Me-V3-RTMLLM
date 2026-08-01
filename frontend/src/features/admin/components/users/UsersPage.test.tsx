@@ -52,18 +52,19 @@ describe('UsersPage', () => {
     })
     vi.mocked(fetchMemberships).mockResolvedValue({
       memberships: [
-        { slug: 'free', is_active: true, rank: 0 },
-        { slug: 'premium', is_active: true, rank: 1 },
-        { slug: 'legacy', is_active: false, rank: 2 },
+        { slug: 'free', label: 'Free', is_active: true, rank: 0 },
+        { slug: 'premium', label: 'Premium Plus', is_active: true, rank: 1 },
+        { slug: 'legacy', label: 'Legacy', is_active: false, rank: 2 },
       ] as never,
     })
     renderPage()
 
     const select = await screen.findByLabelText(/Membership for reader/)
+    // Options show the admin-authored label, not the raw slug.
     await waitFor(() => {
       expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
-        'free',
-        'premium',
+        'Free',
+        'Premium Plus',
       ])
     })
 

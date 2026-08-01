@@ -1,12 +1,12 @@
 import type { AdminUser } from '@/features/admin/api/users'
-import { UserRow } from './UserRow'
+import { UserRow, type MembershipOption } from './UserRow'
 
 export function UsersTable({
   users,
   memberships,
 }: {
   users: AdminUser[]
-  memberships: string[]
+  memberships: MembershipOption[]
 }) {
   return (
     <div className="overflow-x-auto">

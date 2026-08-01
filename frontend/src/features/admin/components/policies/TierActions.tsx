@@ -31,7 +31,7 @@ export function TierActions({ tier, allTiers }: Props) {
         <button type="button" className="underline" onClick={() => setEditing(true)}>
           Edit
         </button>
-        {!tier.is_default ? (
+        {!tier.is_default && tier.is_active ? (
           <button
             type="button"
             className="underline"

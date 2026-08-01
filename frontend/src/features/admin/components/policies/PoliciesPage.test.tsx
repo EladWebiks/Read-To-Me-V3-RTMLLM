@@ -146,6 +146,9 @@ describe('PoliciesPage', () => {
     const scoped = within(wrapper as HTMLElement)
     expect(scoped.getByRole('button', { name: 'Reactivate' })).toBeTruthy()
     expect(scoped.queryByRole('button', { name: 'Deactivate' })).toBeNull()
+    // Regression: an inactive, non-default tier must not offer "Make
+    // default" — crowning it would leave is_active=false, is_default=true.
+    expect(scoped.queryByRole('button', { name: 'Make default' })).toBeNull()
   })
 
   it('opens the create dialog from New tier and submits a create request', async () => {

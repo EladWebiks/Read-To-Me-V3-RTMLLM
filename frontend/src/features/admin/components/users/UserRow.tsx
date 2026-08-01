@@ -2,12 +2,48 @@ import type { AdminUser } from '@/features/admin/api/users'
 import { usePatchUser } from '@/features/admin/hooks/useAdminUsers'
 import { UserRowActions } from './UserRowActions'
 
+/** Option shown in the operator override dropdown: slug is submitted, label is shown. */
+export type MembershipOption = { slug: string; label: string }
+
+/** Membership dropdown: submits the slug, displays the admin-authored label. */
+function MembershipSelect({
+  user,
+  memberships,
+  patch,
+}: {
+  user: AdminUser
+  memberships: MembershipOption[]
+  patch: ReturnType<typeof usePatchUser>
+}) {
+  // While the registry loads, keep the current tier so it never blanks.
+  const options =
+    memberships.length > 0
+      ? memberships
+      : [{ slug: user.membership, label: user.membership }]
+  return (
+    <select
+      className="rounded border border-border bg-background px-1 py-0.5 text-xs"
+      value={user.membership}
+      aria-label={`Membership for ${user.username} (operator override)`}
+      onChange={(event) =>
+        patch.mutate({ id: user.id, body: { membership: event.target.value } })
+      }
+    >
+      {options.map((tier) => (
+        <option key={tier.slug} value={tier.slug}>
+          {tier.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 export function UserRow({
   user,
   memberships,
 }: {
   user: AdminUser
-  memberships: string[]
+  memberships: MembershipOption[]
 }) {
   const patch = usePatchUser()
   const deleted = user.deleted_at !== null
@@ -40,21 +76,7 @@ export function UserRow({
         />
       </td>
       <td className="px-2 py-1.5">
-        <select
-          className="rounded border border-border bg-background px-1 py-0.5 text-xs"
-          value={user.membership}
-          aria-label={`Membership for ${user.username} (operator override)`}
-          onChange={(event) =>
-            patch.mutate({ id: user.id, body: { membership: event.target.value } })
-          }
-        >
-          {/* While the registry loads, keep the current tier so it never blanks. */}
-          {(memberships.length > 0 ? memberships : [user.membership]).map((tier) => (
-            <option key={tier} value={tier}>
-              {tier}
-            </option>
-          ))}
-        </select>
+        <MembershipSelect user={user} memberships={memberships} patch={patch} />
       </td>
       <td className="px-2 py-1.5">{user.google_linked ? 'linked' : '—'}</td>
       <td className="px-2 py-1.5 text-muted-foreground">

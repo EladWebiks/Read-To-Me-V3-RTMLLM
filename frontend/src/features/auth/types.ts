@@ -10,4 +10,5 @@ export type User = {
 
 export type MeResponse = {
   user: User
+  membership_label: string
 }

@@ -23,7 +23,9 @@ function renderAvatar(overrides: Partial<User> = {}) {
         <Routes>
           <Route
             path="/library"
-            element={<UserAvatar user={{ ...user, ...overrides }} />}
+            element={
+              <UserAvatar user={{ ...user, ...overrides }} membershipLabel="Free Tier" />
+            }
           />
           <Route path="/usage" element={<div>usage-page-marker</div>} />
         </Routes>
@@ -61,7 +63,7 @@ describe('UserAvatar', () => {
     renderAvatar()
     fireEvent.keyDown(screen.getByLabelText('Account menu'), { key: 'Enter' })
     expect(await screen.findByText('idan.avin@gmail.com')).toBeTruthy()
-    expect(screen.getByText('free plan')).toBeTruthy()
+    expect(screen.getByText('Free Tier plan')).toBeTruthy()
 
     fireEvent.click(screen.getByText('Plan & usage'))
     expect(await screen.findByText('usage-page-marker')).toBeTruthy()

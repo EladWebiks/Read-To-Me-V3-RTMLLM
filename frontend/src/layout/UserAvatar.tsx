@@ -10,8 +10,10 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui'
 
+type Props = { user: User; membershipLabel: string }
+
 /** Navbar avatar: Google profile picture with an initial-letter fallback. */
-export function UserAvatar({ user }: { user: User }) {
+export function UserAvatar({ user, membershipLabel }: Props) {
   const [broken, setBroken] = useState(false)
   const navigate = useNavigate()
   const showImage = Boolean(user.picture_url) && !broken
@@ -42,7 +44,7 @@ export function UserAvatar({ user }: { user: User }) {
       <DropdownMenuContent align="end">
         <DropdownMenuLabel className="px-2.5 py-1.5 text-xs text-muted-foreground">
           {user.email ?? user.username}
-          <span className="block capitalize">{user.membership} plan</span>
+          <span className="block">{membershipLabel} plan</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
         <DropdownMenuItem onSelect={() => navigate('/usage')}>

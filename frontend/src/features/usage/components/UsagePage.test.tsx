@@ -6,6 +6,7 @@ import { UsagePage } from './UsagePage'
 
 const usage: MeUsage = {
   membership: 'free',
+  membership_label: 'Free Tier',
   exempt: false,
   as_of: '2026-07-31T12:00:00+00:00',
   resets_at: '2026-08-01T00:00:00+00:00',
@@ -53,7 +54,7 @@ function renderPage() {
 describe('UsagePage', () => {
   it('renders tier, reset date, month meters, and the storage section', async () => {
     renderPage()
-    expect(await screen.findByText('free')).toBeTruthy()
+    expect(await screen.findByText('Free Tier')).toBeTruthy()
     expect(screen.getByText(/Usage resets August 1, 2026/)).toBeTruthy()
     expect(screen.getByText('AI tokens')).toBeTruthy()
     expect(screen.getByText('4,500 / 5,000')).toBeTruthy()

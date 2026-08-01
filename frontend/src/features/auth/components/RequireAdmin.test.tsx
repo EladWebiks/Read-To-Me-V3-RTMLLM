@@ -21,6 +21,7 @@ function me(isAdmin: boolean): MeResponse {
       membership: 'free',
       created_at: '2026-01-01T00:00:00Z',
     },
+    membership_label: 'Free',
   }
 }
 
