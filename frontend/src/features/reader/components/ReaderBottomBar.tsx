@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react'
-import { Button } from '@/shared/ui'
+import { Button, Select } from '@/shared/ui'
 import type { ChapterSummary } from '@/features/library/types'
 
 type Props = {
@@ -23,8 +23,8 @@ export function ReaderBottomBar(props: Props) {
       >
         Prev
       </Button>
-      <select
-        className="min-w-[12rem] flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+      <Select
+        className="min-w-[12rem] flex-1"
         value={props.chapterId}
         aria-label="Chapter list"
         onChange={(event) => props.onNavigate(event.target.value)}
@@ -34,7 +34,7 @@ export function ReaderBottomBar(props: Props) {
             {chapter.chapter_number}. {chapter.title || 'Untitled'}
           </option>
         ))}
-      </select>
+      </Select>
       <Button
         type="button"
         variant="outline"

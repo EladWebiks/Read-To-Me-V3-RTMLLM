@@ -1,4 +1,5 @@
 import type { DownloadProvider } from '@/features/downloads/types'
+import { Select } from '@/shared/ui'
 
 export function ProviderSelect({
   value,
@@ -10,14 +11,14 @@ export function ProviderSelect({
   return (
     <label className="flex items-center gap-1">
       Provider
-      <select
-        className="rounded-md border border-border bg-background px-2 py-1 text-foreground"
+      <Select
+        className="w-auto"
         value={value}
         onChange={(event) => onChange(event.target.value as DownloadProvider)}
       >
         <option value="edge">Edge</option>
         <option value="sapi">SAPI</option>
-      </select>
+      </Select>
     </label>
   )
 }
