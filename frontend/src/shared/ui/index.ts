@@ -7,6 +7,7 @@ export { SelectField } from './select-field'
 export { Input } from './input'
 export { Select } from './select'
 export { Label } from './label'
+export { Skeleton, SkeletonText } from './skeleton'
 export { Card, CardContent, CardHeader, CardTitle } from './card'
 export {
   Dialog,
