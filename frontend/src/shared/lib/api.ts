@@ -1,3 +1,5 @@
+import { validationDetail } from '@/shared/lib/apiError'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 /** Absolute (or base-prefixed) URL for an API path. */
@@ -19,9 +21,10 @@ async function errorDetail(response: Response): Promise<string> {
   const fallback = `Request failed: ${response.status}`
   try {
     const payload = (await response.json()) as { detail?: unknown }
-    return typeof payload.detail === 'string' && payload.detail
-      ? payload.detail
-      : fallback
+    if (typeof payload.detail === 'string' && payload.detail) {
+      return payload.detail
+    }
+    return validationDetail(payload.detail) ?? fallback
   } catch {
     return fallback
   }

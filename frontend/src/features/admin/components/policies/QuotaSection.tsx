@@ -4,7 +4,7 @@ import type {
   QuotaKindInfo,
 } from '@/features/admin/api/membershipQuotas'
 import { useSaveQuota } from '@/features/admin/hooks/useMembershipQuotas'
-import { parsePolicyInput } from '@/features/admin/logic/policyFields'
+import { parseQuotaInput } from '@/features/admin/logic/quotaFields'
 
 type Props = { membership: string; kinds: QuotaKindInfo[]; rows: MembershipQuotaRow[] }
 
@@ -19,13 +19,21 @@ export function QuotaSection({ membership, kinds, rows }: Props) {
   const [drafts, setDrafts] = useState(() => initialDrafts(kinds, rows))
   const save = useSaveQuota()
   const current = new Map(rows.map((r) => [r.quota_kind, r.limit_value]))
+  // Derived during render — the draft text is the only source of truth.
+  const parsed = new Map(
+    kinds.map((k) => [k.kind, parseQuotaInput(drafts[k.kind] ?? '')]),
+  )
+  const errorFor = (kind: string) => {
+    const result = parsed.get(kind)
+    return result && !result.ok ? result.error : null
+  }
+  const blocked = kinds.some((k) => errorFor(k.kind) !== null)
 
   const onSave = () => {
     for (const meta of kinds) {
-      const parsed = parsePolicyInput(drafts[meta.kind] ?? '')
-      if (parsed === undefined) return
-      if (parsed !== (current.get(meta.kind) ?? null)) {
-        save.mutate({ membership, kind: meta.kind, limit: parsed })
+      const result = parsed.get(meta.kind)
+      if (result?.ok && result.value !== (current.get(meta.kind) ?? null)) {
+        save.mutate({ membership, kind: meta.kind, limit: result.value })
       }
     }
   }
@@ -45,21 +53,28 @@ export function QuotaSection({ membership, kinds, rows }: Props) {
               inputMode="decimal"
               value={drafts[meta.kind] ?? ''}
               placeholder={current.has(meta.kind) ? '' : 'unlimited'}
+              aria-invalid={errorFor(meta.kind) !== null}
               onChange={(event) =>
                 setDrafts((prev) => ({ ...prev, [meta.kind]: event.target.value }))
               }
             />
+            {errorFor(meta.kind) ? (
+              <span className="text-xs text-destructive">{errorFor(meta.kind)}</span>
+            ) : null}
           </label>
         ))}
       </div>
       <button
         type="button"
         className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
-        disabled={save.isPending}
+        disabled={save.isPending || blocked}
         onClick={onSave}
       >
         {save.isPending ? 'Saving…' : 'Save quotas'}
       </button>
+      {save.error ? (
+        <p className="mt-2 text-xs text-destructive">{save.error.message}</p>
+      ) : null}
     </div>
   )
 }

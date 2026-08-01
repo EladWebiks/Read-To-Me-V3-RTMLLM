@@ -61,7 +61,7 @@ async def client() -> AsyncIterator[AsyncClient]:
     await engine.dispose()
 
 
-async def _create_admin(username: str) -> UUID:
+async def _create_user(username: str, *, is_admin: bool) -> UUID:
     engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
@@ -70,7 +70,7 @@ async def _create_admin(username: str) -> UUID:
             email=f"{username}@example.com",
             password_hash=None,
             google_sub=f"{username}-sub",
-            is_admin=True,
+            is_admin=is_admin,
         )
         session.add(user)
         await session.commit()
@@ -81,8 +81,17 @@ async def _create_admin(username: str) -> UUID:
 
 @pytest.fixture
 async def admin_client(client: AsyncClient) -> AsyncClient:
-    user_id = await _create_admin("quota-admin")
+    user_id = await _create_user("quota-admin", is_admin=True)
     token = create_access_token(user_id=user_id, username="quota-admin", settings=get_settings())
+    client.cookies.set(COOKIE_NAME, token, domain=_HOST, path="/")
+    return client
+
+
+@pytest.fixture
+async def reader_client(client: AsyncClient) -> AsyncClient:
+    """An authenticated NON-admin — quota rules are backoffice-only."""
+    user_id = await _create_user("quota-reader", is_admin=False)
+    token = create_access_token(user_id=user_id, username="quota-reader", settings=get_settings())
     client.cookies.set(COOKIE_NAME, token, domain=_HOST, path="/")
     return client
 
@@ -90,6 +99,15 @@ async def admin_client(client: AsyncClient) -> AsyncClient:
 @pytest.mark.integration
 async def test_anonymous_gets_401(client: AsyncClient) -> None:
     assert (await client.get(BASE)).status_code == 401
+
+
+@pytest.mark.integration
+async def test_non_admin_gets_403_on_every_verb(reader_client: AsyncClient) -> None:
+    """A signed-in reader must not read, raise, or clear anyone's quota rules."""
+    assert (await reader_client.get(BASE)).status_code == 403
+    put = await reader_client.put(f"{BASE}/free/llm_tokens", json={"limit_value": 10**9})
+    assert put.status_code == 403
+    assert (await reader_client.delete(f"{BASE}/free/llm_tokens")).status_code == 403
 
 
 @pytest.mark.integration

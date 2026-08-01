@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { QuotaKindInfo } from '@/features/admin/api/membershipQuotas'
 import { useSetUserQuota, useUserQuotas } from '@/features/admin/hooks/useUserQuotas'
+import { parseQuotaInput } from '@/features/admin/logic/quotaFields'
 import {
   Dialog,
   DialogContent,
@@ -49,22 +51,25 @@ function QuotaOverrideField({ kind, override, tierLimit, onCommit }: FieldProps)
 export function UserQuotasDialog({ userId, username, open, onOpenChange }: Props) {
   const { data } = useUserQuotas(userId, open)
   const save = useSetUserQuota(userId)
+  const [invalid, setInvalid] = useState<string | null>(null)
   const overrideOf = (kind: string) =>
     data?.overrides.find((row) => row.quota_kind === kind)?.limit_value
 
   const commit = (kind: string, raw: string) => {
-    const trimmed = raw.trim()
-    if (trimmed === '') {
+    const parsed = parseQuotaInput(raw)
+    setInvalid(parsed.ok ? null : parsed.error)
+    if (!parsed.ok) return
+    if (parsed.value === null) {
       if (overrideOf(kind) !== undefined) {
         save.mutate({ kind, limit: null })
       }
       return
     }
-    const value = Number(trimmed)
-    if (Number.isFinite(value) && value >= 0 && value !== overrideOf(kind)) {
-      save.mutate({ kind, limit: value })
+    if (parsed.value !== overrideOf(kind)) {
+      save.mutate({ kind, limit: parsed.value })
     }
   }
+  const message = invalid ?? save.error?.message ?? null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -86,9 +91,7 @@ export function UserQuotasDialog({ userId, username, open, onOpenChange }: Props
             />
           ))}
         </div>
-        {save.error ? (
-          <p className="text-xs text-destructive">{save.error.message}</p>
-        ) : null}
+        {message ? <p className="text-xs text-destructive">{message}</p> : null}
       </DialogContent>
     </Dialog>
   )

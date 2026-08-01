@@ -7,6 +7,7 @@ import {
   fetchUserQuotas,
   putUserQuota,
 } from '@/features/admin/api/userQuotas'
+import { ApiError } from '@/shared/lib/api'
 
 vi.mock('@/features/admin/api/userQuotas', () => ({
   fetchUserQuotas: vi.fn(),
@@ -93,5 +94,44 @@ describe('UserQuotasDialog', () => {
       expect(vi.mocked(putUserQuota)).toHaveBeenCalledWith('u1', 'llm_tokens', 0)
     })
     expect(vi.mocked(deleteUserQuota)).not.toHaveBeenCalled()
+  })
+})
+
+describe('UserQuotasDialog rainy days', () => {
+  it('shows why the API rejected the override', async () => {
+    vi.mocked(fetchUserQuotas).mockResolvedValue(QUOTAS)
+    vi.mocked(putUserQuota).mockRejectedValue(
+      new ApiError(422, 'limit_value: Input should be greater than or equal to 0'),
+    )
+    renderDialog()
+
+    const tokens = await screen.findByPlaceholderText('1,000 (tier)')
+    fireEvent.change(tokens, { target: { value: '9000' } })
+    fireEvent.blur(tokens)
+    expect(
+      await screen.findByText('limit_value: Input should be greater than or equal to 0'),
+    ).toBeTruthy()
+  })
+
+  it('explains a negative entry instead of dropping it', async () => {
+    vi.mocked(fetchUserQuotas).mockResolvedValue(QUOTAS)
+    renderDialog()
+
+    const tokens = await screen.findByPlaceholderText('1,000 (tier)')
+    fireEvent.change(tokens, { target: { value: '-5' } })
+    fireEvent.blur(tokens)
+    expect(await screen.findByText(/Enter a number/)).toBeTruthy()
+    expect(vi.mocked(putUserQuota)).not.toHaveBeenCalled()
+  })
+
+  it('explains a non-numeric entry instead of dropping it', async () => {
+    vi.mocked(fetchUserQuotas).mockResolvedValue(QUOTAS)
+    renderDialog()
+
+    const tokens = await screen.findByPlaceholderText('1,000 (tier)')
+    fireEvent.change(tokens, { target: { value: 'lots' } })
+    fireEvent.blur(tokens)
+    expect(await screen.findByText(/Enter a number/)).toBeTruthy()
+    expect(vi.mocked(putUserQuota)).not.toHaveBeenCalled()
   })
 })
