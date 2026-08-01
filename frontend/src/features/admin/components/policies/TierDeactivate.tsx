@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AdminMembership } from '@/features/admin/api/memberships'
 import { useDeactivateMembership } from '@/features/admin/hooks/useMemberships'
+import { FormError } from '@/shared/ui'
 
 type Props = { tier: AdminMembership; allTiers: AdminMembership[] }
 
@@ -47,9 +48,7 @@ export function TierDeactivate({ tier, allTiers }: Props) {
       >
         Deactivate
       </button>
-      {deactivate.error ? (
-        <span className="text-destructive">{deactivate.error.message}</span>
-      ) : null}
+      <FormError inline error={deactivate.error} />
     </span>
   )
 }

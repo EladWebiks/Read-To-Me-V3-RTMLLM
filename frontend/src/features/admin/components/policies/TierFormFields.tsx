@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import { Input, Label } from '@/shared/ui'
+import { FormField, TextField } from '@/shared/ui'
 import type { TierDraft } from './TierFormDialog'
 
 type Props = {
@@ -15,54 +15,45 @@ export function TierFormFields({ showSlug, draft, onChange }: Props) {
   return (
     <>
       {showSlug ? (
-        <div className="space-y-1">
-          <Label htmlFor="tier-slug">Slug</Label>
-          <Input
-            id="tier-slug"
-            value={draft.slug}
-            pattern="^[a-z0-9_-]{1,32}$"
-            title="Lowercase letters, digits, _ or -, up to 32 characters"
-            onChange={onChange('slug')}
-            required
-          />
-        </div>
+        <TextField
+          id="tier-slug"
+          label="Slug"
+          value={draft.slug}
+          pattern="^[a-z0-9_-]{1,32}$"
+          title="Lowercase letters, digits, _ or -, up to 32 characters"
+          onChange={onChange('slug')}
+          required
+        />
       ) : null}
-      <div className="space-y-1">
-        <Label htmlFor="tier-label">Label</Label>
-        <Input
-          id="tier-label"
-          value={draft.label}
-          onChange={onChange('label')}
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="tier-rank">Rank</Label>
-        <Input
-          id="tier-rank"
-          type="number"
-          value={draft.rank}
-          onChange={onChange('rank')}
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="tier-description">Description</Label>
+      <TextField
+        id="tier-label"
+        label="Label"
+        value={draft.label}
+        onChange={onChange('label')}
+        required
+      />
+      <TextField
+        id="tier-rank"
+        label="Rank"
+        type="number"
+        value={draft.rank}
+        onChange={onChange('rank')}
+        required
+      />
+      <FormField id="tier-description" label="Description">
         <textarea
           id="tier-description"
           className="flex w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm shadow-sm"
           value={draft.description}
           onChange={onChange('description')}
         />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="tier-price">Price label</Label>
-        <Input
-          id="tier-price"
-          value={draft.priceLabel}
-          onChange={onChange('priceLabel')}
-        />
-      </div>
+      </FormField>
+      <TextField
+        id="tier-price"
+        label="Price label"
+        value={draft.priceLabel}
+        onChange={onChange('priceLabel')}
+      />
     </>
   )
 }

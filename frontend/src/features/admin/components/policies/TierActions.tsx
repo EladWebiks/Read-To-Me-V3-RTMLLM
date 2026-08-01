@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AdminMembership } from '@/features/admin/api/memberships'
 import { usePatchMembership } from '@/features/admin/hooks/useMemberships'
+import { FormError } from '@/shared/ui'
 import { TierFormDialog } from './TierFormDialog'
 import { TierDeactivate } from './TierDeactivate'
 
@@ -53,9 +54,7 @@ export function TierActions({ tier, allTiers }: Props) {
           <TierDeactivate tier={tier} allTiers={allTiers} />
         ) : null}
       </div>
-      {patch.error ? (
-        <p className="text-xs text-destructive">{patch.error.message}</p>
-      ) : null}
+      <FormError error={patch.error} />
       <TierFormDialog
         mode="edit"
         tier={tier}

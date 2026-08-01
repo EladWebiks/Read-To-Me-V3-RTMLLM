@@ -5,6 +5,7 @@ import type {
 } from '@/features/admin/api/membershipPolicies'
 import { usePatchMembershipPolicy } from '@/features/admin/hooks/useMembershipPolicies'
 import { parsePolicyInput, POLICY_FIELDS } from '@/features/admin/logic/policyFields'
+import { FormError } from '@/shared/ui'
 import { PolicyField } from './PolicyField'
 
 type Props = {
@@ -58,6 +59,7 @@ export function PolicyCard({ policy, inherited, header, children }: Props) {
         {POLICY_FIELDS.map((meta) => (
           <PolicyField
             key={meta.key}
+            membership={policy.membership}
             meta={meta}
             value={drafts[meta.key] ?? ''}
             inherited={inherited}
@@ -65,9 +67,7 @@ export function PolicyCard({ policy, inherited, header, children }: Props) {
           />
         ))}
       </div>
-      {invalid ? (
-        <p className="mt-2 text-sm text-destructive">Enter numbers (or blank).</p>
-      ) : null}
+      <FormError className="mt-2" error={invalid ? 'Enter numbers (or blank).' : null} />
       <button
         type="button"
         className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
@@ -76,6 +76,7 @@ export function PolicyCard({ policy, inherited, header, children }: Props) {
       >
         {mutation.isPending ? 'Saving…' : 'Save'}
       </button>
+      <FormError className="mt-2" error={mutation.error} />
       {children}
     </div>
   )

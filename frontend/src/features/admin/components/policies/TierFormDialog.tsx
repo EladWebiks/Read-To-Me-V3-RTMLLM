@@ -4,7 +4,7 @@ import {
   useCreateMembership,
   usePatchMembership,
 } from '@/features/admin/hooks/useMemberships'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, FormError } from '@/shared/ui'
 import { TierFormFields } from './TierFormFields'
 
 type Props = ({ mode: 'create' } | { mode: 'edit'; tier: AdminMembership }) & {
@@ -68,9 +68,7 @@ function TierForm(props: Props) {
         draft={draft}
         onChange={onChange}
       />
-      {mutation.error ? (
-        <p className="text-xs text-destructive">{mutation.error.message}</p>
-      ) : null}
+      <FormError error={mutation.error} />
       <button
         type="submit"
         className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
