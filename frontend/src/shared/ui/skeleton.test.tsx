@@ -1,6 +1,7 @@
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Skeleton, SkeletonText } from './skeleton'
+import { InlineLoader, Spinner } from './spinner'
 
 // vitest runs with globals:false, so testing-library's auto-cleanup is not registered.
 afterEach(cleanup)
@@ -32,5 +33,28 @@ describe('SkeletonText', () => {
   it('is aria-hidden at the wrapper', () => {
     const { container } = render(<SkeletonText />)
     expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('Spinner', () => {
+  it('spins and stays out of the accessibility tree', () => {
+    const { container } = render(<Spinner />)
+    const icon = container.firstElementChild as HTMLElement
+    expect(icon.getAttribute('aria-hidden')).toBe('true')
+    expect(icon.getAttribute('class') ?? '').toContain('animate-spin')
+  })
+
+  it('sm renders the compact size', () => {
+    const { container } = render(<Spinner size="sm" />)
+    expect((container.firstElementChild as HTMLElement).getAttribute('class')).toContain(
+      'size-3.5',
+    )
+  })
+})
+
+describe('InlineLoader', () => {
+  it('renders its label as visible text next to a hidden spinner', () => {
+    render(<InlineLoader label="Loading chapters…" />)
+    expect(screen.getByText('Loading chapters…')).toBeTruthy()
   })
 })
