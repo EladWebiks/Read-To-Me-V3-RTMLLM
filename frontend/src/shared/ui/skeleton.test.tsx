@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Skeleton, SkeletonText } from './skeleton'
+import { SkeletonCards, SkeletonRows, SkeletonTable } from './skeleton-layouts'
 import { InlineLoader, Spinner } from './spinner'
 
 // vitest runs with globals:false, so testing-library's auto-cleanup is not registered.
@@ -56,5 +57,32 @@ describe('InlineLoader', () => {
   it('renders its label as visible text next to a hidden spinner', () => {
     render(<InlineLoader label="Loading chapters…" />)
     expect(screen.getByText('Loading chapters…')).toBeTruthy()
+  })
+})
+
+describe('SkeletonTable', () => {
+  it('renders one header bar plus rows, each with the requested cell count', () => {
+    const { container } = render(<SkeletonTable rows={4} cols={3} />)
+    // (1 header row + 4 body rows) × 3 cells
+    expect(container.querySelectorAll('.rtm-skeleton')).toHaveLength(15)
+    expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('SkeletonCards', () => {
+  it('renders the requested number of cards inside the library grid shape', () => {
+    const { container } = render(<SkeletonCards count={6} />)
+    expect(container.querySelectorAll('.rtm-skeleton')).toHaveLength(6)
+    expect(container.firstElementChild?.className).toContain('sm:grid-cols-2')
+    expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('SkeletonRows', () => {
+  it('renders count blocks at the requested height', () => {
+    const { container } = render(<SkeletonRows count={3} height="h-10" />)
+    const rows = container.querySelectorAll('.rtm-skeleton')
+    expect(rows).toHaveLength(3)
+    expect(rows[0].className).toContain('h-10')
   })
 })
