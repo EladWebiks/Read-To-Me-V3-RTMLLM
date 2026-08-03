@@ -1,14 +1,16 @@
 import { useState } from 'react'
 
 /** limit/offset paging for the backend Page[T] envelope. */
-export function usePageState(limit = 50) {
-  const [offset, setOffset] = useState(0)
+export function usePageState(limit: number) {
+  const [rawOffset, setRawOffset] = useState(0)
+  const offset = Math.floor(rawOffset / limit) * limit
+
   return {
     limit,
     offset,
-    prev: () => setOffset((current) => Math.max(0, current - limit)),
+    prev: () => setRawOffset(Math.max(0, offset - limit)),
     next: (total: number) =>
-      setOffset((current) => (current + limit < total ? current + limit : current)),
-    reset: () => setOffset(0),
+      setRawOffset(offset + limit < total ? offset + limit : offset),
+    reset: () => setRawOffset(0),
   }
 }

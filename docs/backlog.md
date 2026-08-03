@@ -41,7 +41,7 @@ avoid half-finished mixing.
 | 5 | T2.3 | Settings shown in more than one place | Done |
 | 6 | T4 | Library updates live during scraping | Done |
 | 7 | T3 | Login page full redesign | Done |
-| 8 | T2.4 | Admin backoffice visual + UX | Discuss then code |
+| 8 | T2.4 | Admin backoffice visual + UX | In progress |
 | 9 | T2.5 | Chat fullscreen redesign + placeholders | Plan first (layout) |
 | 10 | T5 | Polling → SSE / push where useful | Plan first (inventory + design) |
 | 11 | T1 | Improve book discovery / sources | Plan first (source strategy) |
@@ -136,12 +136,18 @@ caps the speed slider).
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | In progress |
+| Branch | `backlog-cleanup` |
 | Plan first | Discuss visual direction; formal spec only if scope grows |
 
 **Goal:** Improve `/admin/*` look and interaction (density, hierarchy,
 empty states, consistency with shared form/query primitives).
+
+**Slices:**
+1. List shell (viewport lock + fit rows + pinned pagination) — Users first
+2. Roll shell to Jobs / Tool calls / Usage
+3. Settings key tooltips
+4. Identity + filters (email, not bare user id)
 
 #### T2.5 — Chat fullscreen redesign + placeholders
 

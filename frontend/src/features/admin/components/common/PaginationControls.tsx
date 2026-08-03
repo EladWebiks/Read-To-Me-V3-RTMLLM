@@ -14,7 +14,7 @@ export function PaginationControls({
   const start = total === 0 ? 0 : offset + 1
   const end = Math.min(offset + limit, total)
   return (
-    <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
+    <div className="flex items-center gap-3 text-sm text-muted-foreground">
       <span>
         {start}–{end} of {total}
       </span>

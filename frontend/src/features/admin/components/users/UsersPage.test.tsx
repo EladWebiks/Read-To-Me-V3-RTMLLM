@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { UsersPage } from './UsersPage'
 import { fetchMemberships } from '@/features/admin/api/memberships'
 import { fetchAdminUsers, patchAdminUser } from '@/features/admin/api/users'
@@ -18,6 +18,15 @@ vi.mock('@/features/admin/api/memberships', () => ({
   patchMembership: vi.fn(),
   deactivateMembership: vi.fn(),
 }))
+
+beforeAll(() => {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+})
 
 const USER = {
   id: 'u1',

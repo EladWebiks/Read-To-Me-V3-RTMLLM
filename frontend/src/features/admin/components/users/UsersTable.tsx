@@ -9,9 +9,9 @@ export function UsersTable({
   memberships: MembershipOption[]
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="h-full overflow-auto">
       <table className="w-full text-left text-sm">
-        <thead className="text-muted-foreground">
+        <thead className="sticky top-0 bg-background text-muted-foreground">
           <tr>
             <th className="px-2 py-1.5 font-medium">Username</th>
             <th className="px-2 py-1.5 font-medium">Email</th>
