@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { ApiError } from '@/shared/lib/api'
 import { fetchMe, logout } from '@/features/auth/api'
+import { clearSessionClientState } from '@/features/auth/logic/clearSessionState'
 
 export const meQueryKey = ['auth', 'me'] as const
 
@@ -20,7 +21,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: logout,
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: meQueryKey })
+      clearSessionClientState(queryClient)
       void navigate('/login', { replace: true })
     },
   })

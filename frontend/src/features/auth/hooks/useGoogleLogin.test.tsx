@@ -55,7 +55,10 @@ describe('useGoogleLogin', () => {
   it('starts idle, goes pending, then navigates to /reader on success', () => {
     mockOpen(fakePopup())
     const queryClient = new QueryClient()
-    const resetSpy = vi.spyOn(queryClient, 'resetQueries')
+    queryClient.setQueryData(['library', 'books'], [{ id: 'old' }])
+    fetchMeMock.mockResolvedValue({ user: { id: 'u-new' } })
+    const clearSpy = vi.spyOn(queryClient, 'clear')
+    const fetchSpy = vi.spyOn(queryClient, 'fetchQuery')
     const view = renderUseGoogleLogin(queryClient)
 
     expect(view.result.current.state).toEqual({ status: 'idle' })
@@ -66,13 +69,17 @@ describe('useGoogleLogin', () => {
     act(() => dispatchAuthMessage({ type: 'rtm-google-auth', ok: true, reason: null }))
 
     expect(navigateMock).toHaveBeenCalledWith('/reader', { replace: true })
-    expect(resetSpy).toHaveBeenCalledWith({ queryKey: meQueryKey })
+    expect(clearSpy).toHaveBeenCalled()
+    expect(queryClient.getQueryData(['library', 'books'])).toBeUndefined()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: meQueryKey }),
+    )
   })
 
   it('clears the cached me error before navigating, so the guard shows loading', async () => {
-    // Pins the fix for the invalidate+navigate race: with invalidateQueries the
-    // cached 401 error survives the navigate, ProtectedRoute reads
-    // isLoading === false / isError === true and bounces back to /login.
+    // Pins the fix for the invalidate+navigate race: a leftover 401 on `me`
+    // would make ProtectedRoute bounce back to /login. We clear everything,
+    // then start a fresh fetch so status is pending at navigate time.
     mockOpen(fakePopup())
     const queryClient = new QueryClient()
     await queryClient
@@ -83,6 +90,10 @@ describe('useGoogleLogin', () => {
       })
       .catch(() => undefined)
     expect(queryClient.getQueryState(meQueryKey)?.status).toBe('error')
+
+    fetchMeMock.mockImplementation(
+      () => new Promise(() => undefined), // stay pending through navigate
+    )
 
     let statusAtNavigate: string | undefined
     navigateMock.mockImplementation(() => {

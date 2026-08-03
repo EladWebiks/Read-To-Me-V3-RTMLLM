@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { fetchMe, GOOGLE_LOGIN_URL } from '@/features/auth/api'
+import { clearSessionClientState } from '@/features/auth/logic/clearSessionState'
 import { openGooglePopup, type PopupResult } from '@/features/auth/logic/googlePopup'
 import { meQueryKey } from './hooks'
 
@@ -33,14 +34,13 @@ export function useGoogleLogin() {
       checkSession,
       (result: PopupResult) => {
         if (result.status === 'success') {
-          // resetQueries, not invalidateQueries: on this page the `me` query is
-          // already cached in `status: 'error'` (401). Invalidation only starts a
-          // refetch and leaves the error in place, so the ProtectedRoute mounted
-          // by the navigate below sees isLoading === false / isError === true and
-          // bounces straight back to /login until the refetch lands. Resetting
-          // clears the cached error synchronously, putting the guard into its
-          // "Checking session…" branch instead.
-          void queryClient.resetQueries({ queryKey: meQueryKey })
+          // Drop the previous principal's caches and persisted chat thread.
+          // Then start a fresh `me` fetch so ProtectedRoute sees pending
+          // (not a leftover 401) before navigate mounts the shell.
+          clearSessionClientState(queryClient)
+          void queryClient
+            .fetchQuery({ queryKey: meQueryKey, queryFn: fetchMe })
+            .catch(() => undefined)
           void navigate('/reader', { replace: true })
           return
         }
