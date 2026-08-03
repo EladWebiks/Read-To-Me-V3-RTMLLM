@@ -8,22 +8,20 @@ import { ShellNavLinks } from './ShellNav'
 export function AppShell() {
   const { pathname } = useLocation()
   const isReading = pathname.startsWith('/read/')
-  const isAdmin = pathname.startsWith('/admin')
-  const lockMain = isReading || isAdmin
-  useReaderScrollLock(lockMain)
+  useReaderScrollLock(isReading)
   useLibraryLiveDuringScrapes()
 
   return (
     <div
       className={
-        lockMain
+        isReading
           ? 'flex h-dvh flex-col overflow-hidden bg-background text-foreground'
           : 'min-h-screen bg-background text-foreground'
       }
     >
       <header
         className={`z-40 shrink-0 border-b border-border/80 bg-background/90 backdrop-blur-sm ${
-          lockMain ? '' : 'sticky top-0'
+          isReading ? '' : 'sticky top-0'
         }`}
       >
         <div className="flex w-full items-center justify-between gap-3 px-4 py-3">
@@ -40,9 +38,7 @@ export function AppShell() {
         className={
           isReading
             ? 'mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden px-3 py-2 sm:px-4 sm:py-3'
-            : isAdmin
-              ? 'mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col overflow-hidden px-4 py-4 sm:py-6'
-              : 'mx-auto w-full max-w-5xl px-4 py-4 sm:py-6'
+            : 'mx-auto w-full max-w-5xl px-4 py-4 sm:py-6'
         }
       >
         <Outlet />
