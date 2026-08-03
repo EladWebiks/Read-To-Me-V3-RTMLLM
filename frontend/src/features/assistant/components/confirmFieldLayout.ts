@@ -8,7 +8,7 @@ const RANGE_PAIRS: ReadonlyArray<readonly [string, string]> = [
 
 const SHORT_LABELS: Record<string, string> = {
   chapter_from: 'From',
-  chapter_to: 'To',
+  chapter_to: 'To (inclusive)',
   start_chapter: 'From',
   chapter_count: 'Count',
 }

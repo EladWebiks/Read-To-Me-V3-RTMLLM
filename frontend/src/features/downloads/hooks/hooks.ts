@@ -49,7 +49,9 @@ export function useDownloadJob(jobId: string | null) {
     enabled: Boolean(jobId),
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === 'pending' || status === 'running' ? 2000 : false
+      return status === 'pending' || status === 'processing' || status === 'running'
+        ? 2000
+        : false
     },
   })
 }

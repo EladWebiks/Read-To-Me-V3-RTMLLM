@@ -26,6 +26,8 @@ describe('confirmFieldLayout', () => {
     expect(shortLabel(field('chapter_from', 'First chapter number, inclusive'))).toBe(
       'From',
     )
-    expect(shortLabel(field('chapter_to', 'Last chapter number, inclusive'))).toBe('To')
+    expect(shortLabel(field('chapter_to', 'Last chapter number, inclusive'))).toBe(
+      'To (inclusive)',
+    )
   })
 })
