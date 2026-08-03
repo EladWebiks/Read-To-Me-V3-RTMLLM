@@ -98,7 +98,7 @@ Parent of T2.1–T2.6. All sub-tickets commit on `backlog-cleanup`.
 
 **Acceptance (draft):** Logout/login clears or invalidates cached user-owned
 server state (react-query) and any client UI state that can leak identity
-before the new session’s data loads.
+before the new session’s data loads. Assistant panel closes (not left open).
 
 #### T2.2 — Chat does not reset on re-login
 
@@ -113,6 +113,7 @@ user’s conversation context.
 
 **Acceptance (draft):** Auth change clears conversation id, messages,
 HITL/pending UI, and related query caches so a new session starts clean.
+Panel `open` resets to closed (default app state).
 
 #### T2.3 — Settings shown in more than one place
 

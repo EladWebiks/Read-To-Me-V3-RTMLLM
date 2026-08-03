@@ -14,7 +14,7 @@ describe('clearSessionClientState', () => {
     })
   })
 
-  it('clears the react-query cache and starts a fresh assistant thread', () => {
+  it('clears the react-query cache and resets the assistant shell', () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(['library', 'books'], [{ id: 'book-a' }])
     queryClient.setQueryData(['auth', 'me'], { user: { id: 'u1' } })
@@ -25,5 +25,7 @@ describe('clearSessionClientState', () => {
     expect(queryClient.getQueryData(['auth', 'me'])).toBeUndefined()
     expect(useAssistantStore.getState().conversationId).toBeNull()
     expect(useAssistantStore.getState().newChatNonce).toBe(1)
+    expect(useAssistantStore.getState().open).toBe(false)
+    expect(useAssistantStore.getState().expanded).toBe(false)
   })
 })
