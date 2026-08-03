@@ -17,11 +17,14 @@ export function SheetContent({
 }) {
   return (
     <SheetPrimitive.Portal>
-      <SheetPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/50" />
+      <SheetPrimitive.Overlay className="rtm-sheet-overlay fixed inset-0 z-[100] bg-black/50" />
       <SheetPrimitive.Content
         className={cn(
-          'fixed inset-y-0 z-[100] flex w-full max-w-sm flex-col gap-4 overflow-y-auto border-border bg-background p-6 text-foreground shadow-xl',
-          side === 'right' ? 'right-0 border-l' : 'left-0 border-r',
+          'fixed inset-y-0 z-[100] flex w-full max-w-sm flex-col gap-4 overflow-y-auto',
+          'border-border bg-background p-6 text-foreground shadow-xl',
+          side === 'right'
+            ? 'rtm-sheet-content-right right-0 border-l'
+            : 'rtm-sheet-content-left left-0 border-r',
           className,
         )}
         {...props}

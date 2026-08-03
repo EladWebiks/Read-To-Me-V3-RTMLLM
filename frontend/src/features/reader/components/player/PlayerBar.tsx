@@ -1,13 +1,8 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { Button } from '@/shared/ui'
-import { PlayerControls } from './PlayerControls'
+import { MoreControls, PlayerErrorRow } from './PlayerBarExtras'
 import { TransportButtons } from './TransportButtons'
-import type {
-  PlaybackEngine,
-  TtsProviderName,
-} from '@/features/reader/hooks/ttsSettingsStore'
-import type { ServerVoice } from '@/features/reader/api/audioApi'
 import type { SpeechStatus } from '@/features/reader/hooks/useSpeech'
 
 type PlayerBarProps = {
@@ -19,67 +14,70 @@ type PlayerBarProps = {
   onPlayPause: () => void
   onStop: () => void
   onSkipNext: () => void
-  engine: PlaybackEngine
-  provider: TtsProviderName
-  browserVoices: SpeechSynthesisVoice[]
-  serverVoices: ServerVoice[]
-  voiceURI: string | null
-  serverVoice: string | null
   rate: number
   volume: number
-  autoNext: boolean
-  onEngine: (engine: PlaybackEngine) => void
-  onProvider: (provider: TtsProviderName) => void
-  onVoice: (voiceURI: string | null) => void
-  onServerVoice: (voice: string | null) => void
   onRate: (rate: number) => void
   onVolume: (volume: number) => void
-  onAutoNext: (autoNext: boolean) => void
 }
 
 export function PlayerBar(props: PlayerBarProps) {
   const [moreOpen, setMoreOpen] = useState(false)
   return (
-    <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2">
-      <div className="relative flex min-h-10 items-center justify-center">
-        <TransportButtons
-          status={props.status}
-          hasText={props.hasText}
-          onSkipPrev={props.onSkipPrev}
-          onPlayPause={props.onPlayPause}
-          onStop={props.onStop}
-          onSkipNext={props.onSkipNext}
-        />
-        <div className="absolute right-0 flex items-center gap-1">
-          <span className="hidden text-xs capitalize text-muted-foreground sm:inline">
-            {props.status}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="More playback settings"
-            onClick={() => setMoreOpen((v) => !v)}
-          >
-            {moreOpen ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+    <div className="rounded-md border border-border bg-card px-3 py-1">
+      <TransportRow
+        {...props}
+        moreOpen={moreOpen}
+        onToggleMore={() => setMoreOpen((v) => !v)}
+      />
+      <PlayerErrorRow
+        error={props.error}
+        autoPlayRequested={props.autoPlayRequested}
+        status={props.status}
+        onPlayPause={props.onPlayPause}
+      />
+      <MoreControls
+        open={moreOpen}
+        rate={props.rate}
+        volume={props.volume}
+        onRate={props.onRate}
+        onVolume={props.onVolume}
+      />
+    </div>
+  )
+}
+
+function TransportRow(
+  props: PlayerBarProps & { moreOpen: boolean; onToggleMore: () => void },
+) {
+  return (
+    <div className="relative flex h-9 items-center justify-center">
+      <TransportButtons
+        status={props.status}
+        hasText={props.hasText}
+        onSkipPrev={props.onSkipPrev}
+        onPlayPause={props.onPlayPause}
+        onStop={props.onStop}
+        onSkipNext={props.onSkipNext}
+      />
+      <div className="absolute right-0 flex items-center gap-1">
+        <span className="hidden text-xs capitalize text-muted-foreground sm:inline">
+          {props.status}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-expanded={props.moreOpen}
+          aria-label="Speed and volume"
+          onClick={props.onToggleMore}
+        >
+          <ChevronDown
+            className={`h-4 w-4 transition-transform duration-200 ${
+              props.moreOpen ? 'rotate-180' : ''
+            }`}
+          />
+        </Button>
       </div>
-      {props.error ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-destructive">{props.error}</p>
-          {props.autoPlayRequested && props.status !== 'playing' ? (
-            <Button type="button" variant="outline" size="sm" onClick={props.onPlayPause}>
-              Tap to play
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-      {moreOpen ? <PlayerControls {...props} /> : null}
     </div>
   )
 }

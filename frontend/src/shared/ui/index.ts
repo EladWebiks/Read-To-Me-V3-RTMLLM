@@ -47,6 +47,7 @@ export {
 } from './dropdown-menu'
 export { ListPagination } from './list-pagination'
 export { ThemeProvider } from './theme-provider'
+export { Slider } from './slider'
 export {
   IconTooltip,
   Tooltip,

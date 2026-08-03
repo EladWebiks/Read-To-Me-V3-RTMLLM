@@ -38,7 +38,7 @@ avoid half-finished mixing.
 | 2 | T2.2 | Chat does not reset on re-login | Discuss then code |
 | 3 | T2.6 | Dark-mode chat glow too strong | Discuss then code |
 | 4 | T7 | HITL confirmation bubble redesign | Discuss then code (light design OK) |
-| 5 | T2.3 | Settings shown in more than one place | Discuss then code (inventory first) |
+| 5 | T2.3 | Settings shown in more than one place | Done |
 | 6 | T4 | Library updates live during scraping | Discuss then code |
 | 7 | T3 | Login page full redesign | Discuss then code (visual direction) |
 | 8 | T2.4 | Admin backoffice visual + UX | Discuss then code |
@@ -119,16 +119,18 @@ Panel `open` resets to closed (default app state).
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | No — inventory + decide keep/remove in chat first |
 
 **Problem:** Some settings appear in multiple UI surfaces; redundant or
 confusing.
 
-**Acceptance (draft):** Inventory of settings entry points; each setting has
-one primary place (or a clear primary + justified secondary); unused
-duplicates removed.
+**Acceptance:** Settings sheet = font size, highlight mode, speech engine,
+voice (and server provider), auto-advance to next chapter — with tooltips.
+Reader bar keeps speed + volume only. Theme stays in shell sun/moon (not
+Settings). Max TTS speed cap removed from Settings UI (store default still
+caps the speed slider).
 
 #### T2.4 — Admin backoffice visual + UX
 
