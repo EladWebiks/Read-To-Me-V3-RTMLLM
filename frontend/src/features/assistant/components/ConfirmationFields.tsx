@@ -3,10 +3,9 @@ import {
   defaultDownloadRate,
   defaultVoice,
 } from '@/features/downloads/logic/audioModalUtils'
-import { Select } from '@/shared/ui'
 import type { ConfirmationFormField } from '../api/chatApi'
-import { coerce, stringValue } from './confirmFormUtils'
-import { ConfirmationVoiceControl } from './ConfirmationVoiceControl'
+import { ConfirmationFieldControl } from './ConfirmationFieldControl'
+import { fieldRows, shortLabel } from './confirmFieldLayout'
 
 type Props = {
   tool: string
@@ -32,64 +31,51 @@ export function ConfirmFields(props: Props) {
     props.onChange(name, value)
   }
   return (
-    <div className="mt-3 space-y-2">
-      {props.fields.map((field) => (
-        <label key={field.name} className="block space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
-          <FieldControl
+    <div className="mt-2.5 space-y-2">
+      {fieldRows(props.fields).map((row) =>
+        row.length === 2 ? (
+          <div key={row.map((f) => f.name).join('-')} className="grid grid-cols-2 gap-2">
+            {row.map((field) => (
+              <FieldLabel
+                key={field.name}
+                tool={props.tool}
+                field={field}
+                values={props.values}
+                busy={props.busy}
+                onChange={change}
+                compact
+              />
+            ))}
+          </div>
+        ) : (
+          <FieldLabel
+            key={row[0]!.name}
             tool={props.tool}
-            field={field}
+            field={row[0]!}
             values={props.values}
             busy={props.busy}
             onChange={change}
           />
-        </label>
-      ))}
+        ),
+      )}
     </div>
   )
 }
 
-function FieldControl(props: {
+function FieldLabel(props: {
   tool: string
   field: ConfirmationFormField
   values: Record<string, unknown>
   busy: boolean
   onChange: (name: string, value: unknown) => void
+  compact?: boolean
 }) {
-  if (props.tool === 'create_audio_download' && props.field.name === 'voice') {
-    return <ConfirmationVoiceControl {...props} />
-  }
-  if (props.field.options?.length) {
-    return (
-      <Select
-        disabled={props.busy}
-        value={stringValue(props.values[props.field.name])}
-        onChange={(event) => props.onChange(props.field.name, event.target.value)}
-      >
-        {props.field.options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
-    )
-  }
   return (
-    <input
-      type={
-        props.field.type === 'integer' || props.field.type === 'number'
-          ? 'number'
-          : 'text'
-      }
-      min={props.field.min}
-      max={props.field.max}
-      step={props.field.type === 'integer' ? 1 : undefined}
-      disabled={props.busy}
-      value={stringValue(props.values[props.field.name])}
-      onChange={(event) =>
-        props.onChange(props.field.name, coerce(props.field, event.target.value))
-      }
-      className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-    />
+    <label className="block min-w-0 space-y-1">
+      <span className="text-xs font-medium text-muted-foreground">
+        {props.compact ? shortLabel(props.field) : props.field.label}
+      </span>
+      <ConfirmationFieldControl {...props} />
+    </label>
   )
 }
