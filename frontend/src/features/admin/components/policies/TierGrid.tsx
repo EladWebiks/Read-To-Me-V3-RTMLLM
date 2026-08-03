@@ -33,7 +33,7 @@ export function TierGrid({
   quotas: MembershipQuotasResponse | null
 }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="flex flex-col gap-4">
       {allTiers.map((tier) => {
         const policy =
           data.policies.find((p) => p.membership === tier.slug) ?? blankPolicy(tier.slug)

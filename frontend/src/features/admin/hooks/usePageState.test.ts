@@ -34,4 +34,11 @@ describe('usePageState', () => {
     rerender({ limit: 15 })
     expect(result.current.offset).toBe(0)
   })
+
+  it('jumps to a page via setPage', () => {
+    const { result } = renderHook(() => usePageState(10))
+    act(() => result.current.setPage(3))
+    expect(result.current.offset).toBe(20)
+    expect(result.current.page).toBe(3)
+  })
 })

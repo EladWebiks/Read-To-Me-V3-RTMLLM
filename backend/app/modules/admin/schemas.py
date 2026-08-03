@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from app.modules.llm.schemas import AdminUsageOverview, UserUsageRead
+from app.modules.downloads.schemas import DownloadJobAdminRead
+from app.modules.llm.schemas import (
+    AdminUsageOverview,
+    LlmExecutionRead,
+    ToolCallAdminRead,
+    UserUsageRead,
+)
+from app.modules.scraping.schemas import ScrapeJobAdminRead
 
 
 class Page[ItemT](BaseModel):
@@ -44,3 +51,28 @@ class AdminUserUsageRead(UserUsageRead):
     month_scrape_chapters: int = 0
     month_epub_imports: int = 0
     period_rejections: int = 0
+
+
+class AdminLlmExecutionRead(LlmExecutionRead):
+    """Execution row + username resolved by the admin router."""
+
+    username: str | None = None
+
+
+class AdminToolCallRead(ToolCallAdminRead):
+    """Tool-call audit row + identity resolved by the admin router."""
+
+    username: str | None = None
+    email: str | None = None
+
+
+class AdminScrapeJobRead(ScrapeJobAdminRead):
+    """Scraping job row + username resolved by the admin router."""
+
+    username: str | None = None
+
+
+class AdminDownloadJobRead(DownloadJobAdminRead):
+    """Download job row + username resolved by the admin router."""
+
+    username: str | None = None

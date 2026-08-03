@@ -12,17 +12,23 @@ from datetime import UTC, date, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.deps import get_db, require_admin
 from app.modules.admin.params import PageParams, PeriodParams
-from app.modules.admin.schemas import AdminUsageSummary, AdminUserUsageRead, Page
+from app.modules.admin.schemas import (
+    AdminLlmExecutionRead,
+    AdminUsageSummary,
+    AdminUserUsageRead,
+    Page,
+)
 from app.modules.downloads.service import DownloadService
 from app.modules.imports.service import ImportService
 from app.modules.llm.schemas import (
     AdminUsageOverview,
+    ExecutionAdminFilters,
     LlmExecutionRead,
     ModelUsageRead,
     TaskUsageRead,
@@ -358,18 +364,80 @@ def _decorated_row(row: UserUsageRead, ctx: _RowContext) -> AdminUserUsageRead:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _ExecutionQuery:
+    """Raw query params for /executions before username resolution."""
+
+    q: str | None = None
+    user_id: UUID | None = None
+    task: str | None = None
+    status: str | None = None
+
+
+def _execution_query(
+    q: Annotated[str | None, Query(max_length=128)] = None,
+    user_id: UUID | None = None,
+    task: Annotated[str | None, Query(max_length=64)] = None,
+    status: Annotated[str | None, Query(max_length=32)] = None,
+) -> _ExecutionQuery:
+    return _ExecutionQuery(q=q, user_id=user_id, task=task or None, status=status or None)
+
+
+async def _execution_filters(
+    session: AsyncSession, query: _ExecutionQuery
+) -> ExecutionAdminFilters:
+    """Resolve username search + optional exact user_id into ExecutionAdminFilters."""
+    return ExecutionAdminFilters(
+        user_ids=await _resolve_execution_user_ids(session, query),
+        task=query.task,
+        status=query.status,
+    )
+
+
+async def _resolve_execution_user_ids(
+    session: AsyncSession, query: _ExecutionQuery
+) -> list[UUID] | None:
+    """None = no user filter; empty = match nothing; else IN (...)."""
+    if not query.q and query.user_id is None:
+        return None
+    if not query.q:
+        return [query.user_id] if query.user_id is not None else None
+    matched = await UserService(session).ids_matching_q(query.q.strip())
+    if query.user_id is None:
+        return matched
+    return [query.user_id] if query.user_id in matched else []
+
+
+async def _decorate_executions(
+    session: AsyncSession, items: list[LlmExecutionRead]
+) -> list[AdminLlmExecutionRead]:
+    names = await UserService(session).usernames_for_ids([row.user_id for row in items])
+    return [
+        AdminLlmExecutionRead(username=names.get(row.user_id), **row.model_dump()) for row in items
+    ]
+
+
 @router.get("/executions")
 async def recent_executions(
     period: Annotated[PeriodParams, Depends()],
     page: Annotated[PageParams, Depends()],
+    query: Annotated[_ExecutionQuery, Depends(_execution_query)],
     _admin: Annotated[UserRead, Depends(require_admin)],
     service: Annotated[LlmService, Depends(_llm)],
-) -> Page[LlmExecutionRead]:
-    """Cross-user execution rows, newest first."""
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Page[AdminLlmExecutionRead]:
+    """Cross-user execution rows, newest first, with optional filters."""
+    filters = await _execution_filters(session, query)
     items, total = await service.list_executions_admin(
+        filters,
         period_start=period.period_start,
         period_end=period.period_end,
         limit=page.limit,
         offset=page.offset,
     )
-    return Page(items=items, total=total, limit=page.limit, offset=page.offset)
+    return Page(
+        items=await _decorate_executions(session, items),
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )

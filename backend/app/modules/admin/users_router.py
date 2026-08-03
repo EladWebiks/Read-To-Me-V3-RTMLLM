@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_admin
-from app.modules.admin.params import PageParams
 from app.modules.admin.schemas import Page
+from app.modules.users.admin_list import AdminUserListParams
 from app.modules.users.schemas import UserAdminPatch, UserAdminRead, UserRead
 from app.modules.users.service import UserService
 
@@ -25,11 +25,11 @@ def _service(session: Annotated[AsyncSession, Depends(get_db)]) -> UserService:
 async def list_users(
     _admin: Annotated[UserRead, Depends(require_admin)],
     service: Annotated[UserService, Depends(_service)],
-    page: Annotated[PageParams, Depends()],
+    query: AdminUserListParams,
 ) -> Page[UserAdminRead]:
-    """All users (soft-deleted included, marked), newest first."""
-    items, total = await service.list_users_admin(limit=page.limit, offset=page.offset)
-    return Page(items=items, total=total, limit=page.limit, offset=page.offset)
+    """Users with optional search/filters/sort (soft-deleted included by default)."""
+    items, total = await service.list_users_admin(query)
+    return Page(items=items, total=total, limit=query.limit, offset=query.offset)
 
 
 @router.patch("/{user_id}")

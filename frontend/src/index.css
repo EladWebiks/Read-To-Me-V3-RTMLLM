@@ -158,14 +158,27 @@ body {
 
 .login-brand-atmosphere {
   background:
-    radial-gradient(ellipse 90% 70% at 15% 85%, rgba(120, 113, 108, 0.35), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 90% 10%, rgba(168, 162, 158, 0.2), transparent 50%),
+    radial-gradient(
+      ellipse 90% 70% at 15% 85%,
+      rgba(120, 113, 108, 0.35),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 90% 10%,
+      rgba(168, 162, 158, 0.2),
+      transparent 50%
+    ),
     linear-gradient(165deg, #292524 0%, #1c1917 42%, #0c0a09 100%);
 }
 
 .login-brand-photo:not([hidden]) ~ .login-brand-atmosphere {
   background:
-    linear-gradient(180deg, rgba(12, 10, 9, 0.2) 0%, rgba(12, 10, 9, 0.55) 45%, rgba(12, 10, 9, 0.88) 100%),
+    linear-gradient(
+      180deg,
+      rgba(12, 10, 9, 0.2) 0%,
+      rgba(12, 10, 9, 0.55) 45%,
+      rgba(12, 10, 9, 0.88) 100%
+    ),
     linear-gradient(90deg, rgba(12, 10, 9, 0.15) 0%, transparent 55%);
 }
 

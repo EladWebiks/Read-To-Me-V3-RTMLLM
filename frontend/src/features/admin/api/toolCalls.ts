@@ -1,7 +1,7 @@
 import type { Page } from '@/features/admin/types'
 import { apiGet } from '@/shared/lib/api'
 
-/** Mirrors ToolCallAdminRead (llm/schemas.py) exactly. */
+/** Mirrors AdminToolCallRead (admin/schemas.py). */
 export type ToolCall = {
   id: string
   tool_name: string
@@ -13,6 +13,8 @@ export type ToolCall = {
   output: Record<string, unknown> | null
   error: string | null
   user_id: string | null
+  username: string | null
+  email: string | null
   created_at: string
 }
 

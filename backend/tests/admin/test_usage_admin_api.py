@@ -118,3 +118,29 @@ async def test_recent_executions(client: AsyncClient, seeded: tuple[UUID, UUID])
     assert newest["model"] == "m1"
     assert newest["tokens_in"] == 400
     assert newest["status"] == "ok"
+    assert newest["username"] == "bob"
+
+
+@pytest.mark.integration
+async def test_recent_executions_filter_by_username(
+    client: AsyncClient, seeded: tuple[UUID, UUID]
+) -> None:
+    response = await client.get("/api/admin/usage/executions", params={**PERIOD, "q": "ali"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    assert {row["username"] for row in payload["items"]} == {"alice"}
+
+
+@pytest.mark.integration
+async def test_recent_executions_filter_by_task(
+    client: AsyncClient, seeded: tuple[UUID, UUID]
+) -> None:
+    response = await client.get(
+        "/api/admin/usage/executions", params={**PERIOD, "task": "summarize"}
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["task"] == "summarize"
+    assert payload["items"][0]["username"] == "alice"

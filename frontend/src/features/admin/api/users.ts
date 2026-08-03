@@ -15,8 +15,29 @@ export type AdminUser = {
 
 export type AdminUserPatch = { is_admin?: boolean; membership?: string }
 
-export function fetchAdminUsers(limit: number, offset: number): Promise<Page<AdminUser>> {
-  return apiGet(`/api/admin/users?limit=${limit}&offset=${offset}`)
+export type AdminUserFilters = {
+  q?: string
+  membership?: string
+  status?: 'all' | 'active' | 'deleted'
+  admin?: 'any' | 'admin' | 'user'
+  sort?: 'created_desc' | 'created_asc' | 'username_asc' | 'username_desc'
+}
+
+export function fetchAdminUsers(
+  limit: number,
+  offset: number,
+  filters: AdminUserFilters = {},
+): Promise<Page<AdminUser>> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  if (filters.q?.trim()) params.set('q', filters.q.trim())
+  if (filters.membership) params.set('membership', filters.membership)
+  if (filters.status && filters.status !== 'all') params.set('status', filters.status)
+  if (filters.admin && filters.admin !== 'any') params.set('admin', filters.admin)
+  if (filters.sort && filters.sort !== 'created_desc') params.set('sort', filters.sort)
+  return apiGet(`/api/admin/users?${params}`)
 }
 
 export function patchAdminUser(id: string, body: AdminUserPatch): Promise<AdminUser> {

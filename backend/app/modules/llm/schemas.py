@@ -207,6 +207,18 @@ class LlmExecutionRead(BaseModel):
     created_at: datetime
 
 
+class ExecutionAdminFilters(BaseModel):
+    """Optional filters for the backoffice recent-executions list.
+
+    ``user_ids`` None = no user filter; empty list = match nothing (caller
+    resolved a username query to zero users).
+    """
+
+    user_ids: list[UUID] | None = None
+    task: str | None = None
+    status: str | None = None
+
+
 class ToolCallAdminFilters(BaseModel):
     """Optional filters for the backoffice tool-call audit list."""
 

@@ -27,6 +27,7 @@ class EffectiveSettingRead(BaseModel):
     effective_value: Any
     env_value: Any
     overridden: bool
+    description: str | None = None
     updated_by: UUID | None = None
     updated_at: datetime | None = None
 

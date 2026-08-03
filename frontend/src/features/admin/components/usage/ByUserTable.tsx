@@ -64,8 +64,7 @@ export function ByUserTable({ period }: { period: Period }) {
         total={data.total}
         limit={page.limit}
         offset={page.offset}
-        onPrev={page.prev}
-        onNext={() => page.next(data.total)}
+        onPage={page.setPage}
       />
     </div>
   )

@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.deps import get_db, require_admin
 from app.modules.admin.params import PageParams
-from app.modules.admin.schemas import Page
+from app.modules.admin.schemas import AdminToolCallRead, Page
 from app.modules.llm.schemas import ToolCallAdminFilters, ToolCallAdminRead
 from app.modules.llm.service import LlmService
 from app.modules.users.schemas import UserRead
+from app.modules.users.service import UserService
 
 router = APIRouter(prefix="/tool-calls")
 
@@ -48,9 +49,31 @@ async def list_tool_calls(
     page: Annotated[PageParams, Depends()],
     _admin: Annotated[UserRead, Depends(require_admin)],
     service: Annotated[LlmService, Depends(_llm)],
-) -> Page[ToolCallAdminRead]:
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Page[AdminToolCallRead]:
     """Cross-user tool_call audit rows, newest first."""
     items, total = await service.list_tool_calls_admin(
         filters, limit=page.limit, offset=page.offset
     )
-    return Page(items=items, total=total, limit=page.limit, offset=page.offset)
+    return Page(
+        items=await _decorate_tool_calls(session, items),
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+async def _decorate_tool_calls(
+    session: AsyncSession, items: list[ToolCallAdminRead]
+) -> list[AdminToolCallRead]:
+    ids = [row.user_id for row in items if row.user_id is not None]
+    identities = await UserService(session).identities_for_ids(ids)
+    decorated: list[AdminToolCallRead] = []
+    for row in items:
+        username, email = (None, None)
+        if row.user_id is not None:
+            identity = identities.get(row.user_id)
+            if identity is not None:
+                username, email = identity
+        decorated.append(AdminToolCallRead(username=username, email=email, **row.model_dump()))
+    return decorated

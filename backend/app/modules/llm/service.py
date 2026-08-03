@@ -29,6 +29,7 @@ from app.modules.llm.registry import ModelSpec
 from app.modules.llm.repository import LlmRepository
 from app.modules.llm.schemas import (
     AdminUsageOverview,
+    ExecutionAdminFilters,
     LlmExecutionRead,
     ModelListResponse,
     ModelRead,
@@ -373,11 +374,21 @@ class LlmService:
         return {uid: UserUsageRead(user_id=uid, **asdict(t)) for uid, t in totals.items()}
 
     async def list_executions_admin(
-        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+        self,
+        filters: ExecutionAdminFilters,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+        limit: int,
+        offset: int,
     ) -> tuple[list[LlmExecutionRead], int]:
         """Backoffice recent-executions page, newest first."""
         rows, total = await self._repo.list_executions_admin(
-            period_start=period_start, period_end=period_end, limit=limit, offset=offset
+            filters,
+            period_start=period_start,
+            period_end=period_end,
+            limit=limit,
+            offset=offset,
         )
         return [LlmExecutionRead.model_validate(row) for row in rows], total
 

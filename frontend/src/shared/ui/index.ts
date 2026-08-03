@@ -46,6 +46,16 @@ export {
   DropdownMenuTrigger,
 } from './dropdown-menu'
 export { ListPagination } from './list-pagination'
+export { DataListFrame } from './data-list-frame'
+export { DataListPagination } from './data-list-pagination'
+export {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableColumn,
+  DataTableHeader,
+} from './data-table'
+export { DataTableRow } from './data-table-row'
 export { ThemeProvider } from './theme-provider'
 export { Slider } from './slider'
 export {

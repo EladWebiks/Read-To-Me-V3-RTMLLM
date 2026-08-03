@@ -21,7 +21,7 @@ from app.modules.llm.models import (
     ToolCallRecord,
 )
 from app.modules.llm.registry import ModelSpec
-from app.modules.llm.schemas import ToolCallAdminFilters
+from app.modules.llm.schemas import ExecutionAdminFilters, ToolCallAdminFilters
 from app.modules.usage.kinds import (
     LlmModelFact,
     LlmTaskFact,
@@ -121,6 +121,7 @@ class ToolCallWrite:
     input_data: dict[str, Any]
     status: str
     risk_level: str
+    user_id: uuid.UUID | None = None
     message_id: uuid.UUID | None = None
     output_data: dict[str, Any] | None = None
     duration_ms: int | None = None
@@ -149,6 +150,26 @@ class ConversationSummaryWrite:
     summary: str
     through_message_id: uuid.UUID
     source_message_count: int
+
+
+def _execution_conditions(
+    *,
+    period_start: datetime,
+    period_end: datetime,
+    filters: ExecutionAdminFilters,
+) -> list[ColumnElement[bool]]:
+    """Period + optional user/task/status filters for list_executions_admin."""
+    conditions: list[ColumnElement[bool]] = [
+        LlmExecution.created_at >= period_start,
+        LlmExecution.created_at < period_end,
+    ]
+    if filters.user_ids is not None:
+        conditions.append(LlmExecution.user_id.in_(filters.user_ids))
+    if filters.task:
+        conditions.append(LlmExecution.task == filters.task)
+    if filters.status:
+        conditions.append(LlmExecution.status == filters.status)
+    return conditions
 
 
 def _tool_call_conditions(filters: ToolCallAdminFilters) -> list[ColumnElement[bool]]:
@@ -366,15 +387,25 @@ class LlmRepository:
         }
 
     async def list_executions_admin(
-        self, *, period_start: datetime, period_end: datetime, limit: int, offset: int
+        self,
+        filters: ExecutionAdminFilters,
+        *,
+        period_start: datetime,
+        period_end: datetime,
+        limit: int,
+        offset: int,
     ) -> tuple[list[LlmExecution], int]:
         """Cross-user execution rows, newest first."""
-        condition = self._in_period(period_start, period_end)
-        total_stmt = select(func.count()).select_from(LlmExecution).where(condition)
+        if filters.user_ids is not None and not filters.user_ids:
+            return [], 0
+        conditions = _execution_conditions(
+            period_start=period_start, period_end=period_end, filters=filters
+        )
+        total_stmt = select(func.count()).select_from(LlmExecution).where(*conditions)
         total = int((await self._session.execute(total_stmt)).scalar_one())
         stmt = (
             select(LlmExecution)
-            .where(condition)
+            .where(*conditions)
             .order_by(LlmExecution.created_at.desc(), LlmExecution.id)
             .limit(limit)
             .offset(offset)
@@ -612,6 +643,7 @@ class LlmRepository:
         """Insert a tool_call audit row."""
         row = ToolCallRecord(
             message_id=data.message_id,
+            user_id=data.user_id,
             tool_name=data.tool_name,
             input=data.input_data,
             output=data.output_data,
@@ -648,16 +680,17 @@ class LlmRepository:
     async def list_tool_calls_admin(
         self, filters: ToolCallAdminFilters, *, limit: int, offset: int
     ) -> tuple[list[tuple[ToolCallRecord, uuid.UUID | None]], int]:
-        """Cross-user audit rows, newest first, with owner via the conversation.
+        """Cross-user audit rows, newest first, with owner attribution.
 
-        tool_calls has no user_id; attribution joins message → conversation
-        (both llm-module tables). message_id NULL rows attribute to None.
+        Prefer the stored user_id; fall back to message → conversation for
+        legacy rows written before tool_calls.user_id existed.
         """
         conditions = _tool_call_conditions(filters)
         total_stmt = select(func.count()).select_from(ToolCallRecord).where(*conditions)
         total = int((await self._session.execute(total_stmt)).scalar_one())
+        owner = func.coalesce(ToolCallRecord.user_id, Conversation.user_id)
         stmt = (
-            select(ToolCallRecord, Conversation.user_id)
+            select(ToolCallRecord, owner)
             .join(
                 ConversationMessage,
                 ToolCallRecord.message_id == ConversationMessage.id,

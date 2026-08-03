@@ -87,6 +87,7 @@ async def freeze_pending(req: FreezeRequest) -> ToolCallRecord:
             status="pending_confirmation",
             risk_level=req.tool.risk_level.value,
             confirmed_by_user=False,
+            user_id=req.ctx.user_id,
         )
     )
 

@@ -1,59 +1,58 @@
 import { useState } from 'react'
 import type { AdminUser } from '@/features/admin/api/users'
 import { useDeleteUser, useRestoreUser } from '@/features/admin/hooks/useAdminUsers'
-import { FormError } from '@/shared/ui'
+import { Button, DataTableCell, FormError } from '@/shared/ui'
 import { UserQuotasDialog } from './UserQuotasDialog'
 
-/** Per-row controls: quota overrides, soft-delete/restore, and error text. */
-export function UserRowActions({
-  user,
-  deleted,
-  patchError,
-}: {
+type Props = {
   user: AdminUser
   deleted: boolean
   patchError?: Error | null
-}) {
+}
+
+/** Per-row controls: quota overrides, soft-delete/restore, and error text. */
+export function UserRowActions({ user, deleted, patchError }: Props) {
   const remove = useDeleteUser()
   const restore = useRestoreUser()
   const [quotasOpen, setQuotasOpen] = useState(false)
   const error = patchError ?? remove.error ?? restore.error
 
-  const softDelete = () => {
-    if (window.confirm(`Soft-delete ${user.username}?`)) {
-      remove.mutate(user.id)
-    }
-  }
-
   return (
-    <td className="px-2 py-1.5">
-      <button
-        type="button"
-        className="mr-2 text-xs underline"
-        onClick={() => setQuotasOpen(true)}
-      >
-        Quotas
-      </button>
-      <UserQuotasDialog
-        userId={user.id}
-        username={user.username}
-        open={quotasOpen}
-        onOpenChange={setQuotasOpen}
-      />
-      {deleted ? (
-        <button
-          type="button"
-          className="text-xs underline"
-          onClick={() => restore.mutate(user.id)}
-        >
-          Restore
-        </button>
-      ) : (
-        <button type="button" className="text-xs underline" onClick={softDelete}>
-          Delete
-        </button>
-      )}
+    <DataTableCell className="px-1.5">
+      <div className="flex flex-wrap items-center justify-end gap-0.5">
+        <RowAction label="Quotas" onClick={() => setQuotasOpen(true)} />
+        <UserQuotasDialog
+          userId={user.id}
+          username={user.username}
+          open={quotasOpen}
+          onOpenChange={setQuotasOpen}
+        />
+        {deleted ? (
+          <RowAction label="Restore" onClick={() => restore.mutate(user.id)} />
+        ) : (
+          <RowAction
+            label="Delete"
+            onClick={() => {
+              if (window.confirm(`Soft-delete ${user.username}?`)) remove.mutate(user.id)
+            }}
+          />
+        )}
+      </div>
       <FormError error={error} />
-    </td>
+    </DataTableCell>
+  )
+}
+
+function RowAction({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-6 px-1.5 text-[11px]"
+      onClick={onClick}
+    >
+      {label}
+    </Button>
   )
 }

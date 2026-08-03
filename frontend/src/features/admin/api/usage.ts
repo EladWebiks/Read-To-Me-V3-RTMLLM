@@ -37,6 +37,7 @@ export type UsageOverview = UsageBreakdown & {
 export type LlmExecutionRow = {
   id: string
   user_id: string
+  username: string | null
   conversation_id: string | null
   task: string
   provider: string
@@ -51,8 +52,25 @@ export type LlmExecutionRow = {
   created_at: string
 }
 
+export type ExecutionFilters = {
+  q?: string
+  user_id?: string
+  task?: string
+  status?: string
+}
+
 function rangeQuery(period: Period): string {
   return `from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`
+}
+
+function filterQuery(filters: ExecutionFilters): string {
+  const params = new URLSearchParams()
+  if (filters.q?.trim()) params.set('q', filters.q.trim())
+  if (filters.user_id) params.set('user_id', filters.user_id)
+  if (filters.task?.trim()) params.set('task', filters.task.trim())
+  if (filters.status?.trim()) params.set('status', filters.status.trim())
+  const encoded = params.toString()
+  return encoded ? `&${encoded}` : ''
 }
 
 export function fetchUsageOverview(period: Period): Promise<UsageOverview> {
@@ -73,8 +91,9 @@ export function fetchExecutions(
   period: Period,
   limit: number,
   offset: number,
+  filters: ExecutionFilters = {},
 ): Promise<Page<LlmExecutionRow>> {
   return apiGet(
-    `/api/admin/usage/executions?${rangeQuery(period)}&limit=${limit}&offset=${offset}`,
+    `/api/admin/usage/executions?${rangeQuery(period)}&limit=${limit}&offset=${offset}${filterQuery(filters)}`,
   )
 }

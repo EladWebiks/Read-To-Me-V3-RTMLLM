@@ -1,19 +1,23 @@
 import { useState } from 'react'
-import { DateRangeField } from '@/features/admin/components/common/DateRangeField'
 import { defaultPeriod } from '@/features/admin/logic/period'
-import { ByUserTable } from './ByUserTable'
-import { ExecutionsTable } from './ExecutionsTable'
-import { UsageSummaryTiles } from './UsageSummaryTiles'
+import { UsageExecutionsPanel } from './UsageExecutionsPanel'
+import { UsageStatsPanel } from './UsageStatsPanel'
+import type { UsageTab } from './UsageTabs'
 
 export function UsagePage() {
   const [period, setPeriod] = useState(defaultPeriod)
-  return (
-    <section>
-      <h1 className="mb-1 text-lg font-semibold">AI usage &amp; cost</h1>
-      <DateRangeField period={period} onChange={setPeriod} />
-      <UsageSummaryTiles period={period} />
-      <ByUserTable period={period} />
-      <ExecutionsTable period={period} />
-    </section>
-  )
+  const [tab, setTab] = useState<UsageTab>('stats')
+
+  if (tab === 'executions') {
+    return (
+      <UsageExecutionsPanel
+        period={period}
+        onPeriod={setPeriod}
+        tab={tab}
+        onTab={setTab}
+      />
+    )
+  }
+
+  return <UsageStatsPanel period={period} onPeriod={setPeriod} tab={tab} onTab={setTab} />
 }

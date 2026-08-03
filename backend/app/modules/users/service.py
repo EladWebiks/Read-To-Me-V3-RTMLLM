@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
+from app.modules.users.admin_list import AdminUserListQuery
 from app.modules.users.exceptions import (
     AdminSelfActionError,
     GoogleIdentityConflictError,
@@ -229,16 +230,22 @@ class UserService:
             candidate = f"{cleaned}{suffix}"
         return candidate
 
-    async def list_users_admin(
-        self, *, limit: int, offset: int
-    ) -> tuple[list[UserAdminRead], int]:
-        """Backoffice page over all users, soft-deleted included."""
-        users, total = await self._repo.list_all(limit=limit, offset=offset)
+    async def list_users_admin(self, query: AdminUserListQuery) -> tuple[list[UserAdminRead], int]:
+        """Backoffice page over users (filters/sort; soft-deleted unless filtered)."""
+        users, total = await self._repo.list_admin(query)
         return [UserAdminRead.from_user(user) for user in users], total
 
     async def usernames_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """Backoffice attribution: ids → usernames, soft-deleted included."""
         return await self._repo.usernames_for_ids(user_ids)
+
+    async def ids_matching_q(self, q: str) -> list[UUID]:
+        """Backoffice filter: username/email substring → matching user ids."""
+        return await self._repo.ids_matching_q(q)
+
+    async def identities_for_ids(self, user_ids: list[UUID]) -> dict[UUID, tuple[str, str | None]]:
+        """Backoffice attribution: ids → (username, email)."""
+        return await self._repo.identities_for_ids(user_ids)
 
     async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """Backoffice attribution: ids → membership tiers."""

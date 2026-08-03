@@ -1,16 +1,31 @@
+import { useState } from 'react'
+import type { EffectiveSetting } from '@/features/admin/api/settings'
 import { useAdminSettings } from '@/features/admin/hooks/useAdminSettings'
-import { QueryState, SkeletonTable } from '@/shared/ui'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableColumn,
+  DataTableHeader,
+  QueryState,
+  SkeletonTable,
+  TooltipProvider,
+} from '@/shared/ui'
+import { SettingEditDialog } from './SettingEditDialog'
 import { SettingRow } from './SettingRow'
 
 export function SettingsPage() {
   const { data, isLoading, error, refetch } = useAdminSettings()
+  const [editing, setEditing] = useState<EffectiveSetting | null>(null)
+
   return (
-    <section>
-      <h1 className="mb-1 text-lg font-semibold">Runtime settings</h1>
-      <p className="mb-4 text-sm text-muted-foreground">
-        Overrides apply without a restart (other processes converge within ~30s). Clearing
-        an override restores the environment value.
-      </p>
+    <section className="space-y-4 animate-fade-in-up">
+      <div className="space-y-1">
+        <h1 className="text-xl font-semibold tracking-tight">Runtime settings</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Overrides apply without a restart (other processes converge within ~30s).
+          Clearing an override restores the environment value.
+        </p>
+      </div>
       <QueryState
         isPending={isLoading}
         isError={Boolean(error) || (!isLoading && !data)}
@@ -20,26 +35,42 @@ export function SettingsPage() {
         onRetry={() => void refetch()}
       >
         {data ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-1.5 font-medium">Key</th>
-                  <th className="px-2 py-1.5 font-medium">Effective</th>
-                  <th className="px-2 py-1.5 font-medium">Env</th>
-                  <th className="px-2 py-1.5 font-medium">Status</th>
-                  <th className="px-2 py-1.5 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TooltipProvider>
+            <DataTable
+              empty={data.settings.length === 0}
+              emptyLabel="No tunable settings."
+            >
+              <DataTableHeader>
+                <DataTableColumn>Key</DataTableColumn>
+                <DataTableColumn>Effective</DataTableColumn>
+                <DataTableColumn hideBelow="md">Env</DataTableColumn>
+                <DataTableColumn className="w-24">Status</DataTableColumn>
+                <DataTableColumn className="w-28" srOnly>
+                  Actions
+                </DataTableColumn>
+              </DataTableHeader>
+              <DataTableBody>
                 {data.settings.map((setting) => (
-                  <SettingRow key={setting.key} setting={setting} />
+                  <SettingRow
+                    key={setting.key}
+                    setting={setting}
+                    onEdit={() => setEditing(setting)}
+                  />
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </DataTableBody>
+            </DataTable>
+          </TooltipProvider>
         ) : null}
       </QueryState>
+      {editing ? (
+        <SettingEditDialog
+          setting={editing}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditing(null)
+          }}
+        />
+      ) : null}
     </section>
   )
 }

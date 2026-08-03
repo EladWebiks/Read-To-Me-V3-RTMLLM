@@ -1,64 +1,61 @@
-import { useRef } from 'react'
-import { AdminListFrame } from '@/features/admin/components/common/AdminListFrame'
-import { PaginationControls } from '@/features/admin/components/common/PaginationControls'
-import { useAdminTablePageSize } from '@/features/admin/hooks/useAdminTablePageSize'
+import { useState } from 'react'
+import type { AdminUserFilters } from '@/features/admin/api/users'
 import { useAdminUsers } from '@/features/admin/hooks/useAdminUsers'
 import { useMemberships } from '@/features/admin/hooks/useMemberships'
 import { usePageState } from '@/features/admin/hooks/usePageState'
-import { useViewportLock } from '@/shared/hooks/useViewportLock'
-import { QueryState, SkeletonTable } from '@/shared/ui'
-import { UsersTable } from './UsersTable'
+import { useDataListLayout } from '@/shared/hooks/useDataListLayout'
+import { DataListFrame } from '@/shared/ui'
+import { UsersFilters } from './UsersFilters'
+import { UsersBody, UsersFooter } from './UsersPageParts'
 
 const ROW_REM = 2.5
-const HEADER_REM = 2.25
+const HEADER_REM = 2
+
+const DEFAULT_FILTERS: AdminUserFilters = {
+  status: 'all',
+  admin: 'any',
+  sort: 'created_desc',
+}
 
 export function UsersPage() {
-  const sectionRef = useRef<HTMLElement>(null)
-  const slotRef = useRef<HTMLDivElement>(null)
-  useViewportLock(sectionRef)
-  const pageSize = useAdminTablePageSize(slotRef, {
+  const { sectionRef, slotRef, pageSize } = useDataListLayout({
     rowRem: ROW_REM,
     headerRem: HEADER_REM,
-    fallback: 12,
+    fallback: 10,
   })
+  const [filters, setFilters] = useState<AdminUserFilters>(DEFAULT_FILTERS)
   const page = usePageState(pageSize)
-  const { data, isLoading, error, refetch } = useAdminUsers(page.limit, page.offset)
-  const { data: membershipsData } = useMemberships()
-  const memberships =
-    membershipsData?.memberships
-      .filter((m) => m.is_active)
-      .map((m) => ({ slug: m.slug, label: m.label })) ?? []
+  const query = useAdminUsers(page.limit, page.offset, filters)
+  const memberships = useActiveMembershipOptions()
 
   return (
-    <AdminListFrame
+    <DataListFrame
       sectionRef={sectionRef}
       title="Users"
-      description="Membership changes here are an operator override — membership will be Stripe-managed later. Soft-deleted users stay listed and can be restored."
-      slotRef={slotRef}
-      footer={
-        data ? (
-          <PaginationControls
-            total={data.total}
-            limit={page.limit}
-            offset={page.offset}
-            onPrev={page.prev}
-            onNext={() => page.next(data.total)}
-          />
-        ) : (
-          <span className="text-sm text-muted-foreground">—</span>
-        )
+      description="Operator membership overrides (Stripe later). Soft-deleted users stay listed."
+      toolbar={
+        <UsersFilters
+          filters={filters}
+          memberships={memberships}
+          onChange={(next) => {
+            setFilters(next)
+            page.reset()
+          }}
+        />
       }
+      slotRef={slotRef}
+      footer={<UsersFooter data={query.data} onPage={page.setPage} page={page} />}
     >
-      <QueryState
-        isPending={isLoading}
-        isError={Boolean(error) || (!isLoading && !data)}
-        loading={<SkeletonTable rows={Math.min(pageSize, 8)} cols={6} />}
-        errorLabel="Couldn't load users."
-        label="Loading users…"
-        onRetry={() => void refetch()}
-      >
-        {data ? <UsersTable users={data.items} memberships={memberships} /> : null}
-      </QueryState>
-    </AdminListFrame>
+      <UsersBody pageSize={pageSize} query={query} memberships={memberships} />
+    </DataListFrame>
+  )
+}
+
+function useActiveMembershipOptions() {
+  const { data } = useMemberships()
+  return (
+    data?.memberships
+      .filter((m) => m.is_active)
+      .map((m) => ({ slug: m.slug, label: m.label })) ?? []
   )
 }

@@ -67,6 +67,8 @@ async def test_scraping_jobs_cross_user(client: AsyncClient, admin: UUID) -> Non
     assert payload["total"] == 2
     owners = {row["user_id"] for row in payload["items"]}
     assert owners == {str(alice), str(bob)}
+    names = {row["username"] for row in payload["items"]}
+    assert names == {"alice", "bob"}
 
 
 @pytest.mark.integration
@@ -95,6 +97,7 @@ async def test_download_jobs_cross_user(client: AsyncClient, admin: UUID) -> Non
     row = next(item for item in payload["items"] if item["user_id"] == str(alice))
     assert row["status"] == "processing"
     assert row["total_count"] == 3
+    assert row["username"] == "alice"
 
 
 @pytest.mark.integration

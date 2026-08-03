@@ -25,7 +25,15 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   }
+  class MutationObserverStub {
+    observe() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  }
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+  vi.stubGlobal('MutationObserver', MutationObserverStub)
 })
 
 const USER = {
@@ -71,10 +79,9 @@ describe('UsersPage', () => {
     const select = await screen.findByLabelText(/Membership for reader/)
     // Options show the admin-authored label, not the raw slug.
     await waitFor(() => {
-      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
-        'Free',
-        'Premium Plus',
-      ])
+      expect(
+        Array.from(select.querySelectorAll('option')).map((o) => o.textContent),
+      ).toEqual(['Free', 'Premium Plus'])
     })
 
     fireEvent.change(select, { target: { value: 'premium' } })

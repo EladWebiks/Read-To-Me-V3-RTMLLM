@@ -15,7 +15,9 @@ export function PolicyField({ membership, meta, value, inherited, onChange }: Pr
     <TextField
       id={`policy-${membership}-${meta.key}`}
       label={meta.label}
+      hint={meta.hint}
       numeric
+      size="sm"
       value={value}
       placeholder={placeholderFor(meta, inherited)}
       onChange={(event) => onChange(event.target.value)}

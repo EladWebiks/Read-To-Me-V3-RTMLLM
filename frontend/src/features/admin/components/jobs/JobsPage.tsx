@@ -1,46 +1,66 @@
 import { useState } from 'react'
-import { DownloadJobsTable } from './DownloadJobsTable'
-import { ScrapingJobsTable } from './ScrapingJobsTable'
+import { useDownloadJobs, useScrapingJobs } from '@/features/admin/hooks/useAdminJobs'
+import { usePageState } from '@/features/admin/hooks/usePageState'
+import { useDataListLayout } from '@/shared/hooks/useDataListLayout'
+import { DataListFrame, DataListPagination } from '@/shared/ui'
+import type { JobsKind } from './JobsKindTabs'
+import { JobsBody, JobsToolbar } from './JobsPageParts'
 
-const TAB = 'rounded-md px-2.5 py-1 text-sm'
+const ROW_REM = 2.5
+const HEADER_REM = 2
 
 export function JobsPage() {
-  const [kind, setKind] = useState<'scraping' | 'downloads'>('scraping')
+  const layout = useDataListLayout({
+    rowRem: ROW_REM,
+    headerRem: HEADER_REM,
+    fallback: 12,
+  })
+  const page = usePageState(layout.pageSize)
+  const [kind, setKind] = useState<JobsKind>('scraping')
   const [status, setStatus] = useState('')
+  const scraping = useScrapingJobs(status, page.limit, page.offset)
+  const downloads = useDownloadJobs(status, page.limit, page.offset)
+  const query = kind === 'scraping' ? scraping : downloads
+
   return (
-    <section>
-      <h1 className="mb-1 text-lg font-semibold">Jobs monitor</h1>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Read-only view across all users. Cancel/retry live in the owning features.
-      </p>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className={`${TAB} ${kind === 'scraping' ? 'bg-muted font-medium' : 'text-muted-foreground'}`}
-          onClick={() => setKind('scraping')}
-        >
-          Scraping
-        </button>
-        <button
-          type="button"
-          className={`${TAB} ${kind === 'downloads' ? 'bg-muted font-medium' : 'text-muted-foreground'}`}
-          onClick={() => setKind('downloads')}
-        >
-          Downloads
-        </button>
-        <input
-          className="ml-auto rounded border border-border bg-background px-2 py-1 text-sm"
-          placeholder="Filter by status"
-          aria-label="Filter by status"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
+    <DataListFrame
+      sectionRef={layout.sectionRef}
+      slotRef={layout.slotRef}
+      title="Jobs monitor"
+      description="Read-only view across all users. Cancel/retry live in the owning features."
+      toolbar={
+        <JobsToolbar
+          kind={kind}
+          status={status}
+          onKind={(next) => {
+            setKind(next)
+            page.reset()
+          }}
+          onStatus={(next) => {
+            setStatus(next)
+            page.reset()
+          }}
         />
-      </div>
-      {kind === 'scraping' ? (
-        <ScrapingJobsTable status={status} />
-      ) : (
-        <DownloadJobsTable status={status} />
-      )}
-    </section>
+      }
+      footer={
+        query.data ? (
+          <DataListPagination
+            total={query.data.total}
+            limit={page.limit}
+            offset={page.offset}
+            onPage={page.setPage}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">Measuring layout…</p>
+        )
+      }
+    >
+      <JobsBody
+        kind={kind}
+        pageSize={layout.pageSize}
+        scraping={scraping}
+        downloads={downloads}
+      />
+    </DataListFrame>
   )
 }

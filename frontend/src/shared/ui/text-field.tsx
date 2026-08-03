@@ -11,6 +11,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'size'> & {
   error?: string | Error | null
   /** Decimal inputMode + tabular numerals (admin numeric fields). */
   numeric?: boolean
+  size?: 'default' | 'sm'
 }
 
 /** Label + Input + hint + error as one unit, with the ARIA wiring done. */
@@ -20,6 +21,7 @@ export function TextField({
   hint,
   error,
   numeric = false,
+  size = 'default',
   className,
   inputMode,
   ...props
@@ -30,6 +32,7 @@ export function TextField({
       <Input
         {...props}
         id={id}
+        size={size}
         inputMode={numeric ? 'decimal' : inputMode}
         aria-invalid={hasError ? true : undefined}
         aria-describedby={describedBy(id, hint != null, hasError)}

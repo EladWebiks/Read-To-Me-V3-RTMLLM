@@ -147,6 +147,7 @@ class RuntimeConfigService:
             effective_value=overrides[field.key] if overridden else env_value,
             env_value=env_value,
             overridden=overridden,
+            description=field.description,
             updated_by=row.updated_by if row is not None else None,
             updated_at=row.updated_at if row is not None else None,
         )

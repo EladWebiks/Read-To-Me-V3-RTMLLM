@@ -61,10 +61,10 @@ async def execute_tool_call(
         return await _execute_ok(tool, args, ctx, repo, opts, started)
     except _CONTRACT_ERRORS as exc:
         fields = _AuditFields("denied", None, _ms(started), str(exc), opts.confirmed)
-        return await _fail_result(tool, args, repo, opts, fields)
+        return await _fail_result(tool, args, ctx, repo, opts, fields)
     except Exception as exc:
         fields = _AuditFields("error", None, _ms(started), str(exc), opts.confirmed)
-        return await _fail_result(tool, args, repo, opts, fields)
+        return await _fail_result(tool, args, ctx, repo, opts, fields)
 
 
 async def prepare_gated_call(
@@ -101,7 +101,8 @@ async def _execute_ok(
             repo,
             tool,
             args,
-            opts.message_id,
+            ctx,
+            opts,
             _AuditFields("success", payload, _ms(started), None, opts.confirmed),
         )
     return {"ok": True, "tool": tool.name, "data": payload}
@@ -110,12 +111,13 @@ async def _execute_ok(
 async def _fail_result(
     tool: BaseTool,
     args: dict[str, Any],
+    ctx: ToolContext,
     repo: LlmRepository,
     opts: ExecuteOptions,
     fields: _AuditFields,
 ) -> dict[str, Any]:
     if opts.audit:
-        await _audit(repo, tool, args, opts.message_id, fields)
+        await _audit(repo, tool, args, ctx, opts, fields)
     return {"ok": False, "tool": tool.name, "error": fields.error or "error"}
 
 
@@ -142,12 +144,14 @@ async def _audit(
     repo: LlmRepository,
     tool: BaseTool,
     arguments: dict[str, Any],
-    message_id: UUID | None,
+    ctx: ToolContext,
+    opts: ExecuteOptions,
     fields: _AuditFields,
 ) -> None:
     await repo.record_tool_call(
         ToolCallWrite(
-            message_id=message_id,
+            message_id=opts.message_id,
+            user_id=ctx.user_id,
             tool_name=tool.name,
             input_data=dict(arguments),
             output_data=fields.output,

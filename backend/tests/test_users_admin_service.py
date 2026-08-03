@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from app.core.config import get_settings
+from app.modules.users.admin_list import AdminUserListQuery
 from app.modules.users.exceptions import AdminSelfActionError, LastAdminError
 from app.modules.users.schemas import UserAdminPatch, UserCreate
 from app.modules.users.service import UserService
@@ -40,7 +41,17 @@ async def test_list_users_admin_includes_soft_deleted(session: AsyncSession) -> 
     admin = await service.create(_user("boss", is_admin=True))
     victim = await service.create(_user("victim"))
     await service.soft_delete_user_admin(actor_id=admin.id, user_id=victim.id)
-    items, total = await service.list_users_admin(limit=10, offset=0)
+    items, total = await service.list_users_admin(
+        AdminUserListQuery(
+            limit=10,
+            offset=0,
+            q=None,
+            membership=None,
+            status="all",
+            admin="any",
+            sort="created_desc",
+        )
+    )
     assert total == 2
     by_name = {u.username: u for u in items}
     assert by_name["victim"].deleted_at is not None

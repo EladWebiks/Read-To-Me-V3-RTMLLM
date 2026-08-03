@@ -13,15 +13,25 @@ export function useViewportLock(sectionRef: RefObject<HTMLElement | null>) {
       const padBottom = main
         ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0
         : 16
-      section.style.height = `${Math.max(280, window.innerHeight - top - padBottom)}px`
+      const next = `${Math.max(280, window.innerHeight - top - padBottom)}px`
+      if (section.style.height !== next) section.style.height = next
     }
 
     sync()
-    const raf = window.requestAnimationFrame(sync)
+    // Re-measure after paint + entrance animation (translateY shifts getBoundingClientRect).
+    let timeoutId = 0
+    const raf = window.requestAnimationFrame(() => {
+      sync()
+      timeoutId = window.setTimeout(sync, 250)
+    })
     window.addEventListener('resize', sync)
+    window.visualViewport?.addEventListener('resize', sync)
     return () => {
       window.cancelAnimationFrame(raf)
+      window.clearTimeout(timeoutId)
       window.removeEventListener('resize', sync)
+      window.visualViewport?.removeEventListener('resize', sync)
+      section.style.height = ''
     }
   }, [sectionRef])
 }

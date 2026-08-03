@@ -111,8 +111,8 @@ describe('PoliciesPage', () => {
     fireEvent.change(input, { target: { value: '3' } })
     const hitlInput = screen.getByDisplayValue('2')
     fireEvent.change(hitlInput, { target: { value: '' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await screen.findByRole('button', { name: 'Save' })
+    fireEvent.click(screen.getByRole('button', { name: 'Save caps' }))
+    await screen.findByRole('button', { name: 'Save caps' })
     expect(vi.mocked(patchMembershipPolicy)).toHaveBeenCalledWith('free', {
       max_tool_iters: 3,
       max_hitl_rounds: null,
@@ -131,7 +131,7 @@ describe('PoliciesPage', () => {
     mockData([FREE_TIER, LEGACY_TIER], [FREE])
     renderPage()
     const heading = await screen.findByText('Legacy')
-    const card = heading.closest('.rounded-lg')
+    const card = heading.closest('article')
     expect(card).toBeTruthy()
     const inputs = within(card as HTMLElement).getAllByPlaceholderText(/inherit/)
     expect(inputs.every((el) => (el as HTMLInputElement).value === '')).toBe(true)

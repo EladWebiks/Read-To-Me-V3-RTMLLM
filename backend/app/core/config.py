@@ -60,9 +60,17 @@ class StorageSettings(_GroupSettings):
     secure: bool = Field(default=False, validation_alias="minio_secure")
     # Host used inside signed URLs (browser-facing). Defaults to endpoint.
     public_endpoint: str | None = Field(default=None, validation_alias="minio_public_endpoint")
-    signed_url_expires_seconds: int = Field(default=3600, ge=60)
+    signed_url_expires_seconds: int = Field(
+        default=3600,
+        ge=60,
+        description="How long MinIO signed download URLs stay valid (seconds).",
+    )
     # Retention for generated MP3 jobs and MinIO objects (hours).
-    download_job_ttl_hours: int = Field(default=24, ge=1)
+    download_job_ttl_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Hours before generated download jobs and their objects expire.",
+    )
 
 
 class AuthSettings(_GroupSettings):
@@ -97,15 +105,33 @@ class GoogleSsoSettings(_GroupSettings):
 class ScrapeSettings(_GroupSettings):
     """Outbound fetch limits (central fetch service / SSRF guard)."""
 
-    timeout_seconds: int = Field(default=20, ge=1, validation_alias="scrape_timeout_seconds")
-    max_bytes: int = Field(default=2_097_152, ge=1024, validation_alias="scrape_max_bytes")  # 2 MB
-    delay_seconds: float = Field(default=1.5, ge=0, validation_alias="scrape_delay_seconds")
+    timeout_seconds: int = Field(
+        default=20,
+        ge=1,
+        validation_alias="scrape_timeout_seconds",
+        description="Per-request HTTP timeout for outbound scrapes (seconds).",
+    )
+    max_bytes: int = Field(
+        default=2_097_152,
+        ge=1024,
+        validation_alias="scrape_max_bytes",
+        description="Max response body size accepted from a scrape (bytes).",
+    )
+    delay_seconds: float = Field(
+        default=1.5,
+        ge=0,
+        validation_alias="scrape_delay_seconds",
+        description="Minimum delay between scrapes to the same site (seconds).",
+    )
 
 
 class AudioSettings(_GroupSettings):
     """TTS provider toggles."""
 
-    sapi_proxy_enabled: bool = True
+    sapi_proxy_enabled: bool = Field(
+        default=True,
+        description="Allow Windows SAPI TTS via the local proxy when enabled.",
+    )
 
 
 class LlmSettings(_GroupSettings):
@@ -147,33 +173,78 @@ class LlmRuntimeSettings(_GroupSettings):
     and a stray `MAX_TOOL_ITERS` in the environment would configure the run.
     """
 
-    max_tool_iters: int = Field(default=6, ge=1, validation_alias="llm_max_tool_iters")
-    max_external_calls: int = Field(default=3, ge=0, validation_alias="llm_max_external_calls")
+    max_tool_iters: int = Field(
+        default=6,
+        ge=1,
+        validation_alias="llm_max_tool_iters",
+        description="Max tool-calling iterations allowed in one assistant turn.",
+    )
+    max_external_calls: int = Field(
+        default=3,
+        ge=0,
+        validation_alias="llm_max_external_calls",
+        description="Max external (network) tool calls allowed per turn.",
+    )
     max_turn_tokens_in: int = Field(
-        default=64_000, ge=1, validation_alias="llm_max_turn_tokens_in"
+        default=64_000,
+        ge=1,
+        validation_alias="llm_max_turn_tokens_in",
+        description="Max input tokens budgeted for one assistant turn.",
     )
     max_turn_tokens_out: int = Field(
-        default=8_192, ge=1, validation_alias="llm_max_turn_tokens_out"
+        default=8_192,
+        ge=1,
+        validation_alias="llm_max_turn_tokens_out",
+        description="Max output tokens budgeted for one assistant turn.",
     )
-    max_turn_cost_usd: float = Field(default=0.05, gt=0, validation_alias="llm_max_turn_cost_usd")
+    max_turn_cost_usd: float = Field(
+        default=0.05,
+        gt=0,
+        validation_alias="llm_max_turn_cost_usd",
+        description="Max estimated USD cost allowed for one assistant turn.",
+    )
     run_deadline_seconds: int = Field(
-        default=60, ge=1, validation_alias="llm_run_deadline_seconds"
+        default=60,
+        ge=1,
+        validation_alias="llm_run_deadline_seconds",
+        description="Wall-clock deadline for one assistant turn (seconds).",
     )
     context_recent_messages: int = Field(
-        default=10, ge=1, validation_alias="llm_context_recent_messages"
+        default=10,
+        ge=1,
+        validation_alias="llm_context_recent_messages",
+        description="How many recent chat messages to keep verbatim in context.",
     )
     summary_trigger_tokens: int = Field(
-        default=12_000, ge=1, validation_alias="llm_summary_trigger_tokens"
+        default=12_000,
+        ge=1,
+        validation_alias="llm_summary_trigger_tokens",
+        description="Token threshold that triggers conversation summarization.",
     )
     summary_max_output_tokens: int = Field(
-        default=1_200, ge=1, validation_alias="llm_summary_max_output_tokens"
+        default=1_200,
+        ge=1,
+        validation_alias="llm_summary_max_output_tokens",
+        description="Max tokens the summarizer may emit.",
     )
     assistant_mode: Literal["internal_only", "external_allowed"] = Field(
-        default="internal_only", validation_alias="llm_assistant_mode"
+        default="internal_only",
+        validation_alias="llm_assistant_mode",
+        description="internal_only hides external tools; external_allowed enables them.",
     )
     # HITL: how long a pending confirmation stays valid; max pauses per turn.
-    hitl_ttl_seconds: int = Field(default=900, ge=1, validation_alias="llm_hitl_ttl_seconds")
-    max_hitl_rounds: int = Field(default=3, ge=0, validation_alias="llm_max_hitl_rounds")
+    hitl_ttl_seconds: int = Field(
+        default=900,
+        ge=1,
+        validation_alias="llm_hitl_ttl_seconds",
+        description="How long a pending HITL confirmation stays valid (seconds).",
+    )
+    max_hitl_rounds: int = Field(
+        default=3,
+        ge=0,
+        validation_alias="llm_max_hitl_rounds",
+        description="Max confirmation pauses allowed in one assistant turn.",
+    )
 
 
 class UsageSettings(_GroupSettings):
@@ -181,14 +252,21 @@ class UsageSettings(_GroupSettings):
 
     # Nightly re-roll horizon: late-arriving facts (running scrape jobs,
     # next-day EPUB completions) converge within this many days.
-    rollup_window_days: int = Field(default=7, ge=1, validation_alias="usage_rollup_window_days")
+    rollup_window_days: int = Field(
+        default=7,
+        ge=1,
+        validation_alias="usage_rollup_window_days",
+        description="Days of usage facts re-rolled nightly for late-arriving data.",
+    )
 
 
 class MembershipSettings(_GroupSettings):
     """Membership/tier behavior toggles."""
 
     self_switch_enabled: bool = Field(
-        default=True, validation_alias="membership_self_switch_enabled"
+        default=True,
+        validation_alias="membership_self_switch_enabled",
+        description="Allow users to switch their own membership tier in the app.",
     )
 
 

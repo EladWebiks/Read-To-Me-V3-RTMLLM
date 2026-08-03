@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { UsagePage } from './UsagePage'
 import {
   fetchExecutions,
@@ -14,6 +14,23 @@ vi.mock('@/features/admin/api/usage', () => ({
   fetchExecutions: vi.fn(),
 }))
 
+beforeAll(() => {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  class MutationObserverStub {
+    observe() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  }
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+  vi.stubGlobal('MutationObserver', MutationObserverStub)
+})
+
 const BREAKDOWN = { tokens_in: 700, tokens_out: 70, total_cost: 1.75, execution_count: 3 }
 
 function renderPage() {
@@ -25,43 +42,64 @@ function renderPage() {
   )
 }
 
+afterEach(cleanup)
+
+function mockStats() {
+  vi.mocked(fetchUsageOverview).mockResolvedValue({
+    ...BREAKDOWN,
+    period_start: '2026-07-01T00:00:00Z',
+    period_end: '2026-08-01T00:00:00Z',
+    by_model: [{ ...BREAKDOWN, provider: 'gemini', model: 'm1' }],
+    by_task: [{ ...BREAKDOWN, task: 'chat' }],
+    rejections: 5,
+    rejections_by_kind: { llm_tokens: 5 },
+  })
+  vi.mocked(fetchUsageByUser).mockResolvedValue({
+    items: [
+      {
+        ...BREAKDOWN,
+        user_id: 'u2',
+        username: 'bob',
+        membership: 'free',
+        month_tokens: 0,
+        month_cost: 0,
+        llm_tokens_limit: null,
+        llm_cost_limit: null,
+        month_audio_chapters: 0,
+        month_scrape_chapters: 0,
+        month_epub_imports: 0,
+        period_rejections: 2,
+      },
+    ],
+    total: 1,
+    limit: 25,
+    offset: 0,
+  })
+}
+
 describe('UsagePage', () => {
-  it('renders tiles, breakdowns, per-user rows, and executions', async () => {
-    vi.mocked(fetchUsageOverview).mockResolvedValue({
-      ...BREAKDOWN,
-      period_start: '2026-07-01T00:00:00Z',
-      period_end: '2026-08-01T00:00:00Z',
-      by_model: [{ ...BREAKDOWN, provider: 'gemini', model: 'm1' }],
-      by_task: [{ ...BREAKDOWN, task: 'chat' }],
-      rejections: 5,
-      rejections_by_kind: { llm_tokens: 5 },
-    })
-    vi.mocked(fetchUsageByUser).mockResolvedValue({
-      items: [
-        {
-          ...BREAKDOWN,
-          user_id: 'u2',
-          username: 'bob',
-          membership: 'free',
-          month_tokens: 0,
-          month_cost: 0,
-          llm_tokens_limit: null,
-          llm_cost_limit: null,
-          month_audio_chapters: 0,
-          month_scrape_chapters: 0,
-          month_epub_imports: 0,
-          period_rejections: 2,
-        },
-      ],
-      total: 1,
+  it('shows statistics by default', async () => {
+    mockStats()
+    vi.mocked(fetchExecutions).mockResolvedValue({
+      items: [],
+      total: 0,
       limit: 25,
       offset: 0,
     })
+    renderPage()
+    expect(await screen.findByText('bob')).toBeTruthy()
+    expect(screen.getAllByText('Tokens in').length).toBeGreaterThan(0)
+    expect(screen.queryByText('400/40')).toBeNull()
+  })
+
+  it('switches to recent executions with the shared table', async () => {
+    mockStats()
     vi.mocked(fetchExecutions).mockResolvedValue({
       items: [
         {
           id: 'e1',
           user_id: 'u2',
+          username: 'bob',
           conversation_id: null,
           task: 'chat',
           provider: 'gemini',
@@ -77,22 +115,19 @@ describe('UsagePage', () => {
         },
       ],
       total: 1,
-      limit: 25,
+      limit: 12,
       offset: 0,
     })
     renderPage()
-    // The same figures repeat across tiles, breakdowns and the per-user row,
-    // so every shared value is matched with *All* queries.
-    expect(await screen.findByText('Tokens in')).toBeTruthy()
-    expect((await screen.findAllByText('700')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('$1.7500').length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('gemini/m1')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('bob')).toBeTruthy()
-    expect((await screen.findAllByText('ok')).length).toBeGreaterThan(0)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Recent executions' }))
+    expect(await screen.findByLabelText('Filter by username')).toBeTruthy()
     expect(await screen.findByText('400/40')).toBeTruthy()
-    // 'Rejections' labels both the tile and the by-user column header.
-    expect((await screen.findAllByText('Rejections')).length).toBe(2)
-    expect((await screen.findAllByText('5')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('llm_tokens')).toBeTruthy()
+    expect(screen.getAllByText('bob').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('ok').length).toBeGreaterThan(0)
+    expect(
+      screen
+        .getByRole('tab', { name: 'Recent executions' })
+        .getAttribute('aria-selected'),
+    ).toBe('true')
   })
 })

@@ -3,12 +3,47 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.users.admin_list import AdminUserListQuery, AdminUserSort
 from app.modules.users.models import User
+
+
+def _admin_filters(query: AdminUserListQuery) -> list[ColumnElement[bool]]:
+    filters: list[ColumnElement[bool]] = []
+    if query.q:
+        pattern = f"%{query.q.lower()}%"
+        filters.append(
+            or_(
+                func.lower(User.username).like(pattern),
+                func.lower(func.coalesce(User.email, "")).like(pattern),
+            )
+        )
+    if query.membership:
+        filters.append(User.membership == query.membership)
+    if query.status == "active":
+        filters.append(User.deleted_at.is_(None))
+    elif query.status == "deleted":
+        filters.append(User.deleted_at.is_not(None))
+    if query.admin == "admin":
+        filters.append(User.is_admin.is_(True))
+    elif query.admin == "user":
+        filters.append(User.is_admin.is_(False))
+    return filters
+
+
+def _admin_order(sort: AdminUserSort) -> list[ColumnElement[Any]]:
+    if sort == "created_asc":
+        return [User.created_at.asc()]
+    if sort == "username_asc":
+        return [func.lower(User.username).asc()]
+    if sort == "username_desc":
+        return [func.lower(User.username).desc()]
+    return [User.created_at.desc()]
 
 
 class UserRepository:
@@ -75,11 +110,18 @@ class UserRepository:
         await self._session.refresh(user)
         return user
 
-    async def list_all(self, *, limit: int, offset: int) -> tuple[list[User], int]:
-        """Backoffice page over ALL users, newest first, soft-deleted included."""
-        total_stmt = select(func.count()).select_from(User)
+    async def list_admin(self, query: AdminUserListQuery) -> tuple[list[User], int]:
+        """Backoffice page: filters + sort; soft-deleted included unless filtered out."""
+        filters = _admin_filters(query)
+        total_stmt = select(func.count()).select_from(User).where(*filters)
         total = int((await self._session.execute(total_stmt)).scalar_one())
-        stmt = select(User).order_by(User.created_at.desc(), User.id).limit(limit).offset(offset)
+        stmt = (
+            select(User)
+            .where(*filters)
+            .order_by(*_admin_order(query.sort), User.id)
+            .limit(query.limit)
+            .offset(query.offset)
+        )
         rows = (await self._session.execute(stmt)).scalars().all()
         return list(rows), total
 
@@ -117,6 +159,32 @@ class UserRepository:
         stmt = select(User.id, User.username).where(User.id.in_(user_ids))
         rows = (await self._session.execute(stmt)).all()
         return {row[0]: row[1] for row in rows}
+
+    async def ids_matching_q(self, q: str, *, limit: int = 500) -> list[UUID]:
+        """Username/email substring match (case-insensitive), soft-deleted included."""
+        pattern = f"%{q.lower()}%"
+        stmt = (
+            select(User.id)
+            .where(
+                or_(
+                    func.lower(User.username).like(pattern),
+                    func.lower(func.coalesce(User.email, "")).like(pattern),
+                )
+            )
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows)
+
+    async def identities_for_ids(
+        self, user_ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[str, str | None]]:
+        """Map ids → (username, email), soft-deleted included (backoffice attribution)."""
+        if not user_ids:
+            return {}
+        stmt = select(User.id, User.username, User.email).where(User.id.in_(user_ids))
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: (row[1], row[2]) for row in rows}
 
     async def memberships_for_ids(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """ids -> membership tier, soft-deleted included (attribution)."""
