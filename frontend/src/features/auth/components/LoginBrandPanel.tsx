@@ -1,6 +1,6 @@
 /**
  * Brand / atmosphere half of the login split.
- * Drop `frontend/public/login-hero.jpg` (or .webp) to activate the photo layer.
+ * Drop `frontend/public/login-hero.png` (or .jpg) to activate the photo layer.
  */
 export function LoginBrandPanel() {
   return (
@@ -28,10 +28,10 @@ export function LoginBrandPanel() {
 function LoginHeroImage() {
   return (
     <img
-      src="/login-hero.jpg"
+      src="/login-hero.png"
       alt=""
       decoding="async"
-      className="login-brand-photo pointer-events-none absolute inset-0 h-full w-full object-cover"
+      className="login-brand-photo pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_70%]"
       onError={(event) => {
         event.currentTarget.hidden = true
       }}

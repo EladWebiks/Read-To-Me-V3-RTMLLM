@@ -1,9 +1,6 @@
-# Login hero image (optional)
+# Login hero image
 
-Place a wide reading/listening photo here as:
+Canonical file: **`login-hero.png`** (also works if you swap the `src` to `.jpg`).
 
-- `login-hero.jpg` (preferred), or also wire `.webp` in `LoginBrandPanel` later
-
-Recommended: ~2400×1600, no baked-in text/logo, warm/neutral tone that fits
-stone UI (avoid purple neon). The brand panel already darkens the lower edge
-for type contrast.
+Recommended: wide or portrait reading mood, no baked-in text. The brand panel
+applies a dark gradient so **RTM** stays readable at the bottom.
