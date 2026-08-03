@@ -5,21 +5,30 @@ panel, runtime config, memberships, quotas, and usage UX.
 
 Update status in this file as tickets move. One ticket at a time.
 
-## Workflow (every ticket)
+## Workflow (Model B — one backlog branch)
+
+All tickets land on **`backlog-cleanup`**. One PR to `main` when the
+batch is ready (or when we decide to cut a release).
 
 1. **Discuss** the ticket in chat (goal, constraints, acceptance).
-2. **Create a branch** from up-to-date `main`, e.g.
-   `fix/t2-1-auth-state-flash` or `feat/t7-hitl-redesign`.
+2. Stay on **`backlog-cleanup`** (create it from up-to-date `main` only if
+   missing). Do **not** open a per-ticket branch unless parking work.
 3. **Plan when required** (see column below):
    - Write/approve a short design under `docs/superpowers/specs/`
    - Optionally add an implementation plan under `docs/superpowers/plans/`
    - Do **not** start code until the plan is agreed
-4. **Implement** on the ticket branch (quality gates still apply).
-5. **Commit / PR / merge** when the ticket is done; mark status here.
+4. **Implement** on `backlog-cleanup` (quality gates still apply).
+5. **Commit** on `backlog-cleanup`; mark status here. Push the branch when
+   useful for backup/review.
+6. **End of batch:** open one PR `backlog-cleanup` → `main`, merge, then
+   start a fresh backlog branch from `main` if more tickets remain.
 
 Tickets marked **Plan first** need research or a design doc before coding.
 Tickets marked **Discuss then code** can skip a formal spec if the chat
-agreement is enough — still create a branch first.
+agreement is enough.
+
+Work **one ticket at a time** on this branch to keep history readable and
+avoid half-finished mixing.
 
 ## Suggested order
 
@@ -38,8 +47,8 @@ agreement is enough — still create a branch first.
 | 11 | T1 | Improve book discovery / sources | Plan first (source strategy) |
 | 12 | T6 | Full i18n + chat RTL/LTR | Plan first (i18n approach) |
 
-Order can change; do not start the next ticket until the current one is
-merged or explicitly parked.
+Order can change; finish or park the current ticket before starting the next
+on `backlog-cleanup`.
 
 ---
 
@@ -75,7 +84,7 @@ or burning the external-tool budget.
 
 ### T2 — UI / state / chat / admin polish
 
-Parent of T2.1–T2.6. Work each sub-ticket on its own branch.
+Parent of T2.1–T2.6. All sub-tickets commit on `backlog-cleanup`.
 
 #### T2.1 — Auth state flash after login
 
@@ -146,12 +155,13 @@ for chat history, settings, and usage in that shell.
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | No |
 
-**Goal:** Reduce excessive glow / bloom on the assistant in dark mode
-without breaking light mode.
+**Goal:** Soften excessive violet bloom on the assistant panel in dark mode
+(keep accent; no neon). Light mode: violet border tint + neutral elevation
+only. Nav button and thinking composer left unchanged.
 
 ---
 
