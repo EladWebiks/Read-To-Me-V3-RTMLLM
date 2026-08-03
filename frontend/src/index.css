@@ -163,6 +163,24 @@ body {
     linear-gradient(165deg, #292524 0%, #1c1917 42%, #0c0a09 100%);
 }
 
+.login-brand-photo:not([hidden]) ~ .login-brand-atmosphere {
+  background:
+    linear-gradient(180deg, rgba(12, 10, 9, 0.2) 0%, rgba(12, 10, 9, 0.55) 45%, rgba(12, 10, 9, 0.88) 100%),
+    linear-gradient(90deg, rgba(12, 10, 9, 0.15) 0%, transparent 55%);
+}
+
+@media (min-width: 1024px) {
+  .login-brand-photo:not([hidden]) ~ .login-brand-atmosphere {
+    background:
+      linear-gradient(180deg, rgba(12, 10, 9, 0.25) 0%, rgba(12, 10, 9, 0.82) 100%),
+      linear-gradient(90deg, rgba(12, 10, 9, 0.2) 0%, transparent 55%);
+  }
+}
+
+.login-brand-photo[hidden] {
+  display: none;
+}
+
 @keyframes rtm-skeleton-sweep {
   from {
     background-position: -200% 0;
