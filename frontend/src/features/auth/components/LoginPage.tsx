@@ -8,10 +8,10 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground lg:flex-row">
-      <div className="lg:w-[54%]">
+      <div className="lg:flex lg:w-[54%] lg:min-h-dvh lg:flex-col">
         <LoginBrandPanel />
       </div>
-      <div className="flex flex-1 border-t border-border lg:border-l lg:border-t-0">
+      <div className="flex flex-1 border-t border-border lg:min-h-dvh lg:border-l lg:border-t-0">
         <LoginActionColumn
           pending={state.status === 'pending'}
           errorReason={errorReason}

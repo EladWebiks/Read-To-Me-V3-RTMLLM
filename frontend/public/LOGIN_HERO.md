@@ -1,6 +1,7 @@
-# Login hero image
+# Login hero image (optional — not wired yet)
 
-Canonical file: **`login-hero.png`** (also works if you swap the `src` to `.jpg`).
+When you have a final asset, tell the agent to wire it. Suggested path:
 
-Recommended: wide or portrait reading mood, no baked-in text. The brand panel
-applies a dark gradient so **RTM** stays readable at the bottom.
+`frontend/public/login-hero.png`
+
+Do not drop scratch files into `public/` expecting them to appear on login.

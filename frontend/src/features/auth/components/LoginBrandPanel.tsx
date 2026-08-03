@@ -1,14 +1,14 @@
 /**
  * Brand / atmosphere half of the login split.
- * Drop `frontend/public/login-hero.png` (or .jpg) to activate the photo layer.
+ * When you have art, put it at `public/login-hero.png` and we can wire it —
+ * do not drop random files into public expecting them to auto-bind.
  */
 export function LoginBrandPanel() {
   return (
     <section
-      className="login-brand relative flex min-h-[38vh] flex-col justify-end overflow-hidden p-8 sm:min-h-0 sm:p-12 lg:p-16"
+      className="login-brand relative flex h-full min-h-[42vh] flex-col justify-end overflow-hidden p-8 sm:p-12 lg:min-h-full lg:p-16"
       aria-label="Read To Me"
     >
-      <LoginHeroImage />
       <div
         className="login-brand-atmosphere pointer-events-none absolute inset-0"
         aria-hidden
@@ -22,19 +22,5 @@ export function LoginBrandPanel() {
         </p>
       </div>
     </section>
-  )
-}
-
-function LoginHeroImage() {
-  return (
-    <img
-      src="/login-hero.png"
-      alt=""
-      decoding="async"
-      className="login-brand-photo pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_70%]"
-      onError={(event) => {
-        event.currentTarget.hidden = true
-      }}
-    />
   )
 }
