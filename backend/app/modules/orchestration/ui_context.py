@@ -45,7 +45,7 @@ def client_action_for_tool(
     if not ok:
         return None
     if tool_name in {"scrape_book_range", "import_discovered_book"}:
-        return {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
+        return _scrape_action(data)
     if tool_name in {"play_chapter", "resume_book"} and data:
         book_id = data.get("book_id")
         chapter_id = data.get("chapter_id")
@@ -56,6 +56,21 @@ def client_action_for_tool(
                 "label": "Play chapter",
             }
     return _other_action(tool_name, data)
+
+
+def _scrape_action(data: dict[str, object] | None) -> dict[str, object] | None:
+    if not data:
+        return {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
+    job_id = data.get("job_id")
+    if not job_id:
+        return {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
+    return {
+        "type": "scrape",
+        "label": "Open Scraper",
+        "job_id": str(job_id),
+        "max_chapters": data.get("max_chapters"),
+        "chapter_from": data.get("chapter_from"),
+    }
 
 
 def _other_action(

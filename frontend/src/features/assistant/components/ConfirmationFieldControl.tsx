@@ -19,7 +19,7 @@ export function ConfirmationFieldControl(props: Props) {
     return (
       <Select
         size="sm"
-        className="w-full"
+        className="w-full focus-visible:ring-inset"
         disabled={props.busy}
         value={stringValue(props.values[props.field.name])}
         onChange={(event) => props.onChange(props.field.name, event.target.value)}
@@ -47,7 +47,7 @@ export function ConfirmationFieldControl(props: Props) {
       onChange={(event) =>
         props.onChange(props.field.name, coerce(props.field, event.target.value))
       }
-      className="h-8 w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      className="h-8 w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-60"
     />
   )
 }

@@ -5,6 +5,7 @@ import type { ClientAction } from './clientActionTypes'
 export type {
   ClientAction,
   DownloadClientAction,
+  ScrapeClientAction,
   UiSettingsPatch,
 } from './clientActionTypes'
 

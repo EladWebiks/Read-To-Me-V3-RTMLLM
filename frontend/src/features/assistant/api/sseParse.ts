@@ -34,6 +34,15 @@ export function parseClientAction(raw: unknown): ClientAction | undefined {
       chapterTo: obj.chapter_to,
     }
   }
+  if (type === 'scrape' && typeof obj.job_id === 'string') {
+    return {
+      type,
+      label,
+      jobId: obj.job_id,
+      maxChapters: typeof obj.max_chapters === 'number' ? obj.max_chapters : null,
+      chapterFrom: typeof obj.chapter_from === 'number' ? obj.chapter_from : null,
+    }
+  }
   if (type !== 'navigate' && type !== 'play') return undefined
   if (typeof path !== 'string') return undefined
   if (!path.startsWith('/')) return undefined

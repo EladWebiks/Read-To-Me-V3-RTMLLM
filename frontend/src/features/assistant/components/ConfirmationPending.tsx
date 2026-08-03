@@ -39,7 +39,7 @@ export function ConfirmationPending({
           <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
-      <div className="assistant-scroll mt-2 min-h-0 flex-1 overflow-y-auto pr-0.5">
+      <div className="assistant-scroll mt-2 min-h-0 flex-1 overflow-y-auto px-0.5 py-1">
         {children}
       </div>
       {error ? <p className="mt-1.5 shrink-0 text-xs text-destructive">{error}</p> : null}

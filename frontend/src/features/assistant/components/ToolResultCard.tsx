@@ -3,6 +3,7 @@ import { Button } from '@/shared/ui'
 import type { ClientAction } from '../api/chatApi'
 import { DownloadToolResultCard } from './DownloadToolResultCard'
 import { hitlCardClass } from './hitlCardChrome'
+import { ScrapeToolResultCard } from './ScrapeToolResultCard'
 
 type Props = {
   name: string
@@ -15,6 +16,11 @@ type Props = {
 export function ToolResultCard({ name, ok, summary, clientAction }: Props) {
   if (ok && clientAction?.type === 'download') {
     return <DownloadToolResultCard action={clientAction} summary={summary} />
+  }
+  if (ok && clientAction?.type === 'scrape') {
+    return (
+      <ScrapeToolResultCard action={clientAction} summary={summary} toolName={name} />
+    )
   }
   if (!ok) {
     return (
@@ -34,7 +40,8 @@ export function ToolResultCard({ name, ok, summary, clientAction }: Props) {
       <p className="mt-1 text-foreground">{summary}</p>
       {clientAction &&
       clientAction.type !== 'settings' &&
-      clientAction.type !== 'download' ? (
+      clientAction.type !== 'download' &&
+      clientAction.type !== 'scrape' ? (
         <div className="mt-2">
           <Button asChild variant="outline" size="sm">
             <Link

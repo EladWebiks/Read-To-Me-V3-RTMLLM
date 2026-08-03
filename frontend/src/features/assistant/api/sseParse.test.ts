@@ -39,6 +39,24 @@ describe('parseClientAction', () => {
     })
   })
 
+  it('accepts a validated scrape tracking action', () => {
+    expect(
+      parseClientAction({
+        type: 'scrape',
+        label: 'Open Scraper',
+        job_id: 'job-9',
+        max_chapters: 50,
+        chapter_from: 1,
+      }),
+    ).toEqual({
+      type: 'scrape',
+      label: 'Open Scraper',
+      jobId: 'job-9',
+      maxChapters: 50,
+      chapterFrom: 1,
+    })
+  })
+
   it('rejects unknown action types and external paths', () => {
     expect(parseClientAction({ type: 'script', path: '/', label: 'Run' })).toBeUndefined()
     expect(
