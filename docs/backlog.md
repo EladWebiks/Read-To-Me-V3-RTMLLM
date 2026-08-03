@@ -40,7 +40,7 @@ avoid half-finished mixing.
 | 4 | T7 | HITL confirmation bubble redesign | Discuss then code (light design OK) |
 | 5 | T2.3 | Settings shown in more than one place | Done |
 | 6 | T4 | Library updates live during scraping | Done |
-| 7 | T3 | Login page full redesign | Discuss then code (visual direction) |
+| 7 | T3 | Login page full redesign | Done |
 | 8 | T2.4 | Admin backoffice visual + UX | Discuss then code |
 | 9 | T2.5 | Chat fullscreen redesign + placeholders | Plan first (layout) |
 | 10 | T5 | Polling → SSE / push where useful | Plan first (inventory + design) |
@@ -172,12 +172,16 @@ only. Nav button and thinking composer left unchanged.
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | Discuss visual direction; optional short design note |
 
 **Goal:** Full redesign of the Google SSO login page (brand, layout,
 atmosphere). Keep the existing OAuth popup flow unless bugs appear.
+
+**Acceptance:** Split layout — brand/atmosphere panel (Literata RTM + line;
+optional `/login-hero.jpg`) | action column (Sign in + Google). Structured
+so register / premium can stack later. Mobile stacks brand then actions.
 
 ---
 
