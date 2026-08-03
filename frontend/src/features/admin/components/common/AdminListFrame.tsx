@@ -23,7 +23,7 @@ export function AdminListFrame({
   return (
     <section
       ref={sectionRef}
-      className="flex flex-col gap-3 overflow-hidden animate-fade-in-up"
+      className="flex h-full min-h-0 flex-col gap-3 overflow-hidden animate-fade-in-up"
     >
       <div className="shrink-0">
         <h1 className="text-lg font-semibold tracking-tight">{title}</h1>

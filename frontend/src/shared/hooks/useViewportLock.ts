@@ -17,7 +17,11 @@ export function useViewportLock(sectionRef: RefObject<HTMLElement | null>) {
     }
 
     sync()
+    const raf = window.requestAnimationFrame(sync)
     window.addEventListener('resize', sync)
-    return () => window.removeEventListener('resize', sync)
+    return () => {
+      window.cancelAnimationFrame(raf)
+      window.removeEventListener('resize', sync)
+    }
   }, [sectionRef])
 }
