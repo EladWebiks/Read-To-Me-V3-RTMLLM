@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Button } from '@/shared/ui'
 import type { ConfirmationPayload } from '../api/chatApi'
+import { showConfirmSubtitle } from './confirmFieldLayout'
 import { hitlCardClass } from './hitlCardChrome'
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
   children?: ReactNode
 }
 
-/** Pending HITL shell: action / title / subtitle + approve/cancel. */
+/** Pending HITL shell: compact header, scrollable fields, sticky actions. */
 export function ConfirmationPending({
   payload,
   busy,
@@ -23,18 +24,26 @@ export function ConfirmationPending({
 }: Props) {
   const action = payload.action ?? humanizeTool(payload.tool)
   const headline = payload.title?.trim() || payload.summary
+  const fields = payload.form?.fields ?? []
+  const subtitle = showConfirmSubtitle(payload.subtitle, fields) ? payload.subtitle : null
   return (
-    <div className={hitlCardClass}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">
-        {action}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-foreground">{headline}</p>
-      {payload.subtitle ? (
-        <p className="mt-0.5 text-xs text-muted-foreground">{payload.subtitle}</p>
-      ) : null}
-      {children}
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
-      <div className="mt-3 flex gap-2">
+    <div className={`${hitlCardClass} flex max-h-[min(52vh,22rem)] flex-col`}>
+      <div className="shrink-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+          {action}
+        </p>
+        <p className="mt-0.5 text-sm font-semibold leading-snug text-foreground">
+          {headline}
+        </p>
+        {subtitle ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+        ) : null}
+      </div>
+      <div className="assistant-scroll mt-2 min-h-0 flex-1 overflow-y-auto pr-0.5">
+        {children}
+      </div>
+      {error ? <p className="mt-1.5 shrink-0 text-xs text-destructive">{error}</p> : null}
+      <div className="mt-2 flex shrink-0 gap-2 border-t border-border/70 pt-2">
         <Button type="button" size="sm" disabled={busy} onClick={onApprove}>
           Approve
         </Button>

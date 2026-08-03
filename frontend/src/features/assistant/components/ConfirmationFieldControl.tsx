@@ -18,6 +18,8 @@ export function ConfirmationFieldControl(props: Props) {
   if (props.field.options?.length) {
     return (
       <Select
+        size="sm"
+        className="w-full"
         disabled={props.busy}
         value={stringValue(props.values[props.field.name])}
         onChange={(event) => props.onChange(props.field.name, event.target.value)}
@@ -45,7 +47,7 @@ export function ConfirmationFieldControl(props: Props) {
       onChange={(event) =>
         props.onChange(props.field.name, coerce(props.field, event.target.value))
       }
-      className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      className="h-8 w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
     />
   )
 }

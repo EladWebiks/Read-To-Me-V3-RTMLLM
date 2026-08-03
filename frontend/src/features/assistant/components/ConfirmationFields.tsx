@@ -31,10 +31,13 @@ export function ConfirmFields(props: Props) {
     props.onChange(name, value)
   }
   return (
-    <div className="mt-2.5 space-y-2">
+    <div className="space-y-1.5">
       {fieldRows(props.fields).map((row) =>
         row.length === 2 ? (
-          <div key={row.map((f) => f.name).join('-')} className="grid grid-cols-2 gap-2">
+          <div
+            key={row.map((f) => f.name).join('-')}
+            className="grid grid-cols-2 gap-1.5"
+          >
             {row.map((field) => (
               <FieldLabel
                 key={field.name}
@@ -43,7 +46,6 @@ export function ConfirmFields(props: Props) {
                 values={props.values}
                 busy={props.busy}
                 onChange={change}
-                compact
               />
             ))}
           </div>
@@ -68,12 +70,11 @@ function FieldLabel(props: {
   values: Record<string, unknown>
   busy: boolean
   onChange: (name: string, value: unknown) => void
-  compact?: boolean
 }) {
   return (
-    <label className="block min-w-0 space-y-1">
-      <span className="text-xs font-medium text-muted-foreground">
-        {props.compact ? shortLabel(props.field) : props.field.label}
+    <label className="block min-w-0 space-y-0.5">
+      <span className="text-[11px] font-medium text-muted-foreground">
+        {shortLabel(props.field)}
       </span>
       <ConfirmationFieldControl {...props} />
     </label>

@@ -42,12 +42,23 @@ function payload(overrides: Partial<ConfirmationPayload> = {}): ConfirmationPayl
 }
 
 describe('ConfirmationCard', () => {
-  it('shows action, book title, and subtitle', () => {
+  it('shows action and book title', () => {
     render(<ConfirmationCard payload={payload()} busy={false} onResolve={vi.fn()} />)
     expect(screen.getByText('Import book')).toBeTruthy()
     expect(screen.getByText('Starfall')).toBeTruthy()
-    expect(screen.getByText('novelbin')).toBeTruthy()
+    expect(screen.queryByText('novelbin')).toBeNull()
     expect(screen.queryByText(/Confirm/)).toBeNull()
+  })
+
+  it('shows source subtitle when there is no chapter range form', () => {
+    render(
+      <ConfirmationCard
+        payload={payload({ form: { fields: [] }, subtitle: 'novelbin' })}
+        busy={false}
+        onResolve={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('novelbin')).toBeTruthy()
   })
 
   it('calls onResolve(true) when Approve is clicked', () => {
