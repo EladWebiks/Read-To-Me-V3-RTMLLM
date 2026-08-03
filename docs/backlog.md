@@ -39,7 +39,7 @@ avoid half-finished mixing.
 | 3 | T2.6 | Dark-mode chat glow too strong | Discuss then code |
 | 4 | T7 | HITL confirmation bubble redesign | Discuss then code (light design OK) |
 | 5 | T2.3 | Settings shown in more than one place | Done |
-| 6 | T4 | Library updates live during scraping | Discuss then code |
+| 6 | T4 | Library updates live during scraping | Done |
 | 7 | T3 | Login page full redesign | Discuss then code (visual direction) |
 | 8 | T2.4 | Admin backoffice visual + UX | Discuss then code |
 | 9 | T2.5 | Chat fullscreen redesign + placeholders | Plan first (layout) |
@@ -185,16 +185,17 @@ atmosphere). Keep the existing OAuth popup flow unless bugs appear.
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | No — verify event/query path in chat first |
 
 **Problem:** During scraping, new books can appear but chapter counts do
 not update dynamically while the job runs.
 
-**Acceptance (draft):** While a scrape is in progress, library / book
-chapter counts refresh so the user sees progress without a full page reload.
-May interact with T5 if push is preferred over refetch-on-poll.
+**Acceptance:** While scrape jobs are pending/running, app-wide job poll
+(every 2s) invalidates the library books query when status or
+`chapters_done` changes, so chapter counts refresh without a full reload.
+SSE deferred to T5.
 
 ---
 
