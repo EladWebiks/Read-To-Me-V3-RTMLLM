@@ -4,6 +4,7 @@ import { getDownloadUrl } from '@/features/downloads/api'
 import { useDownloadJob } from '@/features/downloads/hooks'
 import { downloadFileFromUrl } from '@/features/downloads/logic/downloadFile'
 import type { DownloadClientAction } from '../api/chatTypes'
+import { hitlCardClass } from './hitlCardChrome'
 
 type Props = {
   action: DownloadClientAction
@@ -37,8 +38,10 @@ export function DownloadToolResultCard({ action, summary }: Props) {
   }, [complete, download])
 
   return (
-    <div className="rounded-2xl border border-border bg-muted/40 px-3.5 py-3 text-sm">
-      <p className="text-xs font-medium text-muted-foreground">Audio download</p>
+    <div className={hitlCardClass}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+        Audio download
+      </p>
       <p className="mt-1 text-foreground">{summary}</p>
       <DownloadProgress
         status={job?.status}

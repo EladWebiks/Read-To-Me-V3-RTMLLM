@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTtsSettings } from '@/features/reader/hooks/ttsSettingsStore'
 import type { ConfirmationPayload } from '../api/chatApi'
 import { ConfirmFields } from './ConfirmationFields'
+import { ConfirmationPending, ResolvedConfirm } from './ConfirmationPending'
 import { defaultsFrom, formValues, validateFields } from './confirmFormUtils'
 
 type Props = {
@@ -35,11 +36,13 @@ export function ConfirmationCard({ payload, busy, onResolve }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm">
-      <p className="font-medium text-foreground">{payload.summary}</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Confirm <span className="font-mono">{payload.tool}</span> before it runs.
-      </p>
+    <ConfirmationPending
+      payload={payload}
+      busy={busy}
+      error={error}
+      onApprove={submit}
+      onCancel={() => onResolve(false)}
+    >
       <ConfirmFields
         tool={payload.tool}
         fields={fields}
@@ -50,34 +53,6 @@ export function ConfirmationCard({ payload, busy, onResolve }: Props) {
           setValues((prev) => ({ ...prev, [name]: value }))
         }}
       />
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={submit}
-          className="rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        >
-          OK
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onResolve(false)}
-          className="rounded-xl border border-border bg-background px-3 py-1.5 text-sm disabled:opacity-50"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ResolvedConfirm({ payload }: { payload: ConfirmationPayload }) {
-  const label = payload.status === 'approved' ? 'Approved' : 'Declined'
-  return (
-    <div className="rounded-2xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm text-muted-foreground">
-      {label} — {payload.summary}
-    </div>
+    </ConfirmationPending>
   )
 }

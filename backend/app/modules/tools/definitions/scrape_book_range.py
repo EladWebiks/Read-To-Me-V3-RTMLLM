@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -10,7 +11,12 @@ from app.modules.scraping.exceptions import PreviewError, UnsupportedSourceError
 from app.modules.scraping.registry import get_adapter
 from app.modules.scraping.schemas import ScrapeJobCreate
 from app.modules.scraping.service import ScrapingService
-from app.modules.tools.base import BaseTool, RiskLevel, ToolContext
+from app.modules.tools.base import (
+    BaseTool,
+    ConfirmationPresentation,
+    RiskLevel,
+    ToolContext,
+)
 from app.modules.tools.exceptions import ToolValidationError
 
 
@@ -96,6 +102,14 @@ class ScrapeBookRangeTool(BaseTool):
         except UnsupportedSourceError as exc:
             raise ToolValidationError(str(exc)) from exc
 
+    async def confirmation_presentation(
+        self,
+        inp: BaseModel,
+        ctx: ToolContext,
+    ) -> ConfirmationPresentation:
+        data = ScrapeBookRangeInput.model_validate(inp.model_dump())
+        return await _scrape_presentation(ctx, data.url)
+
     async def execute(self, inp: BaseModel, ctx: ToolContext) -> BaseModel:
         data = ScrapeBookRangeInput.model_validate(inp.model_dump())
         create = _to_job_create(data)
@@ -127,6 +141,19 @@ async def _job_title(ctx: ToolContext, book_id: UUID | None) -> str:
     except BookAccessDeniedError:
         return "book"
     return book.title
+
+
+async def _scrape_presentation(ctx: ToolContext, url: str) -> ConfirmationPresentation:
+    host = urlparse(url).netloc or url
+    try:
+        preview = await ScrapingService(ctx.session).preview(url)
+    except (UnsupportedSourceError, PreviewError):
+        return ConfirmationPresentation(action="Scrape book", subtitle=host)
+    return ConfirmationPresentation(
+        action="Scrape book",
+        title=preview.title,
+        subtitle=preview.source or host,
+    )
 
 
 def _queued_message(

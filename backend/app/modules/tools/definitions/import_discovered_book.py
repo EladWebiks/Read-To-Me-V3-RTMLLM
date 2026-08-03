@@ -12,7 +12,12 @@ from app.modules.scraping.exceptions import PreviewError, UnsupportedSourceError
 from app.modules.scraping.registry import get_adapter
 from app.modules.scraping.schemas import ScrapeJobCreate
 from app.modules.scraping.service import ScrapingService
-from app.modules.tools.base import BaseTool, RiskLevel, ToolContext
+from app.modules.tools.base import (
+    BaseTool,
+    ConfirmationPresentation,
+    RiskLevel,
+    ToolContext,
+)
 from app.modules.tools.exceptions import ToolValidationError
 
 
@@ -107,6 +112,14 @@ class ImportDiscoveredBookTool(BaseTool):
         except UnsupportedSourceError as exc:
             raise ToolValidationError(str(exc)) from exc
 
+    async def confirmation_presentation(
+        self,
+        inp: BaseModel,
+        ctx: ToolContext,
+    ) -> ConfirmationPresentation:
+        data = ImportDiscoveredBookInput.model_validate(inp.model_dump())
+        return await _import_presentation(ctx, data)
+
     async def execute(self, inp: BaseModel, ctx: ToolContext) -> BaseModel:
         data = ImportDiscoveredBookInput.model_validate(inp.model_dump())
         try:
@@ -140,6 +153,25 @@ class ImportDiscoveredBookTool(BaseTool):
                 job.status,
             ),
         )
+
+
+async def _import_presentation(
+    ctx: ToolContext,
+    data: ImportDiscoveredBookInput,
+) -> ConfirmationPresentation:
+    try:
+        book, src = await DiscoveryService(ctx.session).pick_source(
+            ctx.user_id,
+            data.discovered_book_id,
+            data.source_id,
+        )
+    except DiscoveredBookNotFoundError:
+        return ConfirmationPresentation(action="Import book")
+    return ConfirmationPresentation(
+        action="Import book",
+        title=book.title,
+        subtitle=src.source,
+    )
 
 
 def _to_job_create(

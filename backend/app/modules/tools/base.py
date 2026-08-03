@@ -40,6 +40,15 @@ class ToolContext:
     session: AsyncSession
 
 
+@dataclass(frozen=True, slots=True)
+class ConfirmationPresentation:
+    """Human-facing HITL card copy (not business logic)."""
+
+    action: str
+    title: str | None = None
+    subtitle: str | None = None
+
+
 class BaseTool(ABC):
     """One tool wrapping a domain service method."""
 
@@ -62,6 +71,15 @@ class BaseTool(ABC):
             parameters=_parameters_schema(self.input_model),
         )
 
+    async def confirmation_presentation(
+        self,
+        inp: BaseModel,
+        ctx: ToolContext,
+    ) -> ConfirmationPresentation:
+        """Copy for the confirmation card; override when a title is available."""
+        del inp, ctx
+        return ConfirmationPresentation(action=_humanize_tool(self.name))
+
     @abstractmethod
     async def authorize(self, inp: BaseModel, ctx: ToolContext) -> None:
         """Raise ToolAuthzError if the user may not run this call."""
@@ -69,6 +87,10 @@ class BaseTool(ABC):
     @abstractmethod
     async def execute(self, inp: BaseModel, ctx: ToolContext) -> BaseModel:
         """Call the domain service; return output_model instance."""
+
+
+def _humanize_tool(name: str) -> str:
+    return name.replace("_", " ").capitalize()
 
 
 def _parameters_schema(model: type[BaseModel]) -> dict[str, Any]:

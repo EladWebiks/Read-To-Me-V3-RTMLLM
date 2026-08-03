@@ -12,7 +12,12 @@ from app.modules.downloads.schemas import DownloadCreate
 from app.modules.downloads.service import DownloadService
 from app.modules.library.exceptions import BookAccessDeniedError
 from app.modules.library.service import LibraryService
-from app.modules.tools.base import BaseTool, RiskLevel, ToolContext
+from app.modules.tools.base import (
+    BaseTool,
+    ConfirmationPresentation,
+    RiskLevel,
+    ToolContext,
+)
 from app.modules.tools.exceptions import ToolAuthzError, ToolValidationError
 
 
@@ -77,6 +82,14 @@ class CreateAudioDownloadTool(BaseTool):
         except BookAccessDeniedError as exc:
             raise ToolAuthzError(str(exc)) from exc
 
+    async def confirmation_presentation(
+        self,
+        inp: BaseModel,
+        ctx: ToolContext,
+    ) -> ConfirmationPresentation:
+        data = CreateAudioDownloadInput.model_validate(inp.model_dump())
+        return await _audio_presentation(ctx, data)
+
     async def execute(self, inp: BaseModel, ctx: ToolContext) -> BaseModel:
         data = CreateAudioDownloadInput.model_validate(inp.model_dump())
         try:
@@ -108,3 +121,20 @@ class CreateAudioDownloadTool(BaseTool):
                 f"using {job.provider} / {job.voice} at {job.rate}x."
             ),
         )
+
+
+async def _audio_presentation(
+    ctx: ToolContext,
+    data: CreateAudioDownloadInput,
+) -> ConfirmationPresentation:
+    title: str | None = None
+    try:
+        book = await LibraryService(ctx.session).get_book(ctx.user_id, data.book_id)
+        title = book.title
+    except BookAccessDeniedError:
+        title = None
+    return ConfirmationPresentation(
+        action="Create audio",
+        title=title,
+        subtitle=f"Chapters {data.chapter_from}-{data.chapter_to}",
+    )

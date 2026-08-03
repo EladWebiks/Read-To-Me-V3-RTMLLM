@@ -235,8 +235,8 @@ the structural requirement.
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | Discuss then code; short visual notes OK |
 
 **Problems:**

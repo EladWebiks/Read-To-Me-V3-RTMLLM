@@ -36,6 +36,12 @@ export type ConfirmationPayload = {
   tool: string
   risk: string
   summary: string
+  /** Short action label for the card eyebrow (e.g. "Import book"). */
+  action?: string
+  /** Book title when known. */
+  title?: string | null
+  /** Source, host, or chapter range. */
+  subtitle?: string | null
   args: Record<string, unknown>
   form: { fields: ConfirmationFormField[] } | null
   status: 'pending' | 'approved' | 'rejected'
