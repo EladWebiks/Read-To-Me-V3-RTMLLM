@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from app.modules.llm.chat_service import ChatService
 from app.modules.llm.schemas import (
     ChatRequest,
     ConfirmRequest,
+    ConversationListRead,
     ConversationRead,
     ModelListResponse,
 )
@@ -103,6 +104,17 @@ async def stream_confirm(
     return _sse(_events())
 
 
+@chat_router.get("", response_model=ConversationListRead)
+async def list_conversations(
+    user: Annotated[UserRead, Depends(get_current_user)],
+    service: Annotated[ChatService, Depends(_chat_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ConversationListRead:
+    """List the signed-in user's conversations (newest activity first)."""
+    return await service.list_conversations(user.id, limit=limit, offset=offset)
+
+
 @chat_router.get("/{conversation_id}", response_model=ConversationRead)
 async def get_conversation(
     conversation_id: UUID,
@@ -112,3 +124,18 @@ async def get_conversation(
     """Load one owned conversation with messages."""
     payload = await service.get_conversation(user.id, conversation_id)
     return ConversationRead.model_validate(payload)
+
+
+@chat_router.delete(
+    "/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_conversation(
+    conversation_id: UUID,
+    user: Annotated[UserRead, Depends(get_current_user)],
+    service: Annotated[ChatService, Depends(_chat_service)],
+) -> Response:
+    """Delete an owned conversation and its messages."""
+    await service.delete_conversation(user.id, conversation_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

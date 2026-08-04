@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, and_, func, select
+from sqlalchemy import ColumnElement, and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.llm.models import (
@@ -632,12 +632,69 @@ class LlmRepository:
         conversation_id: uuid.UUID,
         title: str,
     ) -> None:
-        """Update conversation title when still empty."""
+        """Set conversation title to the latest user message preview."""
         row = await self._session.get(Conversation, conversation_id)
-        if row is None or row.title:
+        if row is None:
             return
         row.title = title
+        row.updated_at = datetime.now(UTC)
         await self._session.flush()
+
+    async def list_conversations_for_user(
+        self, user_id: uuid.UUID, *, limit: int, offset: int
+    ) -> tuple[list[Conversation], int]:
+        """Owned conversations, newest activity first."""
+        total_stmt = (
+            select(func.count()).select_from(Conversation).where(Conversation.user_id == user_id)
+        )
+        total = int((await self._session.execute(total_stmt)).scalar_one())
+        stmt = (
+            select(Conversation)
+            .where(Conversation.user_id == user_id)
+            .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return list(rows), total
+
+    async def delete_conversation_for_user(
+        self, conversation_id: uuid.UUID, user_id: uuid.UUID
+    ) -> bool:
+        """Hard-delete an owned conversation and its messages/tool calls.
+
+        Keeps llm_executions/cost audit rows; only clears the conversation FK.
+        """
+        row = await self.get_conversation_for_user(conversation_id, user_id)
+        if row is None:
+            return False
+        await self._purge_conversation_children(conversation_id)
+        await self._session.delete(row)
+        await self._session.flush()
+        return True
+
+    async def _purge_conversation_children(self, conversation_id: uuid.UUID) -> None:
+        msg_ids = select(ConversationMessage.id).where(
+            ConversationMessage.conversation_id == conversation_id
+        )
+        await self._session.execute(
+            delete(ToolCallRecord).where(ToolCallRecord.message_id.in_(msg_ids))
+        )
+        await self._session.execute(
+            delete(ConversationSummary).where(
+                ConversationSummary.conversation_id == conversation_id
+            )
+        )
+        await self._session.execute(
+            update(LlmExecution)
+            .where(LlmExecution.conversation_id == conversation_id)
+            .values(conversation_id=None)
+        )
+        await self._session.execute(
+            delete(ConversationMessage).where(
+                ConversationMessage.conversation_id == conversation_id
+            )
+        )
 
     async def record_tool_call(self, data: ToolCallWrite) -> ToolCallRecord:
         """Insert a tool_call audit row."""

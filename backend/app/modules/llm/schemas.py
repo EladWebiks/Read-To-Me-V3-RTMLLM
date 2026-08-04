@@ -77,6 +77,23 @@ class ConversationRead(BaseModel):
     messages: list[ChatMessageRead] = Field(default_factory=list)
 
 
+class ConversationSummaryRead(BaseModel):
+    """One row for the chat history drawer (title = last user message)."""
+
+    id: UUID
+    title: str | None
+    updated_at: datetime
+
+
+class ConversationListRead(BaseModel):
+    """Paginated conversation list for the signed-in user."""
+
+    items: list[ConversationSummaryRead]
+    total: int
+    limit: int
+    offset: int
+
+
 class ProviderPatch(BaseModel):
     """PATCH /api/admin/llm/catalog/providers/{provider} body."""
 

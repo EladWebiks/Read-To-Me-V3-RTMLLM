@@ -1,87 +1,62 @@
-import { useCallback, useState } from 'react'
-import { useTheme } from 'next-themes'
-import { useLocation, useNavigate } from 'react-router'
-import type { ChatMessage, ClientAction, ConfirmationPayload } from '../api/chatApi'
-import { useAssistantStore } from '../assistantStore'
-import { useHydrateConversation, useNewChatReset } from './chatLifecycle'
-import {
-  useCancelAssistant,
-  useChatFeedbackState,
-  useClearLocalChat,
-} from './chatSessionState'
+import { useCallback } from 'react'
+import type { ClientAction } from '../api/chatApi'
 import { applyClientAction } from './clientActions'
 import { useChatActions } from './useChatActions'
-import { uiContextPayload, useUiContext } from './useUiContext'
+import { useLoadConversation } from './useLoadConversation'
+import { uiContextPayload } from './useUiContext'
+import { useAssistantChatSession } from './useAssistantChatSession'
 
 /** Local chat state + SSE streaming (tools + HITL). */
 export function useAssistantChat() {
-  const conversationId = useAssistantStore((s) => s.conversationId)
-  const setConversationId = useAssistantStore((s) => s.setConversationId)
-  const newChatNonce = useAssistantStore((s) => s.newChatNonce)
-  const uiContext = useUiContext()
-  const { setTheme } = useTheme()
-  const [navigate, pathname] = useAssistantNavigation()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [draft, setDraft] = useState('')
-  const [sending, setSending] = useState(false)
-  const feedback = useChatFeedbackState()
-  const { setError, setLiveStatus, setQuotaResetsAt } = feedback
-  const [pendingConfirm, setPendingConfirm] = useState<ConfirmationPayload | null>(null)
-  const [abortRef] = useState(() => ({ current: null as AbortController | null }))
-
-  useHydrateConversation(setMessages, setConversationId)
-
-  const clearLocal = useClearLocalChat({
-    setMessages,
-    setDraft,
-    setSending,
-    setPendingConfirm,
-    setError,
-    setLiveStatus,
+  const session = useAssistantChatSession()
+  const loadConversation = useLoadConversation({
+    abortRef: session.abortRef,
+    setMessages: session.setMessages,
+    setConversationId: session.setConversationId,
+    setDraft: session.setDraft,
+    setSending: session.setSending,
+    setPendingConfirm: session.setPendingConfirm,
+    setError: session.feedback.setError,
+    setLiveStatus: session.feedback.setLiveStatus,
+    setLoadingHistory: session.setLoadingHistory,
   })
-  useNewChatReset(newChatNonce, abortRef, clearLocal)
-
-  const cancel = useCancelAssistant(abortRef, setMessages, setSending, setLiveStatus)
 
   const onClientAction = useCallback(
-    (action: ClientAction) => applyClientAction(action, pathname, navigate, setTheme),
-    [navigate, pathname, setTheme],
+    (action: ClientAction) =>
+      applyClientAction(action, session.pathname, session.navigate, session.setTheme),
+    [session.navigate, session.pathname, session.setTheme],
   )
 
   const { send, sendText, resolveConfirm } = useChatActions({
-    conversationId,
-    draft,
-    setDraft,
-    sending,
-    setSending,
-    pendingConfirm,
-    setPendingConfirm,
-    setMessages,
-    setError,
-    setQuotaResetsAt,
-    setLiveStatus,
-    setConversationId,
-    abortRef,
-    uiContext: uiContextPayload(uiContext),
+    conversationId: session.conversationId,
+    draft: session.draft,
+    setDraft: session.setDraft,
+    sending: session.sending,
+    setSending: session.setSending,
+    pendingConfirm: session.pendingConfirm,
+    setPendingConfirm: session.setPendingConfirm,
+    setMessages: session.setMessages,
+    setError: session.feedback.setError,
+    setQuotaResetsAt: session.feedback.setQuotaResetsAt,
+    setLiveStatus: session.feedback.setLiveStatus,
+    setConversationId: session.setConversationId,
+    abortRef: session.abortRef,
+    uiContext: uiContextPayload(session.uiContext),
     onClientAction,
   })
 
   return {
-    messages,
-    draft,
-    setDraft,
-    sending,
-    ...feedback,
-    pendingConfirm,
+    messages: session.messages,
+    draft: session.draft,
+    setDraft: session.setDraft,
+    sending: session.sending,
+    loadingHistory: session.loadingHistory,
+    loadConversation,
+    ...session.feedback,
+    pendingConfirm: session.pendingConfirm,
     send,
     sendText,
     resolveConfirm,
-    cancel,
+    cancel: session.cancel,
   }
-}
-
-function useAssistantNavigation() {
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-  return [navigate, pathname] as const
 }

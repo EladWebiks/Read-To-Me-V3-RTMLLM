@@ -41,8 +41,8 @@ avoid half-finished mixing.
 | 5 | T2.3 | Settings shown in more than one place | Done |
 | 6 | T4 | Library updates live during scraping | Done |
 | 7 | T3 | Login page full redesign | Done |
-| 8 | T2.4 | Admin backoffice visual + UX | In progress |
-| 9 | T2.5 | Chat fullscreen redesign + placeholders | Plan first (layout) |
+| 8 | T2.4 | Admin backoffice visual + UX | Done |
+| 9 | T2.5 | Chat history drawer + Read To Me label | Done |
 | 10 | T5 | Polling → SSE / push where useful | Plan first (inventory + design) |
 | 11 | T1 | Improve book discovery / sources | Plan first (source strategy) |
 | 12 | T6 | Full i18n + chat RTL/LTR | Plan first (i18n approach) |
@@ -136,7 +136,7 @@ caps the speed slider).
 
 | Field | Value |
 |-------|--------|
-| Status | In progress |
+| Status | Done |
 | Branch | `backlog-cleanup` |
 | Plan first | Discuss visual direction; formal spec only if scope grows |
 
@@ -149,16 +149,24 @@ empty states, consistency with shared form/query primitives).
 3. Settings key tooltips
 4. Identity + filters (email, not bare user id)
 
-#### T2.5 — Chat fullscreen redesign + placeholders
+#### T2.5 — Chat history drawer + branding
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
-| Plan first | **Yes** — layout for history / settings / usage |
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No — fullscreen redesign deferred (useful on phone) |
 
-**Goal:** Fullscreen chat looks intentional; placeholders (or real panels)
-for chat history, settings, and usage in that shell.
+**Goal:** History button opens an in-chat drawer over the whole panel; picking
+a thread loads it (with loading state). Subtitle says **Read To Me** (not
+Milestone B). Fullscreen toggle kept as-is for mobile.
+
+**Acceptance:**
+- Header subtitle: `Read To Me` (and `Fullscreen · Read To Me` when expanded).
+- History drawer lists user conversations; title = last user message,
+  truncated with `…` when long.
+- Selecting a row loads that conversation into the chat with a loading
+  indicator and close-on-success.
 
 #### T2.6 — Dark-mode chat glow too strong
 

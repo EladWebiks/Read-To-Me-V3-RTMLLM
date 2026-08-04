@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useMeUsage } from '@/features/usage'
 import { ASSISTANT_CHAT_COLUMN } from '../assistantGeometry'
 import { useAssistantChat } from '../hooks/useAssistantChat'
@@ -6,11 +7,21 @@ import { AssistantComposer } from './AssistantComposer'
 import { AssistantMessageList } from './AssistantMessageList'
 
 /** Live assistant chat with tools + HITL form cards. */
-export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
+export function AssistantChat({
+  expanded = false,
+  registerLoad,
+}: {
+  expanded?: boolean
+  registerLoad?: (fn: (id: string) => Promise<void>) => void
+}) {
   const chat = useAssistantChat()
   const usage = useMeUsage()
   const blocked = Boolean(chat.pendingConfirm)
   const quotaNotice = quotaLock(usage.data, chat.quotaResetsAt)
+
+  useEffect(() => {
+    registerLoad?.(chat.loadConversation)
+  }, [chat.loadConversation, registerLoad])
 
   return (
     <div
@@ -30,7 +41,7 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
             messages={chat.messages}
             framed={expanded}
             error={chat.error}
-            sending={chat.sending}
+            sending={chat.sending || chat.loadingHistory}
             liveStatus={chat.liveStatus}
             confirmBusy={chat.sending}
             choicesDisabled={Boolean(chat.pendingConfirm)}
@@ -42,7 +53,7 @@ export function AssistantChat({ expanded = false }: { expanded?: boolean }) {
           <AssistantComposer
             draft={chat.draft}
             setDraft={chat.setDraft}
-            sending={chat.sending}
+            sending={chat.sending || chat.loadingHistory}
             status={chat.liveStatus}
             blocked={blocked}
             quotaNotice={quotaNotice}
