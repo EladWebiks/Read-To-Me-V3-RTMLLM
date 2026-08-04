@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.modules.books.schemas import BookCreate
 from app.modules.chapters.service import ChapterService
 from app.modules.imports.epub import ParsedEpub, parse_epub
+from app.modules.imports.job_events import publish_import_job
 from app.modules.imports.repository import EpubImportRepository
 from app.modules.imports.schemas import (
     EpubImportFileSummary,
@@ -100,6 +101,7 @@ async def start_job(
     task = asyncio.create_task(_run_import(job_id, req, file_payloads))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
+    await publish_import_job(_jobs[job_id])
     return to_progress(_jobs[job_id])
 
 
@@ -122,6 +124,7 @@ async def _run_import(
         # Single terminal point: the job dict is "completed", "cancelled" or
         # "failed" by now, whichever branch above got us here.
         await _finish_record(factory, req.record_id, job)
+        await publish_import_job(job)
         await engine.dispose()
 
 
@@ -178,6 +181,7 @@ async def _parse_all(
         job["current_file"] = filename
         job["files_parsed"] = i + 1  # current file index (1-based) while parsing
         job["message"] = f"Parsing {filename} ({i + 1}/{len(file_payloads)})…"
+        await publish_import_job(job)
         parsed = await asyncio.to_thread(parse_epub, data)
         parsed_files.append((filename, parsed))
     job["total_chapters"] = sum(len(p.chapters) for _, p in parsed_files)
@@ -233,7 +237,7 @@ async def _write_chapters(
             chapter_num += 1
             count += 1
             total_imported += 1
-            _touch_progress(job, total_imported, total_chapters)
+            await _touch_progress_and_publish(job, total_imported, total_chapters)
             await session.commit()
         file_summaries.append(EpubImportFileSummary(name=filename, chapters=count))
     _mark_completed(job, book_id, book_author, total_imported, file_summaries, req)
@@ -247,6 +251,11 @@ def _mark_cancelled(job: dict[str, Any], done: int, total: int) -> None:
 def _touch_progress(job: dict[str, Any], done: int, total: int) -> None:
     job["chapters_imported"] = done
     job["message"] = f"Importing chapter {done} of {total}…"
+
+
+async def _touch_progress_and_publish(job: dict[str, Any], done: int, total: int) -> None:
+    _touch_progress(job, done, total)
+    await publish_import_job(job)
 
 
 def _mark_completed(

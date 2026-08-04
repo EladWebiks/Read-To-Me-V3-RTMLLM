@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { AssistantHost } from '@/features/assistant'
+import { useJobEvents } from '@/features/jobEvents'
 import { useLibraryLiveDuringScrapes } from '@/features/scraping/hooks'
 import { ShellActions } from './ShellActions'
 import { ShellNavLinks } from './ShellNav'
@@ -9,6 +10,7 @@ export function AppShell() {
   const { pathname } = useLocation()
   const isReading = pathname.startsWith('/read/')
   useReaderScrollLock(isReading)
+  useJobEvents()
   useLibraryLiveDuringScrapes()
 
   return (

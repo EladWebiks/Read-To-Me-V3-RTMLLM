@@ -17,6 +17,7 @@ from app.modules.books.service import BookService
 from app.modules.chapters.service import ChapterService
 from app.modules.scraping.adapters.base import ScrapeAdapter
 from app.modules.scraping.cleaning import clean_content
+from app.modules.scraping.job_events import publish_scrape_job
 from app.modules.scraping.job_messages import public_scrape_error
 from app.modules.scraping.models import ScrapingJob, ScrapingJobItem
 from app.modules.scraping.registry import get_adapter
@@ -51,6 +52,7 @@ async def _process(session: AsyncSession, job_id: UUID) -> None:
     job.message = "Starting…"
     await repo.flush()
     await session.commit()
+    await publish_scrape_job(job)
     try:
         await _walk(session, repo, job)
         if job.status != "cancelled":
@@ -62,6 +64,7 @@ async def _process(session: AsyncSession, job_id: UUID) -> None:
         job.error = public_scrape_error(str(exc)) or "Scrape failed"
         job.message = "Failed"
     await repo.flush()
+    await publish_scrape_job(job)
 
 
 async def _walk(session: AsyncSession, repo: ScrapingRepository, job: ScrapingJob) -> None:
@@ -156,6 +159,7 @@ async def _save_chapter(
     job.message = f"Scraped Chapter {number}"
     await repo.flush()
     await session.commit()
+    await publish_scrape_job(job)
     return data.next_url
 
 

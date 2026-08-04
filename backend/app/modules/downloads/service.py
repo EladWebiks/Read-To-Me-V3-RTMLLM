@@ -16,6 +16,7 @@ from app.modules.downloads.exceptions import (
     DownloadNotReadyError,
     InvalidChapterRangeError,
 )
+from app.modules.downloads.job_events import publish_download_job
 from app.modules.downloads.keys import chapter_object_key, download_filename, job_prefix
 from app.modules.downloads.models import DownloadJob
 from app.modules.downloads.repository import DownloadRepository
@@ -73,6 +74,7 @@ class DownloadService:
         )
         created = await self._repo.add(job)
         await self._session.commit()
+        await publish_download_job(created)
         await self._enqueue(created.id)
         return DownloadJobRead.model_validate(created)
 

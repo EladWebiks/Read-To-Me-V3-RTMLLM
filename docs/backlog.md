@@ -43,7 +43,7 @@ avoid half-finished mixing.
 | 7 | T3 | Login page full redesign | Done |
 | 8 | T2.4 | Admin backoffice visual + UX | Done |
 | 9 | T2.5 | Chat history drawer + Read To Me label | Done |
-| 10 | T5 | Polling → SSE / push where useful | Plan first (inventory + design) |
+| 10 | T5 | Polling → SSE / push where useful | Done |
 | 11 | T1 | Improve book discovery / sources | Plan first (source strategy) |
 | 12 | T6 | Full i18n + chat RTL/LTR | Plan first (i18n approach) |
 
@@ -221,16 +221,17 @@ SSE deferred to T5.
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | **Yes** — inventory pollers, choose keep / SSE / hybrid |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-job-events-sse-design.md`](../superpowers/specs/2026-08-04-job-events-sse-design.md) |
 
 **Goal:** Replace or reduce polling with SSE (or similar) where UX or load
 benefits.
 
-**Plan should cover:** download jobs, scrape jobs, EPUB import, in-chat
-download cards, admin jobs monitor, any other pollers; per-surface
-recommendation; security/authz for streams.
+**Done:** Per-user `GET /api/jobs/events` (Redis pub/sub) drives scrape,
+download, and EPUB import UIs; hooks fall back to polling if SSE is down.
+Admin Jobs stay pull-to-refresh.
 
 ---
 

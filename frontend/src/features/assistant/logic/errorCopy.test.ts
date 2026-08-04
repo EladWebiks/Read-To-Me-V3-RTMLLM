@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { chatErrorMessage } from './errorCopy'
 
 describe('chatErrorMessage', () => {
-  it('passes ordinary errors through', () => {
-    expect(chatErrorMessage('something broke')).toBe('something broke')
-    expect(chatErrorMessage('boom', 'budget_exceeded')).toBe('boom')
+  it('keeps short plain errors', () => {
+    expect(chatErrorMessage('Conversation not found')).toBe('Conversation not found')
   })
 
   it('maps quota_exceeded to friendly copy with the rollover date', () => {
@@ -20,5 +19,18 @@ describe('chatErrorMessage', () => {
   it('falls back to "next month" for a missing/invalid date', () => {
     expect(chatErrorMessage('x', 'quota_exceeded')).toContain('next month')
     expect(chatErrorMessage('x', 'quota_exceeded', 'not-a-date')).toContain('next month')
+  })
+
+  it('maps Gemini high-demand dumps to a short busy message', () => {
+    const dump =
+      '503 Service Unavailable. {\'message\': \'{\\n  "error": {\\n    "code": 503,\\n    "message": "This model is currently experiencing high demand.",\\n    "status": "UNAVAILABLE"\\n  }\\n}\\n\', \'status\': \'Service Unavailable\'}'
+    expect(chatErrorMessage(dump)).toBe(
+      'The AI service is busy right now. Please try again in a moment.',
+    )
+  })
+
+  it('maps rate-limit and timeout wording', () => {
+    expect(chatErrorMessage('429 rate limit exceeded')).toContain('Too many AI requests')
+    expect(chatErrorMessage('Request timeout')).toContain('took too long')
   })
 })

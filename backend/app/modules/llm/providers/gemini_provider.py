@@ -477,7 +477,15 @@ def _map_provider_error(exc: Exception) -> LlmProviderError:
     name = type(exc).__name__.lower()
     text = str(exc).lower()
     if "timeout" in name or "timeout" in text:
-        return LlmTimeoutError(str(exc))
-    if "rate" in name or "429" in text or "quota" in text:
-        return LlmRateLimitError(str(exc))
-    return LlmProviderError(str(exc))
+        return LlmTimeoutError("The assistant took too long to respond. Please try again.")
+    if "429" in text or "rate limit" in text or "resource_exhausted" in text:
+        return LlmRateLimitError(
+            "Too many AI requests right now. Please wait a moment and try again."
+        )
+    if "503" in text or "unavailable" in text or "high demand" in text:
+        return LlmProviderError("The AI service is busy right now. Please try again in a moment.")
+    if "401" in text or "403" in text or "api key" in text or "permission" in text:
+        return LlmProviderError(
+            "The AI service couldn't authenticate. Check your API key settings."
+        )
+    return LlmProviderError("The assistant couldn't complete that reply. Please try again.")

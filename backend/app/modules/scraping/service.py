@@ -19,6 +19,7 @@ from app.modules.scraping.exceptions import (
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
+from app.modules.scraping.job_events import publish_scrape_job
 from app.modules.scraping.job_messages import public_scrape_error
 from app.modules.scraping.models import ScrapingJob
 from app.modules.scraping.registry import ALL_ALLOWED_HOSTS, get_adapter
@@ -92,6 +93,7 @@ class ScrapingService:
         )
         created = await self._repo.add_job(job)
         await self._session.commit()
+        await publish_scrape_job(created)
         await _enqueue(created.id)
         title = (meta.title or book_url or "Untitled").strip() or "Untitled"
         return _to_read(created, title)
@@ -158,6 +160,7 @@ class ScrapingService:
         job.message = "Cancel requested"
         await self._repo.flush()
         await self._session.commit()
+        await publish_scrape_job(job)
         return await self._read_with_title(job)
 
     async def delete_job(self, user_id: UUID, job_id: UUID) -> None:

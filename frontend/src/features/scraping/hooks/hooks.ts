@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useJobEventsStore } from '@/features/jobEvents'
 import {
   cancelScrapeJob,
   createScrapeJob,
@@ -21,11 +22,13 @@ export function useCreateScrapeJob() {
 }
 
 export function useScrapeJobs() {
+  const sseConnected = useJobEventsStore((s) => s.connected)
   return useQuery({
     queryKey: ['scraping', 'jobs'],
     queryFn: listScrapeJobs,
     refetchOnMount: 'always',
     refetchInterval: (query) => {
+      if (sseConnected) return false
       const jobs = query.state.data ?? []
       const busy = jobs.some((j) => j.status === 'pending' || j.status === 'running')
       return busy ? 2000 : false
