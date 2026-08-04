@@ -120,10 +120,9 @@ Current status and remaining order:
 3. **Ranked source → import/scrape HITL — done:** no pasted URL required.
 4. **Persisted owned-book summaries — done:** content hash invalidation + cached tools.
 5. **EPUB import — done:** preview plus bounded chunked import with UI progress.
-6. **Batched theme/trope discovery — next:** support recommendation-style requests
-   without making one external tool call per guessed title. Keep the per-turn external
-   budget bounded; improve the discovery operation instead of masking the problem with
-   a much larger limit.
+6. **Batched theme/trope discovery — done (T1):** `recommend_discovered_books`
+   batches candidate titles / seed book across the four scrape sources in one
+   external budget unit; NovelUpdates rejected; WLNUpdates deferred (T1.1).
 7. **Summarize candidate before import:** spoiler-light metadata/source overview.
 8. **Discuss owned books:** richer grounded multi-step answers over last-read chapters
    and library Q&A
@@ -136,48 +135,13 @@ Current status and remaining order:
 confirm a suggested match, and get a scrape job without pasting a site URL; if two
 sites list the book, the system picks or proposes the richer source.
 
-### Theme-discovery work item — **next**
+### Theme-discovery work item — **done (T1)**
 
-**Problem:** `search_discovered_books` currently accepts one title/alias. For prompts
-such as “find three books like this,” the model may guess candidate titles and invoke
-the external tool repeatedly. A fourth invocation correctly trips the default
-`LLM_MAX_EXTERNAL_CALLS=3` safety budget, even when Gemini token/RPM quota remains.
-Raising token limits does not solve this, and broadly raising the external-call cap
-would increase latency, source traffic, and provider/tool-loop risk.
-
-**Planned slice:**
-
-1. Add a domain-owned batched discovery request supporting:
-   - a seed owned book and/or free-text themes/tropes
-   - optional candidate-title queries
-   - `exclude_owned=true`
-   - a bounded result count (default 3, hard maximum 10)
-2. Expose one assistant tool for the complete recommendation operation. If the model
-   already has candidate titles, accept them as one bounded list rather than requiring
-   repeated `search_discovered_books` calls.
-3. Fan out inside `discovery.service` through deterministic source adapters, with
-   per-source rate limits, SSRF controls, timeouts, and a small concurrency bound.
-   One orchestrator external-tool budget unit does not remove underlying HTTP/source
-   accounting.
-4. Normalize, deduplicate, exclude owned books, and rank candidates by theme evidence,
-   title/alias match, source richness, chapter metadata, and deterministic source
-   priority. Return evidence/reasons; do not let the model silently invent matches.
-5. Render the bounded candidates as a comparison/choice result, then reuse the existing
-   `import_discovered_book` HITL path for the selected item.
-6. Keep `LLM_MAX_EXTERNAL_CALLS=3` as the default. Only tune it from measured traces;
-   do not use token-budget increases as a workaround.
-
-**Acceptance criteria:**
-
-- “Find three books like *Against the Gods*” completes with at most one external
-  discovery tool invocation before the user chooses a result.
-- The result contains up to three deduplicated, not-owned candidates with title,
-  author when available, source, chapter estimate when available, and a concise match
-  reason.
-- A no-result/partial-source outcome is explained normally; the UI never exposes a raw
-  `external call budget exceeded` message for this supported path.
-- Unit tests cover batch bounds, deduplication, ownership exclusion, and ranking;
-  integration tests cover partial source failure and external-budget accounting.
+Shipped: `DiscoveryService.recommend` + `recommend_discovered_books` + WLNUpdates
+theme→title expansion (T1.1). Specs:
+[`docs/superpowers/specs/2026-08-04-discovery-recommendation-design.md`](../superpowers/specs/2026-08-04-discovery-recommendation-design.md),
+[`docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md`](../superpowers/specs/2026-08-04-discovery-theme-index-design.md).
+DaoSearch dual-index deferred (T1.2).
 
 ### 4a. Persisted book summaries **[R][D → ADR-13]** — **done**
 

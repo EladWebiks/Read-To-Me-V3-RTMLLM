@@ -30,12 +30,11 @@ class SearchDiscoveredBooksTool(BaseTool):
 
     name = "search_discovered_books"
     description = (
-        "Search for books by title (or alias) across supported novel sites "
-        "(novelfull, novelbin, freewebnovel, novellunar) when the user did not paste "
-        "a URL. Returns candidates with ranked sources (recommended = richest known "
-        "chapter count). If several title matches, call propose_choices so the user "
-        "can pick. Then call import_discovered_book with the chosen discovered_book_id "
-        "(no URL needed). Requires external_allowed mode."
+        "Search for ONE book by exact title/alias on supported novel sites when the user "
+        "named that specific title (not 'books like X'). For similarity/theme prompts use "
+        "recommend_discovered_books instead. Returns candidates with ranked sources "
+        "(recommended = richest known chapter count). If several title matches, call "
+        "propose_choices, then import_discovered_book. Requires external_allowed mode."
     )
     input_model = SearchDiscoveredBooksInput
     output_model = SearchDiscoveredBooksOutput

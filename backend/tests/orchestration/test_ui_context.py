@@ -66,6 +66,7 @@ def test_client_action_scrape_falls_back_without_job() -> None:
         "label": "Open Scraper",
     }
 
+
 def test_client_action_play() -> None:
     book = uuid4()
     chapter = uuid4()

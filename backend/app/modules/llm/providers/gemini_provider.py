@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from inspect import isawaitable
@@ -104,6 +105,8 @@ class GeminiProvider:
     ) -> T:
         if not self._config.supports_structured:
             raise CapabilityNotSupportedError("structured_output")
+        if req.use_web_search:
+            return await self._structured_with_web_search(req)
         return await self._structured(req)
 
     async def call_tools(self, req: ToolCallingRequest) -> ToolCallingResponse:
@@ -203,6 +206,52 @@ class GeminiProvider:
         except Exception as exc:
             raise _map_provider_error(exc) from exc
 
+    async def _structured_with_web_search(self, req: StructuredOutputRequest[T]) -> T:
+        """Google Search grounding, then coerce free text into response_model."""
+        from google.genai import types
+
+        timeout_s = max(self._config.timeout_seconds, 60)
+        config = types.GenerateContentConfig(
+            max_output_tokens=req.max_output_tokens or self._config.max_output_tokens,
+            temperature=req.temperature if req.temperature is not None else 0.2,
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            http_options=types.HttpOptions(timeout=timeout_s * 1000),
+        )
+        try:
+            raw = await self._get_client().aio.models.generate_content(
+                model=self._config.model_name,
+                contents=_to_contents(req.messages),
+                config=config,
+            )
+        except Exception as exc:
+            raise _map_provider_error(exc) from exc
+        text = _response_text(raw).strip()
+        if not text:
+            raise LlmProviderError("Web-grounded research returned an empty reply.")
+        try:
+            return req.response_model.model_validate_json(_extract_json_payload(text))
+        except Exception:
+            # Fall back to instructor coercion when the model wrapped prose around JSON.
+            return await self._structured(
+                StructuredOutputRequest(
+                    messages=[
+                        Message(
+                            role=Role.SYSTEM,
+                            content=(
+                                "Extract the structured object from the research notes. "
+                                "Use only facts present in the notes."
+                            ),
+                        ),
+                        Message(role=Role.USER, content=text),
+                    ],
+                    response_model=req.response_model,
+                    max_output_tokens=req.max_output_tokens,
+                    temperature=0.0,
+                    task=req.task,
+                    use_web_search=False,
+                )
+            )
+
     async def _structured(self, req: StructuredOutputRequest[T]) -> T:
         import instructor
         from google import genai
@@ -284,6 +333,23 @@ def _tool_payload(content: str) -> dict[str, Any]:
 
 def _to_openai_messages(messages: Sequence[Message]) -> list[dict[str, str]]:
     return [{"role": m.role.value, "content": m.content} for m in messages]
+
+
+def _extract_json_payload(text: str) -> str:
+    """Pull a JSON object/array out of model text (fenced or bare)."""
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, flags=re.IGNORECASE)
+    if fenced is not None:
+        return fenced.group(1).strip()
+    start_obj, start_arr = text.find("{"), text.find("[")
+    starts = [i for i in (start_obj, start_arr) if i >= 0]
+    if not starts:
+        return text.strip()
+    start = min(starts)
+    end_obj, end_arr = text.rfind("}"), text.rfind("]")
+    end = max(end_obj, end_arr)
+    if end <= start:
+        return text.strip()
+    return text[start : end + 1].strip()
 
 
 def _tool_to_genai(tool: ToolSpec) -> Any:

@@ -1,0 +1,24 @@
+{
+  "error": false,
+  "message": null,
+  "data": [
+    {
+      "sid": 1,
+      "title": "Against the Gods",
+      "latest_published": 1501705475.0,
+      "release_count": 2000
+    },
+    {
+      "sid": 2,
+      "title": "Martial Peak",
+      "latest_published": 1501328118.0,
+      "release_count": 5000
+    },
+    {
+      "sid": 3,
+      "title": "Library of Heaven's Path",
+      "latest_published": 1499408780.0,
+      "release_count": 1800
+    }
+  ]
+}

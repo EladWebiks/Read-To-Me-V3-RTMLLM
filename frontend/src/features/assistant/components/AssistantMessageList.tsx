@@ -31,10 +31,9 @@ export function AssistantMessageList({
 }: Props) {
   const visible = messages.filter((m) => m.role !== 'step' && isVisibleToolMessage(m))
   const last = visible[visible.length - 1]
-  const contentKey = `${visible.length}:${last?.id ?? ''}:${last?.content.length ?? 0}:${liveStatus ?? ''}`
+  const contentKey = `${visible.length}:${last?.id ?? ''}:${last?.content.length ?? 0}:${liveStatus ?? ''}:${error ?? ''}`
   const { containerRef, onScroll } = useStickToBottom(sending, contentKey)
-
-  if (!visible.length && !liveStatus) return <EmptyState framed={framed} />
+  const empty = !visible.length && !liveStatus && !error
 
   return (
     <div
@@ -42,6 +41,7 @@ export function AssistantMessageList({
       onScroll={onScroll}
       className="assistant-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 sm:px-4"
     >
+      {empty ? <EmptyState framed={framed} /> : null}
       {visible.map((m, index) => (
         <ChatTurn
           key={m.id}
@@ -69,7 +69,7 @@ export function AssistantMessageList({
 function EmptyState({ framed }: { framed: boolean }) {
   return (
     <div
-      className={`flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center ${
+      className={`flex min-h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center ${
         framed ? 'bg-gradient-to-b from-muted/20 to-transparent' : ''
       }`}
     >

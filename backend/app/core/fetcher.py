@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 from urllib.parse import urlparse
 
 import httpx
@@ -99,6 +100,62 @@ async def post_form_html(
         resp.raise_for_status()
         raw = resp.content[: settings.scrape.max_bytes]
         return raw.decode(resp.encoding or "utf-8", errors="replace")
+
+
+async def get_json(
+    url: str,
+    allowlist: set[str],
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """GET JSON and return a parsed object (SSRF-safe)."""
+    return await _request_json("GET", url, allowlist, headers=headers)
+
+
+async def post_json(
+    url: str,
+    allowlist: set[str],
+    payload: dict[str, object],
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """POST JSON body and return parsed object (SSRF-safe)."""
+    return await _request_json("POST", url, allowlist, headers=headers, json_body=payload)
+
+
+async def _request_json(
+    method: str,
+    url: str,
+    allowlist: set[str],
+    *,
+    headers: dict[str, str] | None = None,
+    json_body: dict[str, object] | None = None,
+) -> dict[str, object]:
+    validate_url(url, allowlist)
+    settings = get_settings()
+    req_headers = {
+        "User-Agent": _USER_AGENT,
+        "Accept": "application/json",
+        **(headers or {}),
+    }
+    if json_body is not None:
+        req_headers.setdefault("Content-Type", "application/json")
+    async with httpx.AsyncClient(
+        timeout=settings.scrape.timeout_seconds,
+        follow_redirects=True,
+        max_redirects=5,
+        headers=req_headers,
+    ) as client:
+        resp = await client.request(method, url, json=json_body)
+        resp.raise_for_status()
+        raw = resp.content[: settings.scrape.max_bytes]
+        try:
+            data: object = json.loads(raw.decode(resp.encoding or "utf-8", errors="replace"))
+        except json.JSONDecodeError as exc:
+            raise FetchError("Invalid JSON response") from exc
+        if not isinstance(data, dict):
+            raise FetchError("JSON response was not an object")
+        return data
 
 
 async def fetch_bytes(url: str, allowlist: set[str]) -> bytes:

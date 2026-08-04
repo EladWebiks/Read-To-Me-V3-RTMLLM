@@ -24,7 +24,9 @@ from app.modules.tools.exceptions import ToolValidationError
 class ImportDiscoveredBookInput(BaseModel):
     """Discovery candidate id plus optional chapter window / source pick."""
 
-    discovered_book_id: UUID = Field(description="Id from search_discovered_books results")
+    discovered_book_id: UUID = Field(
+        description="Id from search_discovered_books or recommend_discovered_books results"
+    )
     source_id: UUID | None = Field(
         default=None,
         description=("Optional book_sources.id. Omit to use the recommended (richest) source."),
@@ -81,7 +83,8 @@ class ImportDiscoveredBookTool(BaseTool):
 
     name = "import_discovered_book"
     description = (
-        "Import/scrape a book chosen from search_discovered_books into the library. "
+        "Import/scrape a book chosen from search_discovered_books or "
+        "recommend_discovered_books into the library. "
         "Pass discovered_book_id from search results. Omit source_id to use the "
         "recommended source (prefer more chapters when known). "
         "Do not ask for a site URL. Map any chapter range into start_chapter and "

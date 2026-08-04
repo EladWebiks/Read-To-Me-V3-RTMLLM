@@ -11,3 +11,7 @@ class DiscoverySearchError(DiscoveryError):
 
 class DiscoveredBookNotFoundError(DiscoveryError):
     """No discovered book for the given id."""
+
+
+class DiscoveryRecommendError(DiscoveryError):
+    """Invalid or incomplete recommend request."""

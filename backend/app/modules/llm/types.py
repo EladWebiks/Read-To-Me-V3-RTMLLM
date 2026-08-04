@@ -98,6 +98,9 @@ class StructuredOutputRequest[T: BaseModel]:
     max_output_tokens: int | None = None
     temperature: float | None = None
     task: str = "structured"
+    # When true, providers that support it may use live web search (e.g. Gemini
+    # Google Search grounding) before coercing into response_model.
+    use_web_search: bool = False
 
 
 @dataclass(frozen=True, slots=True)

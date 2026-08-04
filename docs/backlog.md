@@ -44,7 +44,8 @@ avoid half-finished mixing.
 | 8 | T2.4 | Admin backoffice visual + UX | Done |
 | 9 | T2.5 | Chat history drawer + Read To Me label | Done |
 | 10 | T5 | Polling → SSE / push where useful | Done |
-| 11 | T1 | Improve book discovery / sources | Plan first (source strategy) |
+| 11 | T1 | Improve book discovery / sources | Done |
+| 11a | T1.1 | Theme→title index (WLNUpdates) | Done |
 | 12 | T6 | Full i18n + chat RTL/LTR | Plan first (i18n approach) |
 
 Order can change; finish or park the current ticket before starting the next
@@ -58,27 +59,75 @@ on `backlog-cleanup`.
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | Done |
+| Branch | `backlog-cleanup` |
 | Plan first | **Yes** — design + source choice before build |
-| Spec / plan | TBD under `docs/superpowers/` |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-recommendation-design.md`](superpowers/specs/2026-08-04-discovery-recommendation-design.md) |
 
 **Goal:** Better “find books like X / theme search” without guessing titles
 or burning the external-tool budget.
 
-**Notes:**
-- Prefer an index site with a usable search (e.g. NovelUpdates / Novel Index
-  style) → then cross-match to scrapable adapters.
-- Free-form web search is a last resort, not the primary path.
-- Aligns with the existing “batched theme/trope discovery” roadmap item in
-  `docs/llm-planning/06-roadmap-and-sequencing.md` and README discovery
-  limitation notes.
+**Shipped:**
+- Rejected NovelUpdates as a primary source.
+- Primary path: batched recommend on the four existing scrape sources.
+- `DiscoveryService.recommend` + tool `recommend_discovered_books` (one
+  external budget unit for N candidate titles).
+- `search_discovered_books` kept for exact title lookup; import still via
+  `import_discovered_book` + `propose_choices`.
+- **T1.1:** WLNUpdates theme→title expansion (see below).
 
-**Acceptance (draft):**
+**Acceptance:**
 - Agreed discovery strategy documented.
 - Recommendation-style prompts do not require one external tool call per
   guessed title.
 - Results can be crossed with supported scrape sources for import/HITL.
+
+---
+
+### T1.1 — Theme→title index (WLNUpdates)
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md`](superpowers/specs/2026-08-04-discovery-theme-index-design.md) |
+
+**Goal:** Themes alone can produce candidate titles without the model guessing.
+
+**Shipped:**
+- WLNUpdates allowlisted JSON API as theme→title index (NovelUpdates still rejected).
+- DaoSearch deferred.
+- `recommend` expands short/empty query pools from themes via one WLN search,
+  then existing four-source fan-out.
+
+**Acceptance:**
+- “Find cultivation revenge novels” with themes only uses one recommend tool call.
+- Scrapable hits still from the four adapters; evidence mentions WLN when used.
+
+**Note (2026-08-04):** Live WLN `POST /api` returns HTTP 500; theme expansion
+is empty. Hardcoded title fallback was rejected and removed. See **T1.2**.
+
+---
+
+### T1.2 — Discovery index replan (DaoSearch primary)
+
+| Field | Value |
+|-------|--------|
+| Status | In progress |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-index-replan.md`](superpowers/specs/2026-08-04-discovery-index-replan.md) |
+
+**Goal:** Real live theme / similar-book research without canned title lists
+and without depending on a dead WLN API.
+
+**Scope:**
+- Gemini Google Search grounding as the **only** theme/seed title expander.
+- No DaoSearch / WLN / model-memory title inventing in the recommend pool.
+- Scrape fan-out verifies titles; hard-fail when research empty or unscrapeable.
+- Default `LLM_MAX_EXTERNAL_CALLS` raised to **8** so recommend + import
+  (+ occasional retries) fit one turn.
 
 ---
 

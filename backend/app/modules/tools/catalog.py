@@ -20,6 +20,9 @@ from app.modules.tools.definitions.list_available_chapters import (
 )
 from app.modules.tools.definitions.play_chapter import PlayChapterTool
 from app.modules.tools.definitions.propose_choices import ProposeChoicesTool
+from app.modules.tools.definitions.recommend_discovered_books import (
+    RecommendDiscoveredBooksTool,
+)
 from app.modules.tools.definitions.resume_book import ResumeBookTool
 from app.modules.tools.definitions.scrape_book_range import ScrapeBookRangeTool
 from app.modules.tools.definitions.search_discovered_books import SearchDiscoveredBooksTool
@@ -51,6 +54,7 @@ def build_default_registry() -> ToolRegistry:
             ProposeChoicesTool(),
             UpdateUiSettingsTool(),
             SearchDiscoveredBooksTool(),
+            RecommendDiscoveredBooksTool(),
             ImportDiscoveredBookTool(),
             ScrapeBookRangeTool(),
         ]

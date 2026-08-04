@@ -36,3 +36,21 @@ class DiscoveredBookRead(BaseModel):
 class DiscoverySearchResponse(BaseModel):
     query: str
     results: list[DiscoveredBookRead]
+
+
+class DiscoveryRecommendItem(BaseModel):
+    """One ranked recommend result with match evidence."""
+
+    book: DiscoveredBookRead
+    evidence: list[str] = Field(default_factory=list)
+    # Best known chapter count across scrape sources (None = unknown on our sites).
+    scrapable_chapters: int | None = None
+
+
+class DiscoveryRecommendResponse(BaseModel):
+    """Bounded batch discovery recommendation."""
+
+    queries: list[str]
+    themes: list[str] = Field(default_factory=list)
+    limit: int
+    results: list[DiscoveryRecommendItem] = Field(default_factory=list)
