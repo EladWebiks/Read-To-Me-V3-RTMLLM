@@ -30,10 +30,13 @@ export function LoginBrandPanel() {
         aria-hidden
       />
       <div className="relative z-[1] max-w-md animate-fade-in-up">
-        <p className="login-brand-mark text-4xl tracking-tight sm:text-5xl lg:text-7xl">
-          RTM
-        </p>
-        <p className="mt-2 max-w-sm text-sm leading-relaxed opacity-85 sm:text-base lg:mt-3 lg:text-lg">
+        <img
+          src="/Logo-dark.png"
+          alt="RTM — Read To Me"
+          decoding="async"
+          className="h-16 w-auto max-w-[min(100%,22rem)] object-contain object-left drop-shadow-sm sm:h-20 lg:h-24"
+        />
+        <p className="mt-3 max-w-sm text-sm leading-relaxed opacity-85 sm:text-base lg:mt-4 lg:text-lg">
           Read and listen to your personal library.
         </p>
       </div>
