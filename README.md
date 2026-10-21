@@ -46,13 +46,16 @@
 
 ## Why this project
 
-RTM started as [RTM v2](https://github.com/eladjmc/RTM_V2) — a React + TypeScript
-reader with a small Node backend and a site scraper, still live at
-[read-to-me-beta.netlify.app](https://read-to-me-beta.netlify.app/). It proved the
-idea (read and listen to long web novels in one place) but had no LLM, in-memory
-jobs, and no multi-user story.
+Read To Me is the third generation of a project that has been evolving for over
+three years:
 
-v3 is a ground-up rebuild. Two goals drove the design:
+| | What it was | Live |
+|---|---|---|
+| **v1** — [mern-read-to-me](https://github.com/eladjmc/mern-read-to-me) (2023) | MERN app for comfortable reading: paste or upload text, save it to a library, listen with browser TTS, adjustable speed and typography. No scraping. | [read-to-me.netlify.app](https://read-to-me.netlify.app/) |
+| **v2** — [RTM_V2](https://github.com/eladjmc/RTM_V2) | React + TypeScript rebuild with a Node backend and the first novel-site scraper — read and listen to long web novels in one place. No LLM, in-memory jobs, single user. | [read-to-me-beta.netlify.app](https://read-to-me-beta.netlify.app/) |
+| **v3** — this repo | Ground-up rebuild: Python/FastAPI modular monolith, durable background jobs, seven deterministic scrapers, server-side TTS and MP3 export, multi-user ownership, admin backoffice, and a tool-gated LLM assistant. | self-hosted (`docker compose up`) |
+
+Two goals drove the v3 design:
 
 1. **A reading/listening experience that works for very long web novels** — libraries
    with thousands of chapters per book, resumable progress, server-side TTS, and
