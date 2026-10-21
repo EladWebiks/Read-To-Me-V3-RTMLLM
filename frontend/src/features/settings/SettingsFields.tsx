@@ -1,6 +1,7 @@
 import { useAppSettings } from './settingsStore'
 import { Button } from '@/shared/ui'
 import { RangeRow, SettingLabel } from './SettingsControls'
+import { RegexCutRulesSection } from './RegexCutRulesSection'
 import { SettingsPlaybackFields } from './SettingsPlaybackFields'
 
 export function SettingsFields() {
@@ -39,6 +40,7 @@ export function SettingsFields() {
           ))}
         </div>
       </div>
+      <RegexCutRulesSection />
       <SettingsPlaybackFields />
     </div>
   )

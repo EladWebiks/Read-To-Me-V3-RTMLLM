@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.modules.discovery.exceptions import DiscoveredBookNotFoundError
 from app.modules.discovery.service import DiscoveryService
 from app.modules.scraping.exceptions import PreviewError, UnsupportedSourceError
-from app.modules.scraping.registry import get_adapter
+from app.modules.scraping.registry import get_adapter, supported_source_names
 from app.modules.scraping.schemas import ScrapeJobCreate
 from app.modules.scraping.service import ScrapingService
 from app.modules.tools.base import (
@@ -30,6 +30,14 @@ class ImportDiscoveredBookInput(BaseModel):
     source_id: UUID | None = Field(
         default=None,
         description=("Optional book_sources.id. Omit to use the recommended (richest) source."),
+    )
+    exclude_sources: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description=(
+            "Site names the user said to avoid ('not from X'). "
+            f"Supported: {supported_source_names()}. Picks the richest remaining source."
+        ),
     )
     start_chapter: int | None = Field(
         default=1,
@@ -86,7 +94,9 @@ class ImportDiscoveredBookTool(BaseTool):
         "Import/scrape a book chosen from search_discovered_books or "
         "recommend_discovered_books into the library. "
         "Pass discovered_book_id from search results. Omit source_id to use the "
-        "recommended source (prefer more chapters when known). "
+        "recommended source (prefer more chapters when known). When the user says "
+        "not from / avoid / except a site, pass exclude_sources with those names — "
+        "do not import from an excluded site. "
         "Do not ask for a site URL. Map any chapter range into start_chapter and "
         "chapter_count; the user confirms on a form. Defaults: start_chapter=1, "
         "chapter_count=null (entire book)."
@@ -107,9 +117,10 @@ class ImportDiscoveredBookTool(BaseTool):
                 ctx.user_id,
                 data.discovered_book_id,
                 data.source_id,
+                exclude_sources=tuple(data.exclude_sources),
             )
         except DiscoveredBookNotFoundError as exc:
-            raise ToolValidationError(str(exc)) from exc
+            raise ToolValidationError(_import_source_error(str(exc))) from exc
         try:
             get_adapter(src.book_url)
         except UnsupportedSourceError as exc:
@@ -130,9 +141,10 @@ class ImportDiscoveredBookTool(BaseTool):
                 ctx.user_id,
                 data.discovered_book_id,
                 data.source_id,
+                exclude_sources=tuple(data.exclude_sources),
             )
         except DiscoveredBookNotFoundError as exc:
-            raise ToolValidationError(str(exc)) from exc
+            raise ToolValidationError(_import_source_error(str(exc))) from exc
         create = _to_job_create(src.book_url, data.start_chapter, data.chapter_count)
         try:
             job = await ScrapingService(ctx.session).create_job(ctx.user_id, create)
@@ -167,6 +179,7 @@ async def _import_presentation(
             ctx.user_id,
             data.discovered_book_id,
             data.source_id,
+            exclude_sources=tuple(data.exclude_sources),
         )
     except DiscoveredBookNotFoundError:
         return ConfirmationPresentation(action="Import book")
@@ -175,6 +188,16 @@ async def _import_presentation(
         title=book.title,
         subtitle=src.source,
     )
+
+
+def _import_source_error(raw: str) -> str:
+    if "no-sources-after-exclude:" in raw:
+        names = raw.rsplit(":", 1)[-1]
+        return (
+            f"No scrape sources left after excluding {names}. "
+            "Try another title or allow one of those sites."
+        )
+    return raw
 
 
 def _to_job_create(

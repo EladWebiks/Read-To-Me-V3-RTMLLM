@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import '@/shared/i18n'
 import { truncateHistoryTitle } from './truncateHistoryTitle'
 
 describe('truncateHistoryTitle', () => {

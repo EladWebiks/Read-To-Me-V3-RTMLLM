@@ -141,12 +141,23 @@ async def test_verify_id_token_returns_claims() -> None:
 
 @pytest.mark.unit
 @respx.mock
+async def test_verify_id_token_allows_small_iat_skew() -> None:
+    """Container clocks often lag Google by a few seconds after sleep/wake."""
+    respx.get(GOOGLE_JWKS_URL).mock(return_value=Response(200, json=_jwks()))
+    future_iat = int(time.time()) + 60
+    token = _id_token(iat=future_iat, exp=future_iat + 600)
+    claims = await GoogleOAuthClient(_settings()).verify_id_token(token)
+    assert claims.sub == "google-sub-123"
+
+
+@pytest.mark.unit
+@respx.mock
 @pytest.mark.parametrize(
     ("overrides", "reason"),
     [
         ({"aud": "other-client"}, "invalid_id_token"),
         ({"iss": "https://evil.example.com"}, "invalid_issuer"),
-        ({"exp": int(time.time()) - 60}, "invalid_id_token"),
+        ({"exp": int(time.time()) - 300}, "invalid_id_token"),
         ({"email_verified": False}, "email_not_verified"),
     ],
 )

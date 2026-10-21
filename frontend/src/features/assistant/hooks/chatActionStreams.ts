@@ -9,6 +9,8 @@ export type ChatActionArgs = {
   setDraft: (v: string) => void
   sending: boolean
   setSending: (v: boolean) => void
+  /** Sync lock so a second Enter before React re-renders cannot start another turn. */
+  sendingGateRef: MutableRefObject<boolean>
   pendingConfirm: ConfirmationPayload | null
   setPendingConfirm: (v: ConfirmationPayload | null) => void
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>
@@ -27,6 +29,8 @@ function localId(prefix: string): string {
 
 /** Stream a user text turn. */
 export async function streamUserText(args: ChatActionArgs, text: string): Promise<void> {
+  if (args.sendingGateRef.current) return
+  args.sendingGateRef.current = true
   args.setError(null)
   args.setQuotaResetsAt(null)
   args.setLiveStatus('Thinking…')
@@ -36,23 +40,27 @@ export async function streamUserText(args: ChatActionArgs, text: string): Promis
     ...prev,
     { id: localId('user'), role: 'user', content: text },
   ])
-  await runAssistantStream(
-    {
-      text,
-      conversationId: args.conversationId,
-      assistantId,
-      setConversationId: args.setConversationId,
-      setMessages: args.setMessages,
-      setError: args.setError,
-      setQuotaResetsAt: args.setQuotaResetsAt,
-      setLiveStatus: args.setLiveStatus,
-      setSending: args.setSending,
-      abortRef: args.abortRef,
-      uiContext: args.uiContext,
-      onClientAction: args.onClientAction,
-    },
-    (payload) => args.setPendingConfirm(payload),
-  )
+  try {
+    await runAssistantStream(
+      {
+        text,
+        conversationId: args.conversationId,
+        assistantId,
+        setConversationId: args.setConversationId,
+        setMessages: args.setMessages,
+        setError: args.setError,
+        setQuotaResetsAt: args.setQuotaResetsAt,
+        setLiveStatus: args.setLiveStatus,
+        setSending: args.setSending,
+        abortRef: args.abortRef,
+        uiContext: args.uiContext,
+        onClientAction: args.onClientAction,
+      },
+      (payload) => args.setPendingConfirm(payload),
+    )
+  } finally {
+    args.sendingGateRef.current = false
+  }
 }
 
 /** Resume after HITL OK/Cancel. */
@@ -64,24 +72,30 @@ export async function streamConfirmResolve(
   if (!args.pendingConfirm || !args.conversationId) return
   const callId = args.pendingConfirm.callId
   args.setPendingConfirm(null)
+  if (args.sendingGateRef.current) return
+  args.sendingGateRef.current = true
   args.setLiveStatus('Thinking…')
   args.setSending(true)
   args.setError(null)
   markConfirmStatus(args.setMessages, callId, approved ? 'approved' : 'rejected')
   const assistantId = localId('assistant')
-  await runConfirmStream({
-    conversationId: args.conversationId,
-    callId,
-    approved,
-    values,
-    assistantId,
-    setConversationId: args.setConversationId,
-    setMessages: args.setMessages,
-    setError: args.setError,
-    setQuotaResetsAt: args.setQuotaResetsAt,
-    setLiveStatus: args.setLiveStatus,
-    setSending: args.setSending,
-    abortRef: args.abortRef,
-    onClientAction: args.onClientAction,
-  })
+  try {
+    await runConfirmStream({
+      conversationId: args.conversationId,
+      callId,
+      approved,
+      values,
+      assistantId,
+      setConversationId: args.setConversationId,
+      setMessages: args.setMessages,
+      setError: args.setError,
+      setQuotaResetsAt: args.setQuotaResetsAt,
+      setLiveStatus: args.setLiveStatus,
+      setSending: args.setSending,
+      abortRef: args.abortRef,
+      onClientAction: args.onClientAction,
+    })
+  } finally {
+    args.sendingGateRef.current = false
+  }
 }

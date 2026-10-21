@@ -1,0 +1,79 @@
+{
+  "title": "עוזר",
+  "subtitle": "Read To Me",
+  "subtitleFullscreen": "מסך מלא · Read To Me",
+  "ariaLabel": "עוזר",
+  "openAssistant": "פתח עוזר",
+  "closeAssistant": "סגור עוזר",
+  "emptyTitle": "שאלו אותי בכל נושא",
+  "emptyBody": "ספרייה, האזנה, הורדות ואישור ייבוא כשצריך.",
+  "composer": {
+    "placeholder": "שאלו אותי…",
+    "waitingConfirm": "ממתין לאישור…",
+    "working": "העוזר עובד…",
+    "blockedNotice": "אשרו או בטלו את הפעולה למעלה כדי להמשיך.",
+    "messageAria": "הודעה",
+    "sendAria": "שלח הודעה",
+    "stopAria": "עצור תשובה"
+  },
+  "history": {
+    "untitled": "שיחה ללא כותרת",
+    "title": "היסטוריית שיחות",
+    "button": "היסטוריה",
+    "subtitle": "השיחות האחרונות שלך",
+    "close": "סגור היסטוריה",
+    "delete": "מחק שיחה",
+    "newChat": "שיחה חדשה",
+    "loadFailed": "לא ניתן לטעון את השיחה."
+  },
+  "header": {
+    "fullscreen": "מסך מלא",
+    "exitFullscreen": "יציאה ממסך מלא",
+    "close": "סגור"
+  },
+  "linkSafety": {
+    "title": "לפתוח קישור חיצוני?",
+    "warning": "המעבר יוביל לאתר מחוץ ל-Read To Me.",
+    "copy": "העתק כתובת",
+    "open": "מעבר לאתר",
+    "close": "סגור"
+  },
+  "hitl": {
+    "approve": "אישור",
+    "cancel": "ביטול",
+    "approved": "אושר",
+    "declined": "נדחה",
+    "choose": "בחרו"
+  },
+  "actions": {
+    "import_discovered_book": "ייבוא ספר",
+    "scrape_book_range": "ייבוא מהאתר",
+    "create_audio_download": "יצירת אודיו"
+  },
+  "tool": {
+    "done": "בוצע",
+    "failed": "נכשל",
+    "scrape": "ייבוא",
+    "audioDownload": "הורדת אודיו"
+  },
+  "fields": {
+    "chapter_from": "מפרק",
+    "chapter_to": "עד פרק (כולל)",
+    "start_chapter": "מפרק",
+    "chapter_count": "כמות כוללת של פרקים",
+    "provider": "ספק",
+    "voice": "קול",
+    "rate": "מהירות"
+  },
+  "errors": {
+    "generic": "משהו השתבש. נסו שוב.",
+    "busy": "שירות ה-AI עמוס כרגע. נסו שוב בעוד רגע.",
+    "rateLimited": "יותר מדי בקשות AI כרגע. המתינו רגע ונסו שוב.",
+    "timeout": "לעוזר לקח יותר מדי זמן להגיב. נסו שוב.",
+    "auth": "אימות לשירות ה-AI נכשל. בדקו את מפתח ה-API.",
+    "providerDump": "העוזר לא הצליח להשלים את התשובה. נסו שוב.",
+    "quota": "הגעתם למכסת ה-AI החודשית. שדרגו את התוכנית או נסו שוב אחרי {{date}}.",
+    "quotaNextMonth": "החודש הבא",
+    "quotaLock": "מכסת ה-AI החודשית מלאה — מתאפסת ב-{{date}}"
+  }
+}

@@ -45,19 +45,108 @@ def test_cap_queries_dedupes_and_limits() -> None:
             "against the gods",
             "  Martial Peak  ",
             "",
-            *[f"Title {i}" for i in range(20)],
+            *[f"Title {i}" for i in range(40)],
         ]
     )
     assert capped[0] == "Against the Gods"
     assert capped[1] == "Martial Peak"
-    assert len(capped) == 8
+    assert len(capped) == 30
 
 
 @pytest.mark.unit
 def test_clamp_recommend_limit() -> None:
     assert clamp_recommend_limit(0) == 1
     assert clamp_recommend_limit(3) == 3
-    assert clamp_recommend_limit(99) == 10
+    assert clamp_recommend_limit(20) == 20
+    assert clamp_recommend_limit(99) == 25
+
+
+@pytest.mark.unit
+def test_exclude_title_key_strips_articles() -> None:
+    from app.modules.discovery.recommend import exclude_title_key
+
+    assert exclude_title_key("The Desolate Era") == "desolate era"
+    assert exclude_title_key("Desolate Era") == "desolate era"
+
+
+@pytest.mark.unit
+def test_exclude_title_key_maps_known_aliases() -> None:
+    from app.modules.discovery.recommend import exclude_title_key
+
+    assert exclude_title_key("Master of Gu") == exclude_title_key("Reverend Insanity")
+    assert exclude_title_key("Xian Ni") == exclude_title_key("Renegade Immortal")
+
+
+@pytest.mark.unit
+def test_exclude_title_key_ignores_apostrophe_variants() -> None:
+    from app.modules.discovery.recommend import exclude_title_key
+
+    curly = "A Record of a Mortal\u2019s Journey to Immortality"
+    straight = "A Record of a Mortal's Journey to Immortality"
+    assert exclude_title_key(straight) == exclude_title_key(curly)
+
+
+@pytest.mark.unit
+def test_is_derivative_title_filters_fanfic_extensions() -> None:
+    from app.modules.discovery.recommend import is_derivative_title
+
+    canons = ["Martial Peak", "Desolate Era", "Against the Gods"]
+    assert is_derivative_title("Martial Peak - Rise Of The Human Emperor", canons)
+    assert is_derivative_title("Desolate Era: Hatching a Phoenix at the Beginning", canons)
+    assert is_derivative_title("Cronus' system: Against the gods", canons)
+    assert is_derivative_title("Dual Cultivation In Martial Peak", canons)
+    assert not is_derivative_title("Martial Peak", canons)
+    assert not is_derivative_title("True Martial World", canons)
+
+
+@pytest.mark.unit
+def test_dedupe_by_exclude_key_keeps_first() -> None:
+    from app.modules.discovery.recommend import dedupe_by_exclude_key
+
+    first = _book("Desolate Era")
+    second = _book("The Desolate Era")
+    second.normalized_title = "the desolate era"
+    assert dedupe_by_exclude_key([first, second]) == [first]
+
+
+@pytest.mark.unit
+def test_passes_source_and_min_chapters() -> None:
+    from app.modules.discovery.recommend import passes_source_and_chapters
+
+    srcs = [_Src(800, "ranobes"), _Src(200, "novelfire")]
+    assert passes_source_and_chapters(srcs, source="ranobes", min_chapters=500)
+    assert not passes_source_and_chapters(srcs, source="scribblehub", min_chapters=500)
+    assert not passes_source_and_chapters(
+        [_Src(100, "ranobes")], source="ranobes", min_chapters=500
+    )
+
+
+@pytest.mark.unit
+def test_passes_source_honors_exclude_sources() -> None:
+    from app.modules.discovery.recommend import passes_source_and_chapters
+
+    srcs = [_Src(800, "novellunar"), _Src(200, "novelfire")]
+    assert not passes_source_and_chapters(
+        srcs,
+        source=None,
+        min_chapters=None,
+        exclude_sources=frozenset({"novelfire", "novellunar"}),
+    )
+    assert passes_source_and_chapters(
+        srcs,
+        source=None,
+        min_chapters=None,
+        exclude_sources=frozenset({"novelfire"}),
+    )
+
+
+@pytest.mark.unit
+def test_prefer_source_rows_orders_matching_first() -> None:
+    from app.modules.discovery.recommend import prefer_source_rows
+
+    rows = [_Src(1, "novelfire"), _Src(2, "ranobes"), _Src(3, "novellunar")]
+    ordered = prefer_source_rows(rows, "ranobes")
+    assert ordered[0].source == "ranobes"
 
 
 @pytest.mark.unit

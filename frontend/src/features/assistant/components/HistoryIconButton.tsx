@@ -1,4 +1,5 @@
 import { History } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/shared/ui'
 
 export function HistoryIconButton({
@@ -8,13 +9,15 @@ export function HistoryIconButton({
   onClick: () => void
   pressed?: boolean
 }) {
+  const { t } = useTranslation('assistant')
+  const label = pressed ? t('history.close') : t('history.title')
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
       aria-pressed={pressed}
-      aria-label={pressed ? 'Close history' : 'Chat history'}
+      aria-label={label}
       onClick={onClick}
       className={
         pressed
@@ -27,7 +30,7 @@ export function HistoryIconButton({
         strokeWidth={2.25}
         aria-hidden
       />
-      <span className="whitespace-nowrap">History</span>
+      <span className="whitespace-nowrap">{t('history.button')}</span>
     </Button>
   )
 }

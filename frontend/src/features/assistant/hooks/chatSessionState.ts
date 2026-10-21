@@ -18,6 +18,7 @@ type ClearDeps = {
   setError: (value: string | null) => void
   setLiveStatus: (value: string | null) => void
   setPendingConfirm: (value: ConfirmationPayload | null) => void
+  sendingGateRef: { current: boolean }
 }
 
 /** Reset local chat state for a fresh thread. */
@@ -29,19 +30,30 @@ export function useClearLocalChat(deps: ClearDeps) {
     setError,
     setLiveStatus,
     setPendingConfirm,
+    sendingGateRef,
   } = deps
   return useCallback(() => {
+    sendingGateRef.current = false
     setMessages([])
     setDraft('')
     setError(null)
     setSending(false)
     setLiveStatus(null)
     setPendingConfirm(null)
-  }, [setMessages, setDraft, setError, setSending, setLiveStatus, setPendingConfirm])
+  }, [
+    sendingGateRef,
+    setMessages,
+    setDraft,
+    setError,
+    setSending,
+    setLiveStatus,
+    setPendingConfirm,
+  ])
 }
 
 export function useCancelAssistant(
   abortRef: { current: AbortController | null },
+  sendingGateRef: { current: boolean },
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
   setSending: (value: boolean) => void,
   setLiveStatus: (value: string | null) => void,
@@ -50,6 +62,7 @@ export function useCancelAssistant(
     if (!abortRef.current) return
     abortRef.current.abort()
     abortRef.current = null
+    sendingGateRef.current = false
     setSending(false)
     setLiveStatus(null)
     setMessages((prev) => [
@@ -60,5 +73,5 @@ export function useCancelAssistant(
         content: 'Response canceled.',
       },
     ])
-  }, [abortRef, setLiveStatus, setMessages, setSending])
+  }, [abortRef, sendingGateRef, setLiveStatus, setMessages, setSending])
 }

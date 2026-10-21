@@ -1,5 +1,6 @@
 import { Maximize2, MessageSquarePlus, Minimize2, X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, IconTooltip } from '@/shared/ui'
 import { HistoryIconButton } from './HistoryIconButton'
 
@@ -18,6 +19,8 @@ export function AssistantHeaderActions({
   onToggleExpanded: () => void
   onClose: () => void
 }) {
+  const { t } = useTranslation('assistant')
+  const fullscreenLabel = expanded ? t('header.exitFullscreen') : t('header.fullscreen')
   return (
     <div
       className="flex shrink-0 items-center gap-1"
@@ -28,7 +31,7 @@ export function AssistantHeaderActions({
         variant="outline"
         size="sm"
         onClick={onNewChat}
-        aria-label="New chat"
+        aria-label={t('history.newChat')}
         className="group/btn h-8 gap-1.5 rounded-full border-border/80 bg-background/70 px-2.5 text-xs font-medium shadow-sm transition-all duration-150 hover:bg-muted active:scale-[0.98]"
       >
         <MessageSquarePlus
@@ -36,14 +39,11 @@ export function AssistantHeaderActions({
           strokeWidth={2.25}
           aria-hidden
         />
-        <span className="whitespace-nowrap">New chat</span>
+        <span className="whitespace-nowrap">{t('history.newChat')}</span>
       </Button>
       <HistoryIconButton pressed={historyOpen} onClick={onOpenHistory} />
-      <IconTooltip label={expanded ? 'Exit fullscreen' : 'Enter fullscreen'}>
-        <IconBtn
-          label={expanded ? 'Exit fullscreen' : 'Enter fullscreen'}
-          onClick={onToggleExpanded}
-        >
+      <IconTooltip label={fullscreenLabel}>
+        <IconBtn label={fullscreenLabel} onClick={onToggleExpanded}>
           {expanded ? (
             <Minimize2 className="h-4 w-4 transition-transform duration-150 group-hover/btn:scale-110" />
           ) : (
@@ -51,8 +51,8 @@ export function AssistantHeaderActions({
           )}
         </IconBtn>
       </IconTooltip>
-      <IconTooltip label="Close">
-        <IconBtn label="Close assistant" onClick={onClose}>
+      <IconTooltip label={t('header.close')}>
+        <IconBtn label={t('closeAssistant')} onClick={onClose}>
           <X className="h-4 w-4 transition-transform duration-150 group-hover/btn:scale-110" />
         </IconBtn>
       </IconTooltip>

@@ -1,35 +1,38 @@
 /** Maps structured chat SSE errors to user-facing copy (spec §6). */
+import type { ChatUiLang } from '@/shared/lib/textDirection'
+import i18n from '@/shared/i18n'
 
 export function chatErrorMessage(
   detail: string,
   code?: string,
   resetsAt?: string,
+  lng: ChatUiLang = 'en',
 ): string {
   if (code === 'quota_exceeded') {
-    return `You've reached your monthly AI limit. Upgrade your plan or try again after ${rolloverLabel(resetsAt)}.`
+    return i18n.t('assistant:errors.quota', { lng, date: rolloverLabel(resetsAt, lng) })
   }
-  return friendlyProviderCopy(detail)
+  return friendlyProviderCopy(detail, lng)
 }
 
-function friendlyProviderCopy(detail: string): string {
+function friendlyProviderCopy(detail: string, lng: ChatUiLang): string {
   const text = detail.toLowerCase()
   if (!text.trim()) {
-    return 'Something went wrong. Please try again.'
+    return i18n.t('assistant:errors.generic', { lng })
   }
   if (looksBusy(text)) {
-    return 'The AI service is busy right now. Please try again in a moment.'
+    return i18n.t('assistant:errors.busy', { lng })
   }
   if (looksRateLimited(text)) {
-    return 'Too many AI requests right now. Please wait a moment and try again.'
+    return i18n.t('assistant:errors.rateLimited', { lng })
   }
-  if (looksTimeout(text)) {
-    return 'The assistant took too long to respond. Please try again.'
+  if (looksTimeout(text) || looksDeadline(text)) {
+    return i18n.t('assistant:errors.timeout', { lng })
   }
   if (looksAuth(text)) {
-    return "The AI service couldn't authenticate. Check your API key settings."
+    return i18n.t('assistant:errors.auth', { lng })
   }
   if (looksProviderDump(text)) {
-    return "The assistant couldn't complete that reply. Please try again."
+    return i18n.t('assistant:errors.providerDump', { lng })
   }
   return detail
 }
@@ -55,6 +58,10 @@ function looksTimeout(text: string): boolean {
   return text.includes('timeout') || text.includes('timed out')
 }
 
+function looksDeadline(text: string): boolean {
+  return text.includes('run deadline') || text.includes('deadline exceeded')
+}
+
 function looksAuth(text: string): boolean {
   return (
     text.includes('api key') ||
@@ -76,11 +83,12 @@ function looksProviderDump(text: string): boolean {
   )
 }
 
-function rolloverLabel(resetsAt?: string): string {
-  if (!resetsAt) return 'next month'
+function rolloverLabel(resetsAt: string | undefined, lng: ChatUiLang): string {
+  if (!resetsAt) return i18n.t('assistant:errors.quotaNextMonth', { lng })
   const date = new Date(resetsAt)
-  if (Number.isNaN(date.getTime())) return 'next month'
-  return date.toLocaleDateString(undefined, {
+  if (Number.isNaN(date.getTime()))
+    return i18n.t('assistant:errors.quotaNextMonth', { lng })
+  return date.toLocaleDateString(lng === 'he' ? 'he-IL' : undefined, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

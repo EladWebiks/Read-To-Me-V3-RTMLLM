@@ -33,6 +33,7 @@ export function useAssistantChat() {
     setDraft: session.setDraft,
     sending: session.sending,
     setSending: session.setSending,
+    sendingGateRef: session.sendingGateRef,
     pendingConfirm: session.pendingConfirm,
     setPendingConfirm: session.setPendingConfirm,
     setMessages: session.setMessages,

@@ -34,10 +34,10 @@ avoid half-finished mixing.
 
 | Order | ID | Title | Plan first? |
 |------:|----|-------|-------------|
-| 1 | T2.1 | Auth state flash after login | Discuss then code |
-| 2 | T2.2 | Chat does not reset on re-login | Discuss then code |
-| 3 | T2.6 | Dark-mode chat glow too strong | Discuss then code |
-| 4 | T7 | HITL confirmation bubble redesign | Discuss then code (light design OK) |
+| 1 | T2.1 | Auth state flash after login | Done |
+| 2 | T2.2 | Chat does not reset on re-login | Done |
+| 3 | T2.6 | Dark-mode chat glow too strong | Done |
+| 4 | T7 | HITL confirmation bubble redesign | Done |
 | 5 | T2.3 | Settings shown in more than one place | Done |
 | 6 | T4 | Library updates live during scraping | Done |
 | 7 | T3 | Login page full redesign | Done |
@@ -46,7 +46,8 @@ avoid half-finished mixing.
 | 10 | T5 | Polling → SSE / push where useful | Done |
 | 11 | T1 | Improve book discovery / sources | Done |
 | 11a | T1.1 | Theme→title index (WLNUpdates) | Done |
-| 12 | T6 | Full i18n + chat RTL/LTR | Plan first (i18n approach) |
+| 11b | T1.2 | Discovery index replan | Done |
+| 12 | T6 | i18n foundation + chat RTL/LTR | In progress |
 
 Order can change; finish or park the current ticket before starting the next
 on `backlog-cleanup`.
@@ -110,24 +111,27 @@ is empty. Hardcoded title fallback was rejected and removed. See **T1.2**.
 
 ---
 
-### T1.2 — Discovery index replan (DaoSearch primary)
+### T1.2 — Discovery index replan
 
 | Field | Value |
 |-------|--------|
-| Status | In progress |
+| Status | Done |
 | Branch | `backlog-cleanup` |
 | Plan first | **Yes** |
 | Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-index-replan.md`](superpowers/specs/2026-08-04-discovery-index-replan.md) |
 
-**Goal:** Real live theme / similar-book research without canned title lists
-and without depending on a dead WLN API.
+**Goal:** Real theme / similar-book research without canned title lists and
+without depending on a dead WLN API.
 
-**Scope:**
-- Gemini Google Search grounding as the **only** theme/seed title expander.
-- No DaoSearch / WLN / model-memory title inventing in the recommend pool.
-- Scrape fan-out verifies titles; hard-fail when research empty or unscrapeable.
-- Default `LLM_MAX_EXTERNAL_CALLS` raised to **8** so recommend + import
-  (+ occasional retries) fit one turn.
+**Shipped:**
+- Theme/seed expansion via plain Gemini structured output (no Google Search
+  grounding on free-tier quota; grounding deferred until billing supports it).
+- Scrape fan-out verifies titles on the four supported sources; hard-fail when
+  research empty or unscrapeable. Surface real LLM failures (e.g. rate limit).
+- DaoSearch / WLN not used in the recommend title pool.
+- Default `LLM_MAX_EXTERNAL_CALLS` raised to **8**.
+- `scrapable_chapters` on recommend items; assistant prompt grounding for
+  discovery attributes.
 
 ---
 
@@ -284,21 +288,25 @@ Admin Jobs stay pull-to-refresh.
 
 ---
 
-### T6 — Full i18n + chat RTL/LTR
+### T6 — i18n foundation + chat RTL/LTR
 
 | Field | Value |
 |-------|--------|
-| Status | Open |
-| Branch | _(create when starting)_ |
+| Status | In progress |
+| Branch | `backlog-cleanup` |
 | Plan first | **Yes** — library choice, key structure, RTL rules |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-i18n-chat-direction-design.md`](superpowers/specs/2026-08-04-i18n-chat-direction-design.md) |
 
 **Goal:**
-- Site-wide i18n foundation (even strings that stay English for now).
-- Chat: direction from first strong character (RTL vs LTR) per message and
-  input; bubble and composer layout adapt at message level.
+- Site-wide i18n foundation (English catalogs first; other locales later).
+- Chat: direction from first strong character (`dir="auto"`) per message and
+  composer; bubbles and input adapt at message level.
+- App shell stays English/LTR for now (no app-wide RTL mirroring).
+- HITL chrome stays English; dynamic values (e.g. Hebrew titles) still get
+  `dir="auto"`.
 
-**Hebrew chat support** is the primary product driver; full-site i18n is
-the structural requirement.
+**Hebrew chat support** is the primary product driver; full-site Hebrew UI
+translation is a follow-up.
 
 ---
 

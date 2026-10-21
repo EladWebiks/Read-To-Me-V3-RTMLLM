@@ -10,6 +10,8 @@ from bs4.element import NavigableString
 
 from app.modules.scraping.types import BookMetadata, ChapterData
 
+_CHAPTER_NUM_RE = re.compile(r"/chapter-(\d+)", re.IGNORECASE)
+
 
 class NovelbinAdapter:
     """Deterministic parser for novelbin.com pages."""
@@ -43,14 +45,21 @@ class NovelbinAdapter:
         content = _parse_chapter_content(soup)
         next_url = _parse_next_url(soup, base_url)
         book_title, book_author = _parse_breadcrumb_meta(soup)
+        number = _chapter_number_from_url(base_url)
         return ChapterData(
             title=title,
             content=content,
             next_url=next_url,
             book_title=book_title,
             book_author=book_author,
+            chapter_number=number,
             is_placeholder=not content.strip(),
         )
+
+
+def _chapter_number_from_url(base_url: str) -> int | None:
+    match = _CHAPTER_NUM_RE.search(urlparse(base_url).path)
+    return int(match.group(1)) if match else None
 
 
 def _extract_book_title(soup: BeautifulSoup) -> str:

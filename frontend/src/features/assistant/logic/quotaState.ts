@@ -4,16 +4,19 @@ Two sources (spec §3.3): a live quota_exceeded SSE error (resets_at captured
 in session state) and the ['me','usage'] query — so the lock survives reload
 and releases when a raised quota shows up on the next query refresh. */
 import { resetLabel, type MeUsage } from '@/features/usage'
+import type { ChatUiLang } from '@/shared/lib/textDirection'
+import i18n from '@/shared/i18n'
 
 const LLM_KINDS = new Set(['llm_tokens', 'llm_cost_usd'])
 
 export function quotaLock(
   usage: MeUsage | undefined,
   sseResetsAt: string | null,
+  lng: ChatUiLang = 'en',
 ): string | null {
   const resetsAt = sseResetsAt ?? usageBlockedResetsAt(usage)
   if (resetsAt === null) return null
-  return `Monthly AI limit reached — resets ${resetLabel(resetsAt)}`
+  return i18n.t('assistant:errors.quotaLock', { lng, date: resetLabel(resetsAt) })
 }
 
 function usageBlockedResetsAt(usage: MeUsage | undefined): string | null {

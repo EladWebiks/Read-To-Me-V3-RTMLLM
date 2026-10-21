@@ -12,13 +12,22 @@ from app.modules.discovery.models import DiscoveredBook
 
 class _ScoredSource(Protocol):
     chapter_count_estimate: int | None
+    source: str
 
 
-_MAX_QUERIES = 8
+_MAX_QUERIES = 30
 _MIN_TOKEN_LEN = 3
 _EXACT_MATCH = 3
 _PARTIAL_MATCH = 2
 _TOKEN_MATCH = 1
+_MAX_RECOMMEND_LIMIT = 25
+# Alternate English titles → canonical key (after article strip).
+_TITLE_ALIASES: dict[str, str] = {
+    "master of gu": "reverend insanity",
+    "xian ni": "renegade immortal",
+    "ze tian ji": "way of choices",
+    "stellar transformations": "stellar transformation",
+}
 _STOPWORDS = frozenset(
     {
         "a",
@@ -46,14 +55,120 @@ _STOPWORDS = frozenset(
     }
 )
 _WORD_RE = re.compile(r"[a-z0-9']+")
+# Straight, curly, and prime-like apostrophes commonly seen in titles.
+_APOSTROPHE_RE = re.compile("['\u2019\u2032`]")
+_MIN_CANON_LEN = 8
+_EXTENSION_SLACK = 8
+_DERIV_EXTRA = 3
 
 
 def clamp_recommend_limit(limit: int) -> int:
-    """Clamp result count to the recommend contract (1-10)."""
-    return max(1, min(limit, 10))
+    """Clamp result count to the recommend contract (1-25)."""
+    return max(1, min(limit, _MAX_RECOMMEND_LIMIT))
 
 
-def cap_queries(queries: list[str]) -> list[str]:
+def exclude_title_key(title: str) -> str:
+    """Normalize a title for exclude/dedupe (articles, apostrophes, aliases)."""
+    key = _APOSTROPHE_RE.sub("", normalize_title(title))
+    for prefix in ("the ", "a ", "an "):
+        if key.startswith(prefix):
+            key = key[len(prefix) :]
+            break
+    return _TITLE_ALIASES.get(key, key)
+
+
+def is_derivative_title(candidate: str, canon_titles: Sequence[str]) -> bool:
+    """True when candidate is a fanfic/spinoff of a shorter canonical title."""
+    cand = exclude_title_key(candidate)
+    if not cand:
+        return False
+    canons = {exclude_title_key(t) for t in canon_titles if t.strip()}
+    if cand in canons:
+        return False
+    return any(_extends_canon(cand, canon) for canon in canons)
+
+
+def _extends_canon(cand: str, canon: str) -> bool:
+    if len(canon) < _MIN_CANON_LEN:
+        return False
+    if cand.startswith((f"{canon} ", f"{canon}:")):
+        return True
+    if cand.endswith(f" {canon}") or f": {canon}" in cand or f":{canon}" in cand:
+        return True
+    return f" {canon} " in f" {cand} " and len(cand) > len(canon) + _DERIV_EXTRA
+
+
+def dedupe_by_exclude_key(books: Sequence[DiscoveredBook]) -> list[DiscoveredBook]:
+    """Keep first book per exclude key (caller should pass best-first order)."""
+    seen: set[str] = set()
+    out: list[DiscoveredBook] = []
+    for book in books:
+        key = exclude_title_key(book.normalized_title)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(book)
+    return out
+
+
+def matches_recommend_query(book_title: str, queries: Sequence[str]) -> bool:
+    """Recommend results must match a researched/query title, not fuzzy lookalikes."""
+    book_key = exclude_title_key(book_title)
+    return any(exclude_title_key(q) == book_key for q in queries if q.strip())
+
+
+def prefer_source_rows[T](sources: Sequence[T], preferred: str | None) -> list[T]:
+    """Move rows matching ``preferred`` source name to the front."""
+    if not preferred:
+        return list(sources)
+    matched = [s for s in sources if getattr(s, "source", None) == preferred]
+    rest = [s for s in sources if getattr(s, "source", None) != preferred]
+    return [*matched, *rest]
+
+
+def without_excluded_sources[T](sources: Sequence[T], excluded: frozenset[str]) -> list[T]:
+    """Drop sources whose name is in ``excluded`` (lowercased names)."""
+    if not excluded:
+        return list(sources)
+    return [s for s in sources if getattr(s, "source", None) not in excluded]
+
+
+def source_chapter_estimate(
+    sources: Sequence[_ScoredSource],
+    *,
+    preferred: str | None = None,
+) -> int | None:
+    """Best chapter estimate, preferring a named source when it has a count."""
+    if preferred:
+        for src in sources:
+            if src.source == preferred and src.chapter_count_estimate:
+                return src.chapter_count_estimate
+    estimates = [s.chapter_count_estimate for s in sources if s.chapter_count_estimate]
+    return max(estimates) if estimates else None
+
+
+def passes_source_and_chapters(
+    sources: Sequence[_ScoredSource],
+    *,
+    source: str | None,
+    min_chapters: int | None,
+    exclude_sources: frozenset[str] = frozenset(),
+) -> bool:
+    """True when optional source membership and chapter floor are satisfied."""
+    usable = without_excluded_sources(sources, exclude_sources)
+    if not usable:
+        return False
+    if source and not any(s.source == source for s in usable):
+        return False
+    if min_chapters is None:
+        return True
+    best = source_chapter_estimate(usable, preferred=source) or 0
+    if best <= 0:
+        best = max((s.chapter_count_estimate or 0 for s in usable), default=0)
+    return best >= min_chapters
+
+
+def cap_queries(queries: list[str], *, max_queries: int = _MAX_QUERIES) -> list[str]:
     """Dedupe case-insensitively and hard-cap fan-out size."""
     seen: set[str] = set()
     out: list[str] = []
@@ -61,12 +176,12 @@ def cap_queries(queries: list[str]) -> list[str]:
         cleaned = " ".join(raw.split()).strip()
         if not cleaned:
             continue
-        key = normalize_title(cleaned)
+        key = exclude_title_key(cleaned)
         if not key or key in seen:
             continue
         seen.add(key)
         out.append(cleaned)
-        if len(out) >= _MAX_QUERIES:
+        if len(out) >= max_queries:
             break
     return out
 
@@ -137,13 +252,17 @@ def evidence_for(
 
 def _title_match(normalized_book: str, query: str) -> int:
     needle = normalize_title(query)
-    if not needle:
+    if not needle or _is_noisy_extension(normalized_book, needle):
         return 0
-    if normalized_book == needle:
+    if exclude_title_key(normalized_book) == exclude_title_key(needle):
         return _EXACT_MATCH
     if needle in normalized_book or normalized_book in needle:
         return _PARTIAL_MATCH
     return _token_overlap_score(normalized_book, needle)
+
+
+def _is_noisy_extension(normalized_book: str, needle: str) -> bool:
+    return len(normalized_book) > len(needle) + _EXTENSION_SLACK and needle in normalized_book
 
 
 def _token_overlap_score(normalized_book: str, needle: str) -> int:

@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import i18n from '@/shared/i18n'
 import {
   getConversation,
   type ChatMessage,
@@ -45,7 +46,7 @@ export function useLoadConversation(deps: LoadDeps) {
         setConversationId(conv.id)
         setMessages(conv.messages)
       } catch (err) {
-        setError("Couldn't load that conversation.")
+        setError(i18n.t('assistant:history.loadFailed'))
         throw err
       } finally {
         setLoadingHistory(false)

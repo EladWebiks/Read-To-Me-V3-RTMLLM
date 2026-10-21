@@ -10,12 +10,18 @@ import pytest
 from app.modules.discovery.exceptions import DiscoveryRecommendError
 from app.modules.discovery.indexes.research import ResearchTitleHit
 from app.modules.discovery.models import DiscoveredBook
-from app.modules.discovery.service import DiscoveryService
+from app.modules.discovery.schemas import (
+    BookSourceRead,
+    DiscoveredBookRead,
+    DiscoveryRecommendItem,
+)
+from app.modules.discovery.service import DiscoveryService, RecommendSpec
 from app.modules.discovery.types import ExternalSearchHit
 from app.modules.tools.base import Mode, ToolContext
 from app.modules.tools.catalog import build_default_registry
 from app.modules.tools.definitions.recommend_discovered_books import (
     RecommendDiscoveredBooksInput,
+    RecommendDiscoveredBooksOutput,
     RecommendDiscoveredBooksTool,
 )
 from app.modules.tools.exceptions import ToolValidationError
@@ -38,10 +44,14 @@ def test_recommend_input_requires_bounded_lists() -> None:
         RecommendDiscoveredBooksInput.model_validate({"limit": 0})
     with pytest.raises(ValidationError):
         RecommendDiscoveredBooksInput.model_validate(
-            {"candidate_titles": [f"t{i}" for i in range(11)]}
+            {"candidate_titles": [f"t{i}" for i in range(26)]}
         )
-    ok = RecommendDiscoveredBooksInput.model_validate({"candidate_titles": ["A", "B"], "limit": 3})
-    assert ok.limit == 3
+    with pytest.raises(ValidationError):
+        RecommendDiscoveredBooksInput.model_validate({"limit": 26})
+    ok = RecommendDiscoveredBooksInput.model_validate(
+        {"candidate_titles": ["A", "B"], "limit": 20}
+    )
+    assert ok.limit == 20
 
 
 @pytest.mark.unit
@@ -56,6 +66,10 @@ async def test_recommend_tool_rejects_empty_request() -> None:
         session=MagicMock(),
     )
     with (
+        patch(
+            "app.modules.tools.definitions.recommend_discovered_books.prior_recommend_exclude_titles",
+            new=AsyncMock(return_value=[]),
+        ),
         patch("app.modules.tools.definitions.recommend_discovered_books.DiscoveryService") as svc,
         patch("app.modules.tools.definitions.recommend_discovered_books.LlmService"),
         patch("app.modules.tools.definitions.recommend_discovered_books.get_settings"),
@@ -65,6 +79,118 @@ async def test_recommend_tool_rejects_empty_request() -> None:
         )
         with pytest.raises(ToolValidationError):
             await tool.execute(RecommendDiscoveredBooksInput(), ctx)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recommend_tool_merges_prior_excludes() -> None:
+    tool = RecommendDiscoveredBooksTool()
+    ctx = _tool_ctx()
+    recommend = AsyncMock(return_value=_recommend_stub())
+    with (
+        patch(
+            "app.modules.tools.definitions.recommend_discovered_books.prior_recommend_exclude_titles",
+            new=AsyncMock(return_value=["Coiling Dragon", "The Desolate Era"]),
+        ),
+        patch("app.modules.tools.definitions.recommend_discovered_books.DiscoveryService") as svc,
+        patch("app.modules.tools.definitions.recommend_discovered_books.LlmService"),
+        patch("app.modules.tools.definitions.recommend_discovered_books.get_settings"),
+    ):
+        svc.return_value.recommend = recommend
+        out = await tool.execute(
+            RecommendDiscoveredBooksInput(
+                themes=["cultivation"],
+                limit=20,
+                exclude_titles=["Desolate Era"],
+            ),
+            ctx,
+        )
+    assert isinstance(out, RecommendDiscoveredBooksOutput)
+    assert out.count == 1
+    assert out.results[0].title == "Martial Peak"
+    assert out.results[0].discovered_book_id is not None
+    assert recommend.await_args is not None
+    excluded = recommend.await_args.args[1].exclude_titles
+    assert "Coiling Dragon" in excluded
+    assert len([t for t in excluded if "desolate" in t.lower()]) == 1
+
+
+@pytest.mark.unit
+def test_recommend_slim_payload_stays_small() -> None:
+    """Fat nested book dumps were truncated mid-JSON (model then echoed ']}')."""
+    from app.modules.tools.definitions.recommend_discovered_books import RecommendListItem
+
+    rows = [
+        RecommendListItem(
+            discovered_book_id=uuid4(),
+            title=f"Title {i}",
+            author="Author",
+            scrapable_chapters=1000 + i,
+            source="novelfull",
+            premise="short premise",
+        )
+        for i in range(20)
+    ]
+    payload = RecommendDiscoveredBooksOutput(
+        themes=["xianxia"],
+        count=20,
+        results=rows,
+        message="Found 20\n"
+        + "\n".join(f"- {r.title} — {r.author} — ~{r.scrapable_chapters} chapters" for r in rows),
+    )
+    assert len(payload.model_dump_json()) < 12_000
+
+
+@pytest.mark.unit
+def test_recommend_message_row_includes_exact_book_url() -> None:
+    from app.modules.tools.definitions.recommend_discovered_books import _table_row
+
+    stub = _recommend_stub().results[0]
+    stub.book.sources[0].book_url = "https://ranobes.top/novels/244924-reverend-insanity.html"
+    stub.book.sources[0].source = "ranobes"
+    row = _table_row(stub)
+    assert "url: https://ranobes.top/novels/244924-reverend-insanity.html" in row
+    assert "Martial Peak" in row
+
+
+def _tool_ctx() -> ToolContext:
+    return ToolContext(
+        user_id=uuid4(),
+        conversation_id=uuid4(),
+        run_id=uuid4(),
+        mode=Mode.EXTERNAL_ALLOWED,
+        session=MagicMock(),
+    )
+
+
+def _recommend_stub() -> MagicMock:
+    now = datetime.now(UTC)
+    book_id = uuid4()
+    item = DiscoveryRecommendItem(
+        book=DiscoveredBookRead(
+            id=book_id,
+            title="Martial Peak",
+            author="Momo",
+            description="",
+            language="en",
+            sources=[
+                BookSourceRead(
+                    id=uuid4(),
+                    source="novelfull",
+                    book_url="https://example.com/x",
+                    first_chapter_url="https://example.com/x/1",
+                    chapter_count_estimate=100,
+                    created_at=now,
+                    updated_at=now,
+                )
+            ],
+            created_at=now,
+            updated_at=now,
+        ),
+        evidence=["title research"],
+        scrapable_chapters=100,
+    )
+    return MagicMock(queries=["Martial Peak"], themes=["cultivation"], results=[item])
 
 
 @pytest.mark.unit
@@ -82,7 +208,7 @@ async def test_recommend_themes_only_expands_via_title_research() -> None:
 
     with (
         patch(
-            "app.modules.discovery.indexes.research.titles_from_research",
+            "app.modules.discovery.service.titles_from_research",
             new=AsyncMock(
                 return_value=[
                     ResearchTitleHit(
@@ -100,9 +226,7 @@ async def test_recommend_themes_only_expands_via_title_research() -> None:
     ):
         result = await service.recommend(
             uuid4(),
-            themes=["cultivation"],
-            limit=3,
-            exclude_owned=True,
+            RecommendSpec(themes=("cultivation",), limit=3, exclude_owned=True),
         )
     assert "Martial Peak" in searched
     assert result.results[0].book.title == "Martial Peak"
@@ -116,12 +240,12 @@ async def test_recommend_themes_hard_fails_when_research_empty() -> None:
     service, _searched, _books = _mock_recommend_service(llm=llm)
     with (
         patch(
-            "app.modules.discovery.indexes.research.titles_from_research",
+            "app.modules.discovery.service.titles_from_research",
             new=AsyncMock(return_value=[]),
         ),
         pytest.raises(DiscoveryRecommendError, match="Title research did not return"),
     ):
-        await service.recommend(uuid4(), themes=["cultivation"], limit=3)
+        await service.recommend(uuid4(), RecommendSpec(themes=("cultivation",), limit=3))
 
 
 @pytest.mark.unit
@@ -129,7 +253,7 @@ async def test_recommend_themes_hard_fails_when_research_empty() -> None:
 async def test_recommend_themes_require_llm() -> None:
     service, _searched, _books = _mock_recommend_service(llm=None)
     with pytest.raises(DiscoveryRecommendError, match="requires title research"):
-        await service.recommend(uuid4(), themes=["cultivation"], limit=3)
+        await service.recommend(uuid4(), RecommendSpec(themes=("cultivation",), limit=3))
 
 
 @pytest.mark.unit
@@ -140,7 +264,7 @@ async def test_recommend_hard_fails_when_no_scrapable_hits() -> None:
 
     with (
         patch(
-            "app.modules.discovery.indexes.research.titles_from_research",
+            "app.modules.discovery.service.titles_from_research",
             new=AsyncMock(
                 return_value=[ResearchTitleHit(title="Missing Novel", note="title research")]
             ),
@@ -151,8 +275,56 @@ async def test_recommend_hard_fails_when_no_scrapable_hits() -> None:
         ),
         pytest.raises(DiscoveryRecommendError, match="not found on supported scrape"),
     ):
-        await service.recommend(uuid4(), themes=["cultivation"], limit=3)
+        await service.recommend(uuid4(), RecommendSpec(themes=("cultivation",), limit=3))
     assert "Missing Novel" in searched
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recommend_refills_research_when_scrapable_short() -> None:
+    llm = MagicMock()
+    service, searched, books = _mock_recommend_service(llm=llm)
+    books.clear()
+    service._repo.add_book = AsyncMock(side_effect=_persist_book(books))  # type: ignore[method-assign]
+    research = AsyncMock(side_effect=_refill_research_batches())
+    with (
+        patch("app.modules.discovery.service.titles_from_research", new=research),
+        patch(
+            "app.modules.discovery.service.search_all_sources",
+            side_effect=_search_side_effect(searched),
+        ),
+    ):
+        result = await service.recommend(
+            uuid4(),
+            RecommendSpec(themes=("xianxia",), limit=2, exclude_owned=True),
+        )
+    assert research.await_count == 2
+    assert {row.book.title for row in result.results} == {"Martial Peak", "Coiling Dragon"}
+    assert {"Ghost Novel", "Martial Peak", "Coiling Dragon"} <= set(searched)
+
+
+def _persist_book(books: dict[str, DiscoveredBook]) -> object:
+    async def add_book(book: DiscoveredBook) -> DiscoveredBook:
+        if book.id is None:
+            book.id = uuid4()
+        book.description = book.description or ""
+        book.language = book.language or "en"
+        book.created_at = book.created_at or datetime.now(UTC)
+        book.updated_at = book.updated_at or book.created_at
+        books[book.title] = book
+        return book
+
+    return add_book
+
+
+def _refill_research_batches() -> list[list[ResearchTitleHit]]:
+    return [
+        [ResearchTitleHit(title="Ghost Novel", note="title research: missing")],
+        [
+            ResearchTitleHit(title="Martial Peak", note="title research: classic"),
+            ResearchTitleHit(title="Coiling Dragon", note="title research: classic"),
+        ],
+    ]
 
 
 @pytest.mark.unit
@@ -169,7 +341,7 @@ async def test_recommend_service_one_batch_covers_many_titles() -> None:
 
     with (
         patch(
-            "app.modules.discovery.indexes.research.titles_from_research",
+            "app.modules.discovery.service.titles_from_research",
             new=AsyncMock(return_value=[]),
         ),
         patch(
@@ -180,10 +352,12 @@ async def test_recommend_service_one_batch_covers_many_titles() -> None:
     ):
         result = await service.recommend(
             uuid4(),
-            candidate_titles=["Book One", "Book Two", "Owned Tale"],
-            themes=["cultivation"],
-            limit=3,
-            exclude_owned=True,
+            RecommendSpec(
+                candidate_titles=("Book One", "Book Two", "Owned Tale"),
+                themes=("cultivation",),
+                limit=3,
+                exclude_owned=True,
+            ),
         )
     assert "Book One" in searched
     assert "Book Two" in searched
@@ -221,7 +395,7 @@ def _mock_recommend_service(
     return service, searched, books
 
 
-async def _fake_sources(book_ids: list) -> list[MagicMock]:
+async def _fake_sources(book_ids: list[object]) -> list[MagicMock]:
     out: list[MagicMock] = []
     for book_id in book_ids:
         src = MagicMock()
@@ -243,6 +417,7 @@ def _search_side_effect(searched: list[str]) -> object:
         "Book Two": _hit("Book Two", "novelbin", 200),
         "Owned Tale": _hit("Owned Tale", "novellunar", 50),
         "Martial Peak": _hit("Martial Peak", "novelfull", 5000),
+        "Coiling Dragon": _hit("Coiling Dragon", "novelfull", 800),
     }
 
     async def fake_search(query: str) -> list[ExternalSearchHit]:

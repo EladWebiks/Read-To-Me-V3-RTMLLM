@@ -490,7 +490,7 @@ body {
 }
 
 .assistant-md :where(ul, ol) {
-  padding-left: 1.25em;
+  padding-inline-start: 1.25em;
 }
 
 .assistant-md li {
@@ -501,7 +501,8 @@ body {
   font-weight: 600;
 }
 
-.assistant-md :where(a) {
+.assistant-md :where(a),
+.assistant-md :where(button[data-streamdown='link']) {
   color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -528,9 +529,59 @@ body {
 }
 
 .assistant-md :where(blockquote) {
-  border-left: 3px solid var(--border);
-  padding-left: 0.75em;
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 0.75em;
   color: var(--muted-foreground);
+}
+
+/* Prefer wrapping over horizontal scroll in the chat column. */
+.assistant-md [data-streamdown='table-wrapper'] {
+  max-width: 100%;
+}
+
+.assistant-md [data-streamdown='table-wrapper'] > div {
+  overflow-x: visible;
+  overflow-y: visible;
+  max-width: 100%;
+}
+
+.assistant-md [data-streamdown='table'],
+.assistant-md table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.assistant-md :where(th, td),
+.assistant-md [data-streamdown='table-header-cell'],
+.assistant-md [data-streamdown='table-cell'] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+  hyphens: auto;
+}
+
+/* Streamdown portals fullscreen tables to document.body at z-50; the assistant
+   panel is z-60, so raise the overlay above chat and present it as a modal. */
+body > [data-streamdown='table-fullscreen'] {
+  z-index: 80;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--foreground) 35%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+body > [data-streamdown='table-fullscreen'] > div {
+  height: min(92vh, 56rem);
+  max-width: min(96vw, 72rem);
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--foreground) 22%, transparent);
 }
 
 /* Sheet (settings drawer): overlay fade + panel slide. Radix waits on

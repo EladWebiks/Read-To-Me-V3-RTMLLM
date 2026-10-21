@@ -9,6 +9,7 @@ import pytest
 from app.modules.discovery.exceptions import DiscoveryRecommendError
 from app.modules.discovery.indexes.research import (
     ResearchTitleHit,
+    TitleResearchSpec,
     _hits_from_payload,
     _request,
     _ResearchTitle,
@@ -51,7 +52,7 @@ def test_hits_support_custom_note_prefix() -> None:
 
 
 def test_research_request_disables_web_search() -> None:
-    req = _request(["cultivation"], "Against the Gods", limit=5)
+    req = _request(["cultivation"], "Against the Gods", limit=5, exclude_titles=[])
     assert req.use_web_search is False
     assert req.response_model is _ResearchTitles
 
@@ -67,6 +68,5 @@ async def test_titles_from_research_surfaces_llm_errors() -> None:
         await titles_from_research(
             llm,
             user_id=uuid4(),
-            themes=["cultivation"],
-            seed_title=None,
+            spec=TitleResearchSpec(themes=("cultivation",), seed_title=None),
         )

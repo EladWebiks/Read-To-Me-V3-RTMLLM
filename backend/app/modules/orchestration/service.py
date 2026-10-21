@@ -43,7 +43,11 @@ from app.modules.orchestration.hitl_pause import (
     snapshot_run_id,
 )
 from app.modules.orchestration.policy import PolicyService
-from app.modules.orchestration.prompts import SYSTEM_PROMPT
+from app.modules.orchestration.prompts import build_system_prompt
+from app.modules.orchestration.reply_language import (
+    format_reply_language_block,
+    reply_lang_from_history,
+)
 from app.modules.orchestration.ui_context import (
     choice_request_for_tool,
     client_action_for_tool,
@@ -72,7 +76,7 @@ from app.modules.tools.registry import ToolRegistry
 from app.modules.usage.read_service import UsageReadService
 from app.modules.users.schemas import UserRead
 
-_MAX_TOOL_RESULT_CHARS = 6_000
+_MAX_TOOL_RESULT_CHARS = 24_000
 
 # Persisted role for quota refusals. NOT a member of llm.types.Role on
 # purpose: _to_llm_messages drops roles Role() cannot parse, which is what
@@ -189,6 +193,7 @@ class OrchestrationService:
     ) -> AsyncIterator[ChatSseEvent]:
         """Yield SSE events for one tool-using assistant turn."""
         policy = await PolicyService(self._session, self._settings).resolve(user)
+        yield ChatSseEvent("step", {"label": "Preparing…"})
         try:
             await self._check_llm_quota(user)
         except QuotaExceededError as exc:
@@ -702,12 +707,18 @@ def _to_llm_messages(
     summary: str | None = None,
     ui_context: dict[str, Any] | None = None,
 ) -> list[Message]:
-    messages = [Message(role=Role.SYSTEM, content=SYSTEM_PROMPT)]
+    messages = [Message(role=Role.SYSTEM, content=build_system_prompt())]
     if summary:
         messages.append(Message(role=Role.SYSTEM, content=summary_context_block(summary)))
     block = format_ui_context_block(ui_context)
     if block:
         messages.append(Message(role=Role.SYSTEM, content=block))
+    messages.append(
+        Message(
+            role=Role.SYSTEM,
+            content=format_reply_language_block(reply_lang_from_history(history)),
+        )
+    )
     for row in history:
         try:
             role = Role(row.role)

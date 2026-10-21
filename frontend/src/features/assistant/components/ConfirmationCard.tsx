@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTtsSettings } from '@/features/reader/hooks/ttsSettingsStore'
+import type { ChatUiLang } from '@/shared/lib/textDirection'
 import type { ConfirmationPayload } from '../api/chatApi'
 import { ConfirmFields } from './ConfirmationFields'
 import { ConfirmationPending, ResolvedConfirm } from './ConfirmationPending'
@@ -7,12 +8,13 @@ import { defaultsFrom, formValues, validateFields } from './confirmFormUtils'
 
 type Props = {
   payload: ConfirmationPayload
+  uiLang: ChatUiLang
   busy: boolean
   onResolve: (approved: boolean, values?: Record<string, unknown>) => void
 }
 
 /** Form / binary HITL card for confirmation_required tools. */
-export function ConfirmationCard({ payload, busy, onResolve }: Props) {
+export function ConfirmationCard({ payload, uiLang, busy, onResolve }: Props) {
   const tts = useTtsSettings()
   const [values, setValues] = useState(() =>
     defaultsFrom(payload, {
@@ -22,7 +24,9 @@ export function ConfirmationCard({ payload, busy, onResolve }: Props) {
     }),
   )
   const [error, setError] = useState<string | null>(null)
-  if (payload.status !== 'pending') return <ResolvedConfirm payload={payload} />
+  if (payload.status !== 'pending') {
+    return <ResolvedConfirm payload={payload} uiLang={uiLang} />
+  }
 
   const fields = payload.form?.fields ?? []
   const submit = () => {
@@ -38,6 +42,7 @@ export function ConfirmationCard({ payload, busy, onResolve }: Props) {
   return (
     <ConfirmationPending
       payload={payload}
+      uiLang={uiLang}
       busy={busy}
       error={error}
       onApprove={submit}
@@ -47,6 +52,7 @@ export function ConfirmationCard({ payload, busy, onResolve }: Props) {
         tool={payload.tool}
         fields={fields}
         values={values}
+        uiLang={uiLang}
         busy={busy}
         onChange={(name, value) => {
           setError(null)

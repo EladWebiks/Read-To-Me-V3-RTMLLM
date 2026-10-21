@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.modules.scraping.exceptions import PreviewError, UnsupportedSourceError
-from app.modules.scraping.registry import get_adapter
+from app.modules.scraping.registry import get_adapter, normalize_scrape_url, supported_source_names
 from app.modules.scraping.schemas import ScrapeJobCreate
 from app.modules.scraping.service import ScrapingService
 from app.modules.tools.base import (
@@ -26,7 +26,7 @@ class ScrapeBookRangeInput(BaseModel):
     url: str = Field(
         min_length=8,
         max_length=2048,
-        description="Book or chapter URL on a supported source",
+        description=f"Book or chapter URL on a supported source ({supported_source_names()})",
     )
     start_chapter: int | None = Field(
         default=1,
@@ -79,6 +79,8 @@ class ScrapeBookRangeTool(BaseTool):
     name = "scrape_book_range"
     description = (
         "Import/scrape a book from a supported novel-site URL into the user's library. "
+        f"Supported sources: {supported_source_names()} "
+        "(novelfire includes mirror host novelphoenix.com). "
         "Call when the user provides a URL and wants to add/scrape/import. "
         "Map any chapter range they already stated into start_chapter and "
         "chapter_count (count = end - start + 1 when both ends are given; "
@@ -98,7 +100,7 @@ class ScrapeBookRangeTool(BaseTool):
     async def authorize(self, inp: BaseModel, ctx: ToolContext) -> None:
         data = ScrapeBookRangeInput.model_validate(inp.model_dump())
         try:
-            get_adapter(data.url)
+            get_adapter(normalize_scrape_url(data.url))
         except UnsupportedSourceError as exc:
             raise ToolValidationError(str(exc)) from exc
 
@@ -108,11 +110,11 @@ class ScrapeBookRangeTool(BaseTool):
         ctx: ToolContext,
     ) -> ConfirmationPresentation:
         data = ScrapeBookRangeInput.model_validate(inp.model_dump())
-        return await _scrape_presentation(ctx, data.url)
+        return await _scrape_presentation(ctx, normalize_scrape_url(data.url))
 
     async def execute(self, inp: BaseModel, ctx: ToolContext) -> BaseModel:
         data = ScrapeBookRangeInput.model_validate(inp.model_dump())
-        create = _to_job_create(data)
+        create = _to_job_create(data.model_copy(update={"url": normalize_scrape_url(data.url)}))
         try:
             job = await ScrapingService(ctx.session).create_job(ctx.user_id, create)
         except (UnsupportedSourceError, PreviewError) as exc:

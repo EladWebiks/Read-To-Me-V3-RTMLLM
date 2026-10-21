@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import '@/shared/i18n'
 import type { ConfirmationPayload } from '../api/chatApi'
 import { ConfirmationCard } from './ConfirmationCard'
 
@@ -43,7 +44,14 @@ function payload(overrides: Partial<ConfirmationPayload> = {}): ConfirmationPayl
 
 describe('ConfirmationCard', () => {
   it('shows action and book title', () => {
-    render(<ConfirmationCard payload={payload()} busy={false} onResolve={vi.fn()} />)
+    render(
+      <ConfirmationCard
+        payload={payload()}
+        uiLang="en"
+        busy={false}
+        onResolve={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Import book')).toBeTruthy()
     expect(screen.getByText('Starfall')).toBeTruthy()
     expect(screen.queryByText('novelbin')).toBeNull()
@@ -54,6 +62,7 @@ describe('ConfirmationCard', () => {
     render(
       <ConfirmationCard
         payload={payload({ form: { fields: [] }, subtitle: 'novelbin' })}
+        uiLang="en"
         busy={false}
         onResolve={vi.fn()}
       />,
@@ -63,7 +72,14 @@ describe('ConfirmationCard', () => {
 
   it('calls onResolve(true) when Approve is clicked', () => {
     const onResolve = vi.fn()
-    render(<ConfirmationCard payload={payload()} busy={false} onResolve={onResolve} />)
+    render(
+      <ConfirmationCard
+        payload={payload()}
+        uiLang="en"
+        busy={false}
+        onResolve={onResolve}
+      />,
+    )
     fireEvent.click(screen.getAllByRole('button', { name: 'Approve' })[0]!)
     expect(onResolve).toHaveBeenCalledWith(true, expect.any(Object))
   })

@@ -95,7 +95,7 @@ def test_llm_runtime_defaults() -> None:
     assert runtime.max_turn_tokens_in == 64_000
     assert runtime.max_turn_tokens_out == 8_192
     assert runtime.max_turn_cost_usd == 0.05
-    assert runtime.run_deadline_seconds == 150
+    assert runtime.run_deadline_seconds == 300
     assert runtime.context_recent_messages == 10
     assert runtime.summary_trigger_tokens == 12_000
     assert runtime.summary_max_output_tokens == 1_200

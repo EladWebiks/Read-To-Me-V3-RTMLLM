@@ -3,6 +3,7 @@ import {
   defaultDownloadRate,
   defaultVoice,
 } from '@/features/downloads/logic/audioModalUtils'
+import type { ChatUiLang } from '@/shared/lib/textDirection'
 import type { ConfirmationFormField } from '../api/chatApi'
 import { ConfirmationFieldControl } from './ConfirmationFieldControl'
 import { fieldRows, shortLabel } from './confirmFieldLayout'
@@ -11,6 +12,7 @@ type Props = {
   tool: string
   fields: ConfirmationFormField[]
   values: Record<string, unknown>
+  uiLang: ChatUiLang
   busy: boolean
   onChange: (name: string, value: unknown) => void
 }
@@ -44,6 +46,7 @@ export function ConfirmFields(props: Props) {
                 tool={props.tool}
                 field={field}
                 values={props.values}
+                uiLang={props.uiLang}
                 busy={props.busy}
                 onChange={change}
               />
@@ -55,6 +58,7 @@ export function ConfirmFields(props: Props) {
             tool={props.tool}
             field={row[0]!}
             values={props.values}
+            uiLang={props.uiLang}
             busy={props.busy}
             onChange={change}
           />
@@ -68,13 +72,14 @@ function FieldLabel(props: {
   tool: string
   field: ConfirmationFormField
   values: Record<string, unknown>
+  uiLang: ChatUiLang
   busy: boolean
   onChange: (name: string, value: unknown) => void
 }) {
   return (
     <label className="block min-w-0 space-y-0.5">
       <span className="text-[11px] font-medium text-muted-foreground">
-        {shortLabel(props.field)}
+        {shortLabel(props.field, props.uiLang)}
       </span>
       <ConfirmationFieldControl {...props} />
     </label>

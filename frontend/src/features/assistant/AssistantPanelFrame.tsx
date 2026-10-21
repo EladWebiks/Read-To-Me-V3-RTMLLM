@@ -1,5 +1,6 @@
 import { useRef, type RefObject } from 'react'
 import { motion, type DragControls, type MotionValue } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 import { AssistantPanelChrome } from './components/AssistantPanelChrome'
 import { assistantPanelClass, assistantPanelStyle } from './assistantPanelStyle'
 
@@ -38,13 +39,14 @@ export function AssistantPanelFrame({
   onClose,
 }: Props) {
   const loadRef = useRef<(id: string) => Promise<void>>(async () => {})
+  const { t } = useTranslation('assistant')
 
   return (
     <motion.div
       ref={panelRef}
       role="dialog"
       aria-modal={expanded}
-      aria-label="Assistant"
+      aria-label={t('ariaLabel')}
       drag={expanded ? false : compact ? 'y' : true}
       dragControls={dragControls}
       dragListener={false}

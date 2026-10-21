@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import '@/shared/i18n'
 import { AssistantComposer } from './AssistantComposer'
 
 const NOTICE = 'Monthly AI limit reached — resets August 1, 2026'

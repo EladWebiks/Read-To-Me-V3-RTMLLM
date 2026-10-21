@@ -12,7 +12,7 @@ export function useChatActions(args: ChatActionArgs) {
   const sendText = useCallback(
     async (raw: string) => {
       const text = raw.trim()
-      if (!text || args.sending || args.pendingConfirm) return
+      if (!text || args.sendingGateRef.current || args.pendingConfirm) return
       await streamUserText(args, text)
     },
     [args],
@@ -20,7 +20,7 @@ export function useChatActions(args: ChatActionArgs) {
 
   const send = useCallback(async () => {
     const text = args.draft.trim()
-    if (!text || args.sending || args.pendingConfirm) return
+    if (!text || args.sendingGateRef.current || args.pendingConfirm) return
     args.setDraft('')
     await sendText(text)
   }, [args, sendText])

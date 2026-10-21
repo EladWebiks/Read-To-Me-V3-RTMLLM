@@ -8,8 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.core.normalize import normalize_title
 from app.modules.discovery.exceptions import DiscoveryRecommendError
+from app.modules.discovery.recommend import exclude_title_key
 from app.modules.llm.capabilities import ModelCapability
 from app.modules.llm.exceptions import LlmError
 from app.modules.llm.service import LlmService
@@ -17,7 +17,7 @@ from app.modules.llm.types import Message, Role, StructuredOutputRequest
 
 logger = logging.getLogger(__name__)
 
-_MAX_TITLES = 10
+_MAX_TITLES = 25
 _SYSTEM = (
     "You recommend ENGLISH-TRANSLATED web novels and light novels "
     "(xianxia, xuanhuan, wuxia, cultivation, system, isekai, KR/CN/JP web serials). "
@@ -26,8 +26,16 @@ _SYSTEM = (
     "(not Peter Bernstein's finance book). "
     "Prefer common English fan-translation titles readers search on NovelFull-style "
     "sites (e.g. Martial God Asura, Coiling Dragon, I Shall Seal the Heavens). "
+    "Treat well-known alternate titles as the same book (e.g. Master of Gu = "
+    "Reverend Insanity; Xian Ni = Renegade Immortal) — do not recommend an alias "
+    "of an excluded or seed title. "
+    "Never recommend fanfiction, spinoffs, 'system' clones, or titles that extend a "
+    "famous series with a colon/dash subtitle (e.g. 'Martial Peak - Rise of…', "
+    "'Desolate Era: Hatching…'). Prefer the original main series only. "
     "Only return widely known titles you are confident exist — do not invent "
-    "lookalike or nonsense titles. Return JSON only matching the schema."
+    "lookalike or nonsense titles. For each title, reason must be a one-sentence "
+    "no-spoiler premise (setting + hook), not just 'similar cultivation'. "
+    "Return JSON only matching the schema."
 )
 
 
@@ -48,23 +56,35 @@ class ResearchTitleHit:
     note: str
 
 
+@dataclass(frozen=True, slots=True)
+class TitleResearchSpec:
+    """Inputs for theme/seed title expansion."""
+
+    themes: tuple[str, ...]
+    seed_title: str | None
+    limit: int = _MAX_TITLES
+    exclude_titles: tuple[str, ...] = ()
+
+
 async def titles_from_research(
     llm: LlmService,
     *,
     user_id: UUID,
-    themes: list[str],
-    seed_title: str | None,
-    limit: int = _MAX_TITLES,
+    spec: TitleResearchSpec,
     conversation_id: UUID | None = None,
 ) -> list[ResearchTitleHit]:
     """Expand themes/seed via structured LLM titles (no Google Search grounding)."""
-    cleaned_themes = [t.strip() for t in themes if t.strip()]
-    seed = (seed_title or "").strip() or None
+    cleaned_themes = [t.strip() for t in spec.themes if t.strip()]
+    seed = (spec.seed_title or "").strip() or None
     if not cleaned_themes and seed is None:
         return []
+    # Theme/seed research: always pull a full pool so site filtering can still fill limit.
+    want = max(spec.limit, _MAX_TITLES if (cleaned_themes or seed) else spec.limit)
+    capped = max(1, min(want, _MAX_TITLES))
+    excluded = [t.strip() for t in spec.exclude_titles if t.strip()]
     try:
         payload = await llm.generate_structured(
-            _request(cleaned_themes, seed, limit=limit),
+            _request(cleaned_themes, seed, limit=capped, exclude_titles=excluded),
             user_id=user_id,
             capability=ModelCapability.STRUCTURED_EXTRACTION,
             conversation_id=conversation_id,
@@ -75,7 +95,12 @@ async def titles_from_research(
     except Exception as exc:
         logger.warning("discovery title research failed: %s", exc)
         raise DiscoveryRecommendError(f"Title research failed: {exc}") from exc
-    return _hits_from_payload(payload, seed_title=seed, limit=limit)
+    return _hits_from_payload(
+        payload,
+        seed_title=seed,
+        limit=capped,
+        exclude_titles=excluded,
+    )
 
 
 def _request(
@@ -83,6 +108,7 @@ def _request(
     seed: str | None,
     *,
     limit: int,
+    exclude_titles: list[str],
 ) -> StructuredOutputRequest[_ResearchTitles]:
     parts = [
         f"Recommend up to {limit} DISTINCT English-translated web novels.",
@@ -93,7 +119,12 @@ def _request(
         parts.append(f"Seed web novel: {seed}")
     if themes:
         parts.append("Themes/tropes: " + ", ".join(themes))
-    parts.append('Respond as JSON: {"titles":[{"title":"...","reason":"why similar"}]}')
+    if exclude_titles:
+        sample = ", ".join(exclude_titles[:40])
+        parts.append(f"Do NOT include these already-suggested titles: {sample}")
+    parts.append(
+        'Respond as JSON: {"titles":[{"title":"...","reason":"one-sentence no-spoiler premise"}]}'
+    )
     return StructuredOutputRequest(
         messages=[
             Message(role=Role.SYSTEM, content=_SYSTEM),
@@ -101,7 +132,7 @@ def _request(
         ],
         response_model=_ResearchTitles,
         temperature=0.2,
-        max_output_tokens=1024,
+        max_output_tokens=2048,
         task="discovery_research",
         use_web_search=False,
     )
@@ -112,17 +143,19 @@ def _hits_from_payload(
     *,
     seed_title: str | None,
     limit: int,
+    exclude_titles: list[str] | None = None,
     note_prefix: str = "title research",
 ) -> list[ResearchTitleHit]:
-    seed_norm = normalize_title(seed_title) if seed_title else None
+    seed_norm = exclude_title_key(seed_title) if seed_title else None
+    excluded = {exclude_title_key(t) for t in (exclude_titles or []) if t.strip()}
     out: list[ResearchTitleHit] = []
     seen: set[str] = set()
     for row in payload.titles:
         title = " ".join(row.title.split()).strip()
         if not title:
             continue
-        key = normalize_title(title)
-        if not key or key in seen:
+        key = exclude_title_key(title)
+        if not key or key in seen or key in excluded:
             continue
         if seed_norm is not None and key == seed_norm:
             continue

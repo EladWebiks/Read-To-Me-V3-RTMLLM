@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Input, Label } from '@/shared/ui'
+import { SupportedSitesLinks } from './SupportedSitesLinks'
 
 type Props = {
   url: string
@@ -24,9 +25,7 @@ export function ScrapeDialogFields(p: Props) {
           required
           autoFocus
         />
-        <p className="text-xs text-muted-foreground">
-          novelbin · novelfull · freewebnovel · novellunar
-        </p>
+        <SupportedSitesLinks />
       </Labeled>
       <Labeled id="book-page" label="Book Page URL (optional)">
         <Input

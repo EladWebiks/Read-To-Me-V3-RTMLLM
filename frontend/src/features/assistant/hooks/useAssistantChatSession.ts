@@ -27,6 +27,7 @@ export function useAssistantChatSession() {
   const feedback = useChatFeedbackState()
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmationPayload | null>(null)
   const [abortRef] = useState(() => ({ current: null as AbortController | null }))
+  const [sendingGateRef] = useState(() => ({ current: false }))
 
   useHydrateConversation(setMessages, setConversationId)
   const clearLocal = useClearLocalChat({
@@ -36,10 +37,12 @@ export function useAssistantChatSession() {
     setPendingConfirm,
     setError: feedback.setError,
     setLiveStatus: feedback.setLiveStatus,
+    sendingGateRef,
   })
   useNewChatReset(newChatNonce, abortRef, clearLocal)
   const cancel = useCancelAssistant(
     abortRef,
+    sendingGateRef,
     setMessages,
     setSending,
     feedback.setLiveStatus,
@@ -64,6 +67,7 @@ export function useAssistantChatSession() {
     pendingConfirm,
     setPendingConfirm,
     abortRef,
+    sendingGateRef,
     cancel,
   }
 }

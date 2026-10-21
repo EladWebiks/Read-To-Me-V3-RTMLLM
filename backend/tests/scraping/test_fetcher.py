@@ -1,11 +1,33 @@
 """Unit tests for SSRF-safe fetcher — no network calls."""
 
 import pytest
-from app.core.fetcher import FetchError, validate_url
+from app.core.fetcher import FetchError, looks_like_bot_block, validate_url
 
 pytestmark = pytest.mark.unit
 
 ALLOW = {"novelbin.com", "novelfull.net"}
+
+
+class TestBotBlock:
+    def test_short_cloudflare_challenge_is_blocked(self) -> None:
+        html = "<html><body>Just a moment... challenge-platform</body></html>"
+        assert looks_like_bot_block(html)
+
+    def test_short_cloudflare_page_is_blocked(self) -> None:
+        assert looks_like_bot_block("<html>cloudflare</html>")
+
+    def test_large_novelfire_page_with_cf_scripts_not_blocked(self) -> None:
+        # Live NovelFire HTML embeds challenge-platform JS alongside real content.
+        body = (
+            "x" * 9000
+            + "challenge-platform cdn-cgi/challenge"
+            + '<div id="content"><p>Hello</p></div>'
+        )
+        assert not looks_like_bot_block(body)
+
+    def test_novellunar_chapter_without_id_content_not_blocked(self) -> None:
+        body = "x" * 9000 + '<article><div style="white-space: pre-wrap">hi</div></article>'
+        assert not looks_like_bot_block(body)
 
 
 class TestAllowlist:

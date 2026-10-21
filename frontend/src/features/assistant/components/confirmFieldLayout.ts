@@ -1,4 +1,6 @@
 import type { ConfirmationFormField } from '../api/chatApi'
+import type { ChatUiLang } from '@/shared/lib/textDirection'
+import i18n from '@/shared/i18n'
 
 /** Field pairs rendered on one row in the HITL form. */
 const FIELD_PAIRS: ReadonlyArray<readonly [string, string]> = [
@@ -7,14 +9,20 @@ const FIELD_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ['provider', 'rate'],
 ]
 
-const SHORT_LABELS: Record<string, string> = {
-  chapter_from: 'From',
-  chapter_to: 'To (inclusive)',
-  start_chapter: 'From',
-  chapter_count: 'Count',
-  provider: 'Provider',
-  voice: 'Voice',
-  rate: 'Rate',
+const SHORT_LABEL_KEYS = [
+  'chapter_from',
+  'chapter_to',
+  'start_chapter',
+  'chapter_count',
+  'provider',
+  'voice',
+  'rate',
+] as const
+
+type ShortLabelKey = (typeof SHORT_LABEL_KEYS)[number]
+
+function isShortLabelKey(name: string): name is ShortLabelKey {
+  return (SHORT_LABEL_KEYS as readonly string[]).includes(name)
 }
 
 /** Group fields into rows; preserve declaration order. */
@@ -39,8 +47,11 @@ export function fieldRows(fields: ConfirmationFormField[]): ConfirmationFormFiel
   return rows
 }
 
-export function shortLabel(field: ConfirmationFormField): string {
-  return SHORT_LABELS[field.name] ?? field.label
+export function shortLabel(field: ConfirmationFormField, lng: ChatUiLang = 'en'): string {
+  if (isShortLabelKey(field.name)) {
+    return i18n.t(`assistant:fields.${field.name}`, { lng })
+  }
+  return field.label
 }
 
 /** Subtitle duplicates editable chapter range — skip it on the card. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import '@/shared/i18n'
 import type { ConfirmationFormField } from '../api/chatApi'
 import { fieldRows, shortLabel, showConfirmSubtitle } from './confirmFieldLayout'
 

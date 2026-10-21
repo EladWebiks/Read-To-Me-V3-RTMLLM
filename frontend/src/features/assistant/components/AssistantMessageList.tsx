@@ -1,7 +1,10 @@
 import { MessageSquare } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../api/chatApi'
+import { useChatUiLang } from '../hooks/useChatUiLang'
 import { useStickToBottom } from '../hooks/useStickToBottom'
 import { isVisibleToolMessage } from '../logic/toolVisibility'
+import { langFromMessages, textDirForLang } from '@/shared/lib/textDirection'
 import { ChatTurn } from './ChatTurn'
 import { LiveStatusLine } from './LiveStatusLine'
 
@@ -46,6 +49,7 @@ export function AssistantMessageList({
         <ChatTurn
           key={m.id}
           message={m}
+          uiLang={langFromMessages(visible, index)}
           streaming={sending && m.role === 'assistant' && index === visible.length - 1}
           confirmBusy={confirmBusy}
           choicesDisabled={choicesDisabled}
@@ -54,19 +58,27 @@ export function AssistantMessageList({
         />
       ))}
       {liveStatus ? <LiveStatusLine key={liveStatus} label={liveStatus} /> : null}
-      {error ? (
-        <div
-          role="alert"
-          className="rounded-2xl border border-destructive/35 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
-        >
-          {error}
-        </div>
-      ) : null}
+      {error ? <ErrorBanner text={error} /> : null}
+    </div>
+  )
+}
+
+function ErrorBanner({ text }: { text: string }) {
+  const lang = useChatUiLang()
+  return (
+    <div
+      dir={textDirForLang(lang)}
+      role="alert"
+      className="rounded-2xl border border-destructive/35 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
+    >
+      {text}
     </div>
   )
 }
 
 function EmptyState({ framed }: { framed: boolean }) {
+  const lang = useChatUiLang()
+  const { t } = useTranslation('assistant', { lng: lang })
   return (
     <div
       className={`flex min-h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center ${
@@ -77,10 +89,8 @@ function EmptyState({ framed }: { framed: boolean }) {
         <MessageSquare className="h-6 w-6" />
       </div>
       <div className="max-w-sm space-y-1.5">
-        <p className="text-sm font-medium text-foreground">Ask anything</p>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Library tools, play, downloads, and scrape confirmation when needed.
-        </p>
+        <p className="text-sm font-medium text-foreground">{t('emptyTitle')}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{t('emptyBody')}</p>
       </div>
     </div>
   )

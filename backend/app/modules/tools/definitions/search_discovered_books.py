@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.modules.discovery.schemas import DiscoveredBookRead
 from app.modules.discovery.service import DiscoveryService
+from app.modules.scraping.registry import supported_source_names
 from app.modules.tools.base import BaseTool, RiskLevel, ToolContext
 
 
@@ -30,11 +31,15 @@ class SearchDiscoveredBooksTool(BaseTool):
 
     name = "search_discovered_books"
     description = (
-        "Search for ONE book by exact title/alias on supported novel sites when the user "
-        "named that specific title (not 'books like X'). For similarity/theme prompts use "
+        "Search for ONE book by exact title/alias on supported novel sites "
+        f"({supported_source_names()}) when the user named that specific title "
+        "(not 'books like X'), including follow-ups like 'what is X about?' for a "
+        "title you previously recommended. For similarity/theme prompts use "
         "recommend_discovered_books instead. Returns candidates with ranked sources "
-        "(recommended = richest known chapter count). If several title matches, call "
-        "propose_choices, then import_discovered_book. Requires external_allowed mode."
+        "(recommended = richest known chapter count). Site blurbs are often empty — "
+        "still return matches so you can answer with sources/ids; for premise see "
+        "system grounding rules. If several title matches, call propose_choices, then "
+        "import_discovered_book. Requires external_allowed mode."
     )
     input_model = SearchDiscoveredBooksInput
     output_model = SearchDiscoveredBooksOutput

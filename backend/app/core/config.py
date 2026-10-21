@@ -204,7 +204,7 @@ class LlmRuntimeSettings(_GroupSettings):
         description="Max estimated USD cost allowed for one assistant turn.",
     )
     run_deadline_seconds: int = Field(
-        default=150,
+        default=300,
         ge=1,
         validation_alias="llm_run_deadline_seconds",
         description="Wall-clock deadline for one assistant turn (seconds).",
