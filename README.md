@@ -312,7 +312,7 @@ sequenceDiagram
         Domain->>DB: Ownership-scoped read/write
         Tool-->>Orch: Validated structured result
     else Confirmation-required tool
-        Orch-->>UI: SSE confirmation form; pause
+        Orch-->>UI: SSE confirmation form, turn paused
         User->>UI: Approve/edit or reject
         UI->>Chat: POST confirmation
         Chat->>Orch: Resume frozen call
