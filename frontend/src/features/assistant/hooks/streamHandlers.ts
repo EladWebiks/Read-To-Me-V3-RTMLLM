@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import { lastUserLang } from '@/shared/lib/textDirection'
 import type {
   ChatMessage,
   ChatStreamHandlers,
@@ -84,8 +85,6 @@ function buildErrorHandler(args: StreamArgs): ChatStreamHandlers['onError'] {
   return (detail, code, resetsAt) => {
     setLiveStatus(null)
     if (code === 'quota_exceeded') {
-      // Mirror the server-persisted marker (Task 2) instead of the banner,
-      // and arm the composer lock for this session.
       setMessages((prev) => [
         ...prev,
         { id: `quota-${crypto.randomUUID()}`, role: 'quota_refusal', content: detail },
@@ -93,6 +92,10 @@ function buildErrorHandler(args: StreamArgs): ChatStreamHandlers['onError'] {
       setQuotaResetsAt(resetsAt ?? null)
       return
     }
-    setError(chatErrorMessage(detail, code, resetsAt))
+    setMessages((prev) => {
+      const lang = lastUserLang(prev)
+      queueMicrotask(() => setError(chatErrorMessage(detail, code, resetsAt, lang)))
+      return prev
+    })
   }
 }

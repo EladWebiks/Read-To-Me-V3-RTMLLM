@@ -77,6 +77,23 @@ class ConversationRead(BaseModel):
     messages: list[ChatMessageRead] = Field(default_factory=list)
 
 
+class ConversationSummaryRead(BaseModel):
+    """One row for the chat history drawer (title = last user message)."""
+
+    id: UUID
+    title: str | None
+    updated_at: datetime
+
+
+class ConversationListRead(BaseModel):
+    """Paginated conversation list for the signed-in user."""
+
+    items: list[ConversationSummaryRead]
+    total: int
+    limit: int
+    offset: int
+
+
 class ProviderPatch(BaseModel):
     """PATCH /api/admin/llm/catalog/providers/{provider} body."""
 
@@ -205,6 +222,18 @@ class LlmExecutionRead(BaseModel):
     fallback_used: bool
     error: str | None
     created_at: datetime
+
+
+class ExecutionAdminFilters(BaseModel):
+    """Optional filters for the backoffice recent-executions list.
+
+    ``user_ids`` None = no user filter; empty list = match nothing (caller
+    resolved a username query to zero users).
+    """
+
+    user_ids: list[UUID] | None = None
+    task: str | None = None
+    status: str | None = None
 
 
 class ToolCallAdminFilters(BaseModel):

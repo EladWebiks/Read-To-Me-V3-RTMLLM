@@ -165,3 +165,31 @@ def _attr(tag: Tag | None, key: str) -> str:
         return ""
     val = tag.get(key, "")
     return str(val) if val else ""
+
+
+def extract_novel_id(html: str) -> str | None:
+    """NovelFull book id used by ``/ajax-chapter-option``."""
+    soup = BeautifulSoup(html, "html.parser")
+    tag = soup.select_one("[data-novel-id]")
+    if tag is None:
+        return None
+    value = _attr(tag, "data-novel-id").strip()
+    return value or None
+
+
+def ajax_chapter_option_url(novel_id: str) -> str:
+    return f"https://novelfull.net/ajax-chapter-option?novelId={novel_id}"
+
+
+def toc_page_for_chapter(chapter_number: int, *, page_size: int = 50) -> int:
+    """1-based NovelFull TOC page index (``?page=N``), ~50 chapters per page."""
+    if chapter_number < 1:
+        return 1
+    return (chapter_number - 1) // page_size + 1
+
+
+def book_toc_page_url(book_url: str, page: int) -> str:
+    if page <= 1:
+        return book_url
+    joiner = "&" if "?" in book_url else "?"
+    return f"{book_url}{joiner}page={page}"

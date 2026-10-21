@@ -6,6 +6,7 @@ export type EffectiveSetting = {
   effective_value: unknown
   env_value: unknown
   overridden: boolean
+  description?: string | null
   updated_by?: string | null
   updated_at?: string | null
 }

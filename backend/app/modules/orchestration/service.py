@@ -43,7 +43,11 @@ from app.modules.orchestration.hitl_pause import (
     snapshot_run_id,
 )
 from app.modules.orchestration.policy import PolicyService
-from app.modules.orchestration.prompts import SYSTEM_PROMPT
+from app.modules.orchestration.prompts import build_system_prompt
+from app.modules.orchestration.reply_language import (
+    format_reply_language_block,
+    reply_lang_from_history,
+)
 from app.modules.orchestration.ui_context import (
     choice_request_for_tool,
     client_action_for_tool,
@@ -52,7 +56,13 @@ from app.modules.orchestration.ui_context import (
 from app.modules.quotas.exceptions import QuotaExceededError
 from app.modules.quotas.kinds import QuotaKind
 from app.modules.quotas.service import QuotaService
-from app.modules.tools.base import BaseTool, Mode, RiskLevel, ToolContext
+from app.modules.tools.base import (
+    BaseTool,
+    ConfirmationPresentation,
+    Mode,
+    RiskLevel,
+    ToolContext,
+)
 from app.modules.tools.catalog import build_default_registry
 from app.modules.tools.exceptions import (
     ToolAuthzError,
@@ -66,7 +76,7 @@ from app.modules.tools.registry import ToolRegistry
 from app.modules.usage.read_service import UsageReadService
 from app.modules.users.schemas import UserRead
 
-_MAX_TOOL_RESULT_CHARS = 6_000
+_MAX_TOOL_RESULT_CHARS = 24_000
 
 # Persisted role for quota refusals. NOT a member of llm.types.Role on
 # purpose: _to_llm_messages drops roles Role() cannot parse, which is what
@@ -183,6 +193,7 @@ class OrchestrationService:
     ) -> AsyncIterator[ChatSseEvent]:
         """Yield SSE events for one tool-using assistant turn."""
         policy = await PolicyService(self._session, self._settings).resolve(user)
+        yield ChatSseEvent("step", {"label": "Preparing…"})
         try:
             await self._check_llm_quota(user)
         except QuotaExceededError as exc:
@@ -487,7 +498,8 @@ class OrchestrationService:
                 yield event
             return
         proposed = inp.model_dump(mode="json")
-        summary = _confirmation_summary(pack.tool.name, proposed)
+        presentation = await pack.tool.confirmation_presentation(inp, pack.ctx)
+        summary = _summary_from_presentation(presentation, pack.tool.name, proposed)
         row = await freeze_pending(
             FreezeRequest(
                 repo=self._repo,
@@ -502,6 +514,9 @@ class OrchestrationService:
                 proposed=proposed,
                 provided_fields=set(pack.call.arguments),
                 summary=summary,
+                action=presentation.action,
+                title=presentation.title,
+                subtitle=presentation.subtitle,
             )
         )
         await self._session.commit()
@@ -609,6 +624,16 @@ def _confirmation_summary(tool_name: str, proposed: dict[str, Any]) -> str:
     return f"Confirm {tool_name}"
 
 
+def _summary_from_presentation(
+    presentation: ConfirmationPresentation,
+    tool_name: str,
+    proposed: dict[str, Any],
+) -> str:
+    if presentation.title:
+        return f"{presentation.action}: {presentation.title}"
+    return _confirmation_summary(tool_name, proposed)
+
+
 def _tool_round(
     state: _LoopState,
     resp: ToolCallingResponse,
@@ -682,12 +707,18 @@ def _to_llm_messages(
     summary: str | None = None,
     ui_context: dict[str, Any] | None = None,
 ) -> list[Message]:
-    messages = [Message(role=Role.SYSTEM, content=SYSTEM_PROMPT)]
+    messages = [Message(role=Role.SYSTEM, content=build_system_prompt())]
     if summary:
         messages.append(Message(role=Role.SYSTEM, content=summary_context_block(summary)))
     block = format_ui_context_block(ui_context)
     if block:
         messages.append(Message(role=Role.SYSTEM, content=block))
+    messages.append(
+        Message(
+            role=Role.SYSTEM,
+            content=format_reply_language_block(reply_lang_from_history(history)),
+        )
+    )
     for row in history:
         try:
             role = Role(row.role)

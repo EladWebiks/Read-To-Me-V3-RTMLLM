@@ -49,4 +49,5 @@ class TestParseChapterPage:
         assert "chapter-2" in data.next_url
         assert data.book_title == "Test Novel Title"
         assert data.book_author == "Test Author"
+        assert data.chapter_number == 1
         assert not data.is_placeholder

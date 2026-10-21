@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsPage } from './SettingsPage'
 import {
   deleteAdminSetting,
@@ -22,12 +22,14 @@ const SETTINGS = {
       effective_value: 8,
       env_value: 5,
       overridden: true,
+      description: 'Max tool-calling iterations allowed in one assistant turn.',
     },
     {
       key: 'scrape.delay_seconds',
       effective_value: 1.5,
       env_value: 1.5,
       overridden: false,
+      description: 'Minimum delay between scrapes to the same site (seconds).',
     },
   ],
 }
@@ -41,6 +43,8 @@ function renderPage() {
   )
 }
 
+afterEach(cleanup)
+
 describe('SettingsPage', () => {
   it('lists keys with override status', async () => {
     vi.mocked(fetchAdminSettings).mockResolvedValue(SETTINGS)
@@ -50,7 +54,7 @@ describe('SettingsPage', () => {
     expect(vi.mocked(deleteAdminSetting)).not.toHaveBeenCalled()
   })
 
-  it('saves an edited value as typed JSON', async () => {
+  it('opens a modal to edit and saves typed JSON', async () => {
     vi.mocked(fetchAdminSettings).mockResolvedValue(SETTINGS)
     vi.mocked(putAdminSetting).mockResolvedValue({
       key: 'llm_runtime.max_tool_iters',
@@ -59,22 +63,23 @@ describe('SettingsPage', () => {
       updated_at: '2026-07-30T00:00:00Z',
     })
     renderPage()
-    fireEvent.click((await screen.findAllByText('Edit'))[0])
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]!)
+    expect(await screen.findByRole('heading', { name: 'Edit setting' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Value for llm_runtime.max_tool_iters'), {
       target: { value: '9' },
     })
-    fireEvent.click(screen.getByText('Save'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() =>
       expect(putAdminSetting).toHaveBeenCalledWith('llm_runtime.max_tool_iters', 9),
     )
   })
 
-  it('shows the API detail inline when the save is rejected', async () => {
+  it('shows the API detail in the modal when the save is rejected', async () => {
     vi.mocked(fetchAdminSettings).mockResolvedValue(SETTINGS)
     vi.mocked(putAdminSetting).mockRejectedValue(new ApiError(422, 'value must be >= 1'))
     renderPage()
-    fireEvent.click((await screen.findAllByText('Edit'))[0])
-    fireEvent.click(screen.getByText('Save'))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]!)
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }))
     expect(await screen.findByText('value must be >= 1')).toBeTruthy()
   })
 })

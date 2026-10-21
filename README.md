@@ -10,9 +10,9 @@ workflows from RTM v2 while replacing its in-memory jobs and single-purpose back
 with durable storage, background workers, ownership checks, and a tool-gated assistant.
 
 > **Project status:** Milestones A and B are implemented. Milestone C currently includes
-> title discovery/import and persisted book summaries. The next discovery slice is a
-> batched theme/trope recommendation tool so “find three books like this” uses one
-> bounded external operation instead of repeated title searches. Richer multi-step book
+> title discovery/import and persisted book summaries. Batched theme/trope
+> recommendations use `recommend_discovered_books` so “find three books like this”
+> is one bounded external operation on the four supported sources. Richer multi-step book
 > discussion, destructive/large assistant tools, and the evaluation harness also remain.
 
 ## Contents
@@ -73,15 +73,14 @@ suffix.
 Scraped pages and book text are always treated as untrusted data, never as instructions
 for the assistant.
 
-**Current discovery limitation:** discovery accepts one title/alias per tool call; it
-does not yet search reliably by theme, trope, or similarity. A recommendation prompt
-may cause the model to verify several guessed titles separately and hit the default
-three-external-call turn budget. Increasing the token budget does not help because this
-is a separate safety counter. The planned fix is a bounded batch recommendation tool
-that accepts a seed book/themes and optional candidate titles, searches deterministic
-sources inside one discovery operation, excludes owned books, deduplicates/ranks the
-results, and returns evidence for up to the requested count. The external-call cap stays
-small instead of being raised to conceal inefficient tool use.
+**Discovery:** `search_discovered_books` looks up one exact title/alias.
+`recommend_discovered_books` batches candidate titles, a seed owned book, and/or
+themes in **one** external tool call. Themes expand via allowlisted WLNUpdates
+(`search-advanced`) into titles, then the four scrape sources are searched;
+results are ranked, deduped, and owned titles excluded with evidence. Import
+still goes through `import_discovered_book` + HITL. NovelUpdates is not used.
+See
+[`docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md`](docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md).
 
 ### Controlled assistant
 

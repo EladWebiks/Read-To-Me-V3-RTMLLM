@@ -1,10 +1,11 @@
 import type { Page } from '@/features/admin/types'
 import { apiGet } from '@/shared/lib/api'
 
-/** Mirrors ScrapeJobAdminRead (scraping/schemas.py) exactly. */
+/** Mirrors AdminScrapeJobRead (admin/schemas.py). */
 export type ScrapeJob = {
   id: string
   user_id: string
+  username: string | null
   book_id: string | null
   book_title: string | null
   start_url: string
@@ -19,10 +20,11 @@ export type ScrapeJob = {
   updated_at: string
 }
 
-/** Mirrors DownloadJobAdminRead (downloads/schemas.py) exactly. */
+/** Mirrors AdminDownloadJobRead (admin/schemas.py). */
 export type DownloadJob = {
   id: string
   user_id: string
+  username: string | null
   book_id: string
   chapter_from: number
   chapter_to: number

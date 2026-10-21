@@ -164,6 +164,7 @@ async def _session_token_or_popup_error(service: AuthService, code: str) -> str 
     try:
         _user, token = await service.login_with_google(code)
     except GoogleAuthError as exc:
+        logger.warning("google_auth_rejected reason=%s", exc.reason)
         return _popup_error(exc.reason, 400)
     except Exception as exc:
         # Reachable at least via GoogleNotConfiguredError (a sibling of

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from inspect import isawaitable
@@ -104,6 +105,8 @@ class GeminiProvider:
     ) -> T:
         if not self._config.supports_structured:
             raise CapabilityNotSupportedError("structured_output")
+        if req.use_web_search:
+            return await self._structured_with_web_search(req)
         return await self._structured(req)
 
     async def call_tools(self, req: ToolCallingRequest) -> ToolCallingResponse:
@@ -185,42 +188,108 @@ class GeminiProvider:
             raise _map_provider_error(exc) from exc
 
     async def _open_tool_stream(self, req: ToolCallingRequest) -> Any:
+        import asyncio
+
         from google.genai import types
 
         client = self._get_client()
+        timeout_s = max(self._config.timeout_seconds, 1)
         config = types.GenerateContentConfig(
             max_output_tokens=req.max_output_tokens or self._config.max_output_tokens,
             temperature=req.temperature,
             tools=[_tool_to_genai(tool) for tool in req.tools],
-            http_options=types.HttpOptions(timeout=self._config.timeout_seconds * 1000),
+            http_options=types.HttpOptions(timeout=timeout_s * 1000),
         )
         try:
-            return await client.aio.models.generate_content_stream(
+            return await asyncio.wait_for(
+                client.aio.models.generate_content_stream(
+                    model=self._config.model_name,
+                    contents=_to_contents(req.messages),
+                    config=config,
+                ),
+                timeout=float(timeout_s),
+            )
+        except TimeoutError as exc:
+            raise LlmTimeoutError(f"Tool stream timed out after {timeout_s}s") from exc
+        except Exception as exc:
+            raise _map_provider_error(exc) from exc
+
+    async def _structured_with_web_search(self, req: StructuredOutputRequest[T]) -> T:
+        """Google Search grounding, then coerce free text into response_model."""
+        from google.genai import types
+
+        timeout_s = max(self._config.timeout_seconds, 60)
+        config = types.GenerateContentConfig(
+            max_output_tokens=req.max_output_tokens or self._config.max_output_tokens,
+            temperature=req.temperature if req.temperature is not None else 0.2,
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            http_options=types.HttpOptions(timeout=timeout_s * 1000),
+        )
+        try:
+            raw = await self._get_client().aio.models.generate_content(
                 model=self._config.model_name,
                 contents=_to_contents(req.messages),
                 config=config,
             )
         except Exception as exc:
             raise _map_provider_error(exc) from exc
+        text = _response_text(raw).strip()
+        if not text:
+            raise LlmProviderError("Web-grounded research returned an empty reply.")
+        try:
+            return req.response_model.model_validate_json(_extract_json_payload(text))
+        except Exception:
+            # Fall back to instructor coercion when the model wrapped prose around JSON.
+            return await self._structured(
+                StructuredOutputRequest(
+                    messages=[
+                        Message(
+                            role=Role.SYSTEM,
+                            content=(
+                                "Extract the structured object from the research notes. "
+                                "Use only facts present in the notes."
+                            ),
+                        ),
+                        Message(role=Role.USER, content=text),
+                    ],
+                    response_model=req.response_model,
+                    max_output_tokens=req.max_output_tokens,
+                    temperature=0.0,
+                    task=req.task,
+                    use_web_search=False,
+                )
+            )
 
     async def _structured(self, req: StructuredOutputRequest[T]) -> T:
+        import asyncio
+
         import instructor
         from google import genai
+        from google.genai import types
 
+        timeout_s = max(self._config.timeout_seconds, 1)
         client = instructor.from_genai(
-            genai.Client(api_key=self._config.api_key),
+            genai.Client(
+                api_key=self._config.api_key,
+                http_options=types.HttpOptions(timeout=timeout_s * 1000),
+            ),
             use_async=True,
         )
         try:
             # instructor stubs for from_genai disagree with the async create API.
             create = cast(Any, client.chat.completions.create)
-            result = await create(
-                model=self._config.model_name,
-                messages=_to_openai_messages(req.messages),
-                response_model=req.response_model,
-                max_retries=self._config.max_retries,
+            result = await asyncio.wait_for(
+                create(
+                    model=self._config.model_name,
+                    messages=_to_openai_messages(req.messages),
+                    response_model=req.response_model,
+                    max_retries=self._config.max_retries,
+                ),
+                timeout=float(timeout_s),
             )
             return cast(T, result)
+        except TimeoutError as exc:
+            raise LlmTimeoutError(f"Structured output timed out after {timeout_s}s") from exc
         except Exception as exc:
             raise _map_provider_error(exc) from exc
 
@@ -284,6 +353,23 @@ def _tool_payload(content: str) -> dict[str, Any]:
 
 def _to_openai_messages(messages: Sequence[Message]) -> list[dict[str, str]]:
     return [{"role": m.role.value, "content": m.content} for m in messages]
+
+
+def _extract_json_payload(text: str) -> str:
+    """Pull a JSON object/array out of model text (fenced or bare)."""
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text, flags=re.IGNORECASE)
+    if fenced is not None:
+        return fenced.group(1).strip()
+    start_obj, start_arr = text.find("{"), text.find("[")
+    starts = [i for i in (start_obj, start_arr) if i >= 0]
+    if not starts:
+        return text.strip()
+    start = min(starts)
+    end_obj, end_arr = text.rfind("}"), text.rfind("]")
+    end = max(end_obj, end_arr)
+    if end <= start:
+        return text.strip()
+    return text[start : end + 1].strip()
 
 
 def _tool_to_genai(tool: ToolSpec) -> Any:
@@ -476,8 +562,27 @@ def _coerce_args(raw: Any) -> dict[str, Any]:
 def _map_provider_error(exc: Exception) -> LlmProviderError:
     name = type(exc).__name__.lower()
     text = str(exc).lower()
+    mapped = _classify_provider_error(name, text)
+    logger.warning(
+        "gemini_provider_error mapped=%s raw_type=%s raw=%s",
+        type(mapped).__name__,
+        type(exc).__name__,
+        str(exc)[:500],
+    )
+    return mapped
+
+
+def _classify_provider_error(name: str, text: str) -> LlmProviderError:
     if "timeout" in name or "timeout" in text:
-        return LlmTimeoutError(str(exc))
-    if "rate" in name or "429" in text or "quota" in text:
-        return LlmRateLimitError(str(exc))
-    return LlmProviderError(str(exc))
+        return LlmTimeoutError("The assistant took too long to respond. Please try again.")
+    if "429" in text or "rate limit" in text or "resource_exhausted" in text:
+        return LlmRateLimitError(
+            "Too many AI requests right now. Please wait a moment and try again."
+        )
+    if "503" in text or "unavailable" in text or "high demand" in text:
+        return LlmProviderError("The AI service is busy right now. Please try again in a moment.")
+    if "401" in text or "403" in text or "api key" in text or "permission" in text:
+        return LlmProviderError(
+            "The AI service couldn't authenticate. Check your API key settings."
+        )
+    return LlmProviderError("The assistant couldn't complete that reply. Please try again.")

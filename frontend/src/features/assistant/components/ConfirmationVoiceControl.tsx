@@ -16,6 +16,8 @@ export function ConfirmationVoiceControl(props: Props) {
   const voices = useServerVoices(provider)
   return (
     <Select
+      size="sm"
+      className="w-full"
       disabled={props.busy || voices.isLoading}
       value={stringValue(props.values.voice)}
       onChange={(event) => props.onChange(props.field.name, event.target.value || null)}

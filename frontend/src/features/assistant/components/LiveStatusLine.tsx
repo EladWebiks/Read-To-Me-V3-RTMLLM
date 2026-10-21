@@ -12,8 +12,10 @@ export function LiveStatusLine({ label }: { label: string }) {
       role="status"
     >
       <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden />
-      <span className="sr-only">{label}</span>
-      <span className="min-w-0 flex-1 truncate" aria-hidden>
+      <span dir="auto" className="sr-only">
+        {label}
+      </span>
+      <span dir="auto" className="min-w-0 flex-1 truncate" aria-hidden>
         {typedLabel}
         <span className="assistant-status-caret" />
       </span>

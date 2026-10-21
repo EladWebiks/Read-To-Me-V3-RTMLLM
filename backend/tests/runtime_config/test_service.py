@@ -155,3 +155,5 @@ async def test_list_effective_reports_overrides(session: AsyncSession, admin: Us
     assert iters.overridden is False
     assert iters.effective_value == 6
     assert iters.updated_by is None
+    assert iters.description is not None
+    assert "tool" in iters.description.lower()

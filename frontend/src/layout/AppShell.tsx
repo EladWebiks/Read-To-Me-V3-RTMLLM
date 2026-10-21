@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
 import { AssistantHost } from '@/features/assistant'
+import { useJobEvents } from '@/features/jobEvents'
+import { useLibraryLiveDuringScrapes } from '@/features/scraping/hooks'
+import { BrandMark } from './BrandMark'
 import { ShellActions } from './ShellActions'
 import { ShellNavLinks } from './ShellNav'
 
@@ -8,6 +11,8 @@ export function AppShell() {
   const { pathname } = useLocation()
   const isReading = pathname.startsWith('/read/')
   useReaderScrollLock(isReading)
+  useJobEvents()
+  useLibraryLiveDuringScrapes()
 
   return (
     <div
@@ -22,10 +27,8 @@ export function AppShell() {
           isReading ? '' : 'sticky top-0'
         }`}
       >
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-3">
-          <Link to="/library" className="text-lg font-semibold tracking-tight">
-            RTM
-          </Link>
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:py-3">
+          <BrandMark />
           <div className="flex items-center gap-1 sm:gap-2">
             <ShellNavLinks readerActive={pathname === '/reader' || isReading} />
             <ShellActions />

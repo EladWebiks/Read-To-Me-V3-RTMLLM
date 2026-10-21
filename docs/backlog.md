@@ -1,0 +1,352 @@
+# RTM backlog — post–admin-panel tickets
+
+Working list of product/engineering tickets after `main` absorbed the admin
+panel, runtime config, memberships, quotas, and usage UX.
+
+Update status in this file as tickets move. One ticket at a time.
+
+## Workflow (Model B — one backlog branch)
+
+All tickets land on **`backlog-cleanup`**. One PR to `main` when the
+batch is ready (or when we decide to cut a release).
+
+1. **Discuss** the ticket in chat (goal, constraints, acceptance).
+2. Stay on **`backlog-cleanup`** (create it from up-to-date `main` only if
+   missing). Do **not** open a per-ticket branch unless parking work.
+3. **Plan when required** (see column below):
+   - Write/approve a short design under `docs/superpowers/specs/`
+   - Optionally add an implementation plan under `docs/superpowers/plans/`
+   - Do **not** start code until the plan is agreed
+4. **Implement** on `backlog-cleanup` (quality gates still apply).
+5. **Commit** on `backlog-cleanup`; mark status here. Push the branch when
+   useful for backup/review.
+6. **End of batch:** open one PR `backlog-cleanup` → `main`, merge, then
+   start a fresh backlog branch from `main` if more tickets remain.
+
+Tickets marked **Plan first** need research or a design doc before coding.
+Tickets marked **Discuss then code** can skip a formal spec if the chat
+agreement is enough.
+
+Work **one ticket at a time** on this branch to keep history readable and
+avoid half-finished mixing.
+
+## Suggested order
+
+| Order | ID | Title | Plan first? |
+|------:|----|-------|-------------|
+| 1 | T2.1 | Auth state flash after login | Done |
+| 2 | T2.2 | Chat does not reset on re-login | Done |
+| 3 | T2.6 | Dark-mode chat glow too strong | Done |
+| 4 | T7 | HITL confirmation bubble redesign | Done |
+| 5 | T2.3 | Settings shown in more than one place | Done |
+| 6 | T4 | Library updates live during scraping | Done |
+| 7 | T3 | Login page full redesign | Done |
+| 8 | T2.4 | Admin backoffice visual + UX | Done |
+| 9 | T2.5 | Chat history drawer + Read To Me label | Done |
+| 10 | T5 | Polling → SSE / push where useful | Done |
+| 11 | T1 | Improve book discovery / sources | Done |
+| 11a | T1.1 | Theme→title index (WLNUpdates) | Done |
+| 11b | T1.2 | Discovery index replan | Done |
+| 12 | T6 | i18n foundation + chat RTL/LTR | In progress |
+
+Order can change; finish or park the current ticket before starting the next
+on `backlog-cleanup`.
+
+---
+
+## Tickets
+
+### T1 — Improve book discovery / sources
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** — design + source choice before build |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-recommendation-design.md`](superpowers/specs/2026-08-04-discovery-recommendation-design.md) |
+
+**Goal:** Better “find books like X / theme search” without guessing titles
+or burning the external-tool budget.
+
+**Shipped:**
+- Rejected NovelUpdates as a primary source.
+- Primary path: batched recommend on the four existing scrape sources.
+- `DiscoveryService.recommend` + tool `recommend_discovered_books` (one
+  external budget unit for N candidate titles).
+- `search_discovered_books` kept for exact title lookup; import still via
+  `import_discovered_book` + `propose_choices`.
+- **T1.1:** WLNUpdates theme→title expansion (see below).
+
+**Acceptance:**
+- Agreed discovery strategy documented.
+- Recommendation-style prompts do not require one external tool call per
+  guessed title.
+- Results can be crossed with supported scrape sources for import/HITL.
+
+---
+
+### T1.1 — Theme→title index (WLNUpdates)
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md`](superpowers/specs/2026-08-04-discovery-theme-index-design.md) |
+
+**Goal:** Themes alone can produce candidate titles without the model guessing.
+
+**Shipped:**
+- WLNUpdates allowlisted JSON API as theme→title index (NovelUpdates still rejected).
+- DaoSearch deferred.
+- `recommend` expands short/empty query pools from themes via one WLN search,
+  then existing four-source fan-out.
+
+**Acceptance:**
+- “Find cultivation revenge novels” with themes only uses one recommend tool call.
+- Scrapable hits still from the four adapters; evidence mentions WLN when used.
+
+**Note (2026-08-04):** Live WLN `POST /api` returns HTTP 500; theme expansion
+is empty. Hardcoded title fallback was rejected and removed. See **T1.2**.
+
+---
+
+### T1.2 — Discovery index replan
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-discovery-index-replan.md`](superpowers/specs/2026-08-04-discovery-index-replan.md) |
+
+**Goal:** Real theme / similar-book research without canned title lists and
+without depending on a dead WLN API.
+
+**Shipped:**
+- Theme/seed expansion via plain Gemini structured output (no Google Search
+  grounding on free-tier quota; grounding deferred until billing supports it).
+- Scrape fan-out verifies titles on the four supported sources; hard-fail when
+  research empty or unscrapeable. Surface real LLM failures (e.g. rate limit).
+- DaoSearch / WLN not used in the recommend title pool.
+- Default `LLM_MAX_EXTERNAL_CALLS` raised to **8**.
+- `scrapable_chapters` on recommend items; assistant prompt grounding for
+  discovery attributes.
+
+---
+
+### T2 — UI / state / chat / admin polish
+
+Parent of T2.1–T2.6. All sub-tickets commit on `backlog-cleanup`.
+
+#### T2.1 — Auth state flash after login
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No |
+
+**Problem:** After login, the UI briefly shows the previous user’s data.
+
+**Acceptance (draft):** Logout/login clears or invalidates cached user-owned
+server state (react-query) and any client UI state that can leak identity
+before the new session’s data loads. Assistant panel closes (not left open).
+
+#### T2.2 — Chat does not reset on re-login
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No |
+
+**Problem:** Assistant/chat state survives re-login and can show another
+user’s conversation context.
+
+**Acceptance (draft):** Auth change clears conversation id, messages,
+HITL/pending UI, and related query caches so a new session starts clean.
+Panel `open` resets to closed (default app state).
+
+#### T2.3 — Settings shown in more than one place
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No — inventory + decide keep/remove in chat first |
+
+**Problem:** Some settings appear in multiple UI surfaces; redundant or
+confusing.
+
+**Acceptance:** Settings sheet = font size, highlight mode, speech engine,
+voice (and server provider), auto-advance to next chapter — with tooltips.
+Reader bar keeps speed + volume only. Theme stays in shell sun/moon (not
+Settings). Max TTS speed cap removed from Settings UI (store default still
+caps the speed slider).
+
+#### T2.4 — Admin backoffice visual + UX
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | Discuss visual direction; formal spec only if scope grows |
+
+**Goal:** Improve `/admin/*` look and interaction (density, hierarchy,
+empty states, consistency with shared form/query primitives).
+
+**Slices:**
+1. List shell (viewport lock + fit rows + pinned pagination) — Users first
+2. Roll shell to Jobs / Tool calls / Usage
+3. Settings key tooltips
+4. Identity + filters (email, not bare user id)
+
+#### T2.5 — Chat history drawer + branding
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No — fullscreen redesign deferred (useful on phone) |
+
+**Goal:** History button opens an in-chat drawer over the whole panel; picking
+a thread loads it (with loading state). Subtitle says **Read To Me** (not
+Milestone B). Fullscreen toggle kept as-is for mobile.
+
+**Acceptance:**
+- Header subtitle: `Read To Me` (and `Fullscreen · Read To Me` when expanded).
+- History drawer lists user conversations; title = last user message,
+  truncated with `…` when long.
+- Selecting a row loads that conversation into the chat with a loading
+  indicator and close-on-success.
+
+#### T2.6 — Dark-mode chat glow too strong
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No |
+
+**Goal:** Soften excessive violet bloom on the assistant panel in dark mode
+(keep accent; no neon). Light mode: violet border tint + neutral elevation
+only. Nav button and thinking composer left unchanged.
+
+---
+
+### T3 — Login page full redesign
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | Discuss visual direction; optional short design note |
+
+**Goal:** Full redesign of the Google SSO login page (brand, layout,
+atmosphere). Keep the existing OAuth popup flow unless bugs appear.
+
+**Acceptance:** Split layout — brand/atmosphere panel (Literata RTM + line;
+optional `/login-hero.jpg`) | action column (Sign in + Google). Structured
+so register / premium can stack later. Mobile stacks brand then actions.
+
+---
+
+### T4 — Library updates live during scraping
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | No — verify event/query path in chat first |
+
+**Problem:** During scraping, new books can appear but chapter counts do
+not update dynamically while the job runs.
+
+**Acceptance:** While scrape jobs are pending/running, app-wide job poll
+(every 2s) invalidates the library books query when status or
+`chapters_done` changes, so chapter counts refresh without a full reload.
+SSE deferred to T5.
+
+---
+
+### T5 — Polling → SSE / push where useful
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** — inventory pollers, choose keep / SSE / hybrid |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-job-events-sse-design.md`](../superpowers/specs/2026-08-04-job-events-sse-design.md) |
+
+**Goal:** Replace or reduce polling with SSE (or similar) where UX or load
+benefits.
+
+**Done:** Per-user `GET /api/jobs/events` (Redis pub/sub) drives scrape,
+download, and EPUB import UIs; hooks fall back to polling if SSE is down.
+Admin Jobs stay pull-to-refresh.
+
+---
+
+### T6 — i18n foundation + chat RTL/LTR
+
+| Field | Value |
+|-------|--------|
+| Status | In progress |
+| Branch | `backlog-cleanup` |
+| Plan first | **Yes** — library choice, key structure, RTL rules |
+| Spec / plan | [`docs/superpowers/specs/2026-08-04-i18n-chat-direction-design.md`](superpowers/specs/2026-08-04-i18n-chat-direction-design.md) |
+
+**Goal:**
+- Site-wide i18n foundation (English catalogs first; other locales later).
+- Chat: direction from first strong character (`dir="auto"`) per message and
+  composer; bubbles and input adapt at message level.
+- App shell stays English/LTR for now (no app-wide RTL mirroring).
+- HITL chrome stays English; dynamic values (e.g. Hebrew titles) still get
+  `dir="auto"`.
+
+**Hebrew chat support** is the primary product driver; full-site Hebrew UI
+translation is a follow-up.
+
+---
+
+### T7 — HITL confirmation bubble redesign
+
+| Field | Value |
+|-------|--------|
+| Status | Done |
+| Branch | `backlog-cleanup` |
+| Plan first | Discuss then code; short visual notes OK |
+
+**Problems:**
+- HITL confirmation UI looks poor.
+- Scrape / import confirmation does not show the **book title**.
+- Bubble shows too much or the wrong information.
+
+**Goal:** Redesign the confirmation card: clear hierarchy, only required
+decision info, Approve / Cancel. For scrape / import tools, show book title
+(and short source if useful). Hide noise (raw UUIDs, redundant args).
+
+**Acceptance (draft):**
+- Scrape/import HITL shows a human-readable book title.
+- Form fields remain editable where required (chapter range, etc.).
+- Card works in light and dark mode and fits the chat column.
+
+---
+
+## Status legend
+
+| Status | Meaning |
+|--------|---------|
+| Open | Not started |
+| Planning | Spec/plan in progress |
+| In progress | Branch exists; implementation underway |
+| Blocked | Waiting on decision or dependency |
+| Done | Merged to `main` |
+
+## Related docs
+
+- Discovery / theme search (product intent): `docs/llm-planning/06-roadmap-and-sequencing.md`
+- HITL protocol: `docs/llm-planning/04-hitl.md`
+- Assistant capabilities (user-facing): `docs/assistant-capabilities.md`
+- Existing design/plan pattern: `docs/superpowers/specs/`, `docs/superpowers/plans/`

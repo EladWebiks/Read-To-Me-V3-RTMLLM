@@ -158,7 +158,8 @@ Use server playback with Edge voice and play at 1.25x
 
 | יכולת | כלי | הערה |
 |--------|------|------|
-| חיפוש כותרת באתרים נתמכים | `search_discovered_books` | מחזיר מועמדים + מקורות מדורגים (`recommended`) |
+| חיפוש כותרת באתרים נתמכים | `search_discovered_books` | כותרת מדויקת; מועמדים + מקורות מדורגים (`recommended`) |
+| המלצות / ספרים דומים (batched) | `recommend_discovered_books` | themes ו/או כותרות ו/או seed; WLN מרחיב themes; evidence + דירוג |
 | ייבוא מועמד discovery (בלי URL) | `import_discovered_book` | טופס אישור; בוחר מקור עשיר בפרקים אם לא צוין |
 | הוספת ספר מ־URL | `scrape_book_range` | תמיד מופיע טופס אישור לפני הרצה |
 
@@ -169,6 +170,8 @@ Use server playback with Edge voice and play at 1.25x
   אם ביקשת "מ־5 עד 55", העוזר אמור למלא `start=5`, `count=51` (כולל שני הקצוות)
 
 אפשר לתת **שם ספר** (בלי URL) — חיפוש → בחירה → import; או **URL** של עמוד ספר/פרק.
+להמלצות לפי נושא / "ספרים דומים" — העוזר אמור לקרוא ל־`recommend_discovered_books`
+(קריאה אחת; themes מורחבים דרך WLNUpdates לכותרות, ואז חיפוש בארבעת מקורות הסקרייפ).
 
 **דוגמאות (כותרת בלי URL):**
 
@@ -178,6 +181,20 @@ Find Rise of the Primordial Godsmith and add it to my library
 
 ```text
 תמצא את Martial Peak באתרים הנתמכים ותייבא לספרייה מתחילת פרק 1
+```
+
+**דוגמאות (המלצות / themes — בלי לנחש כותרות):**
+
+```text
+Find 3 cultivation revenge novels I can scrape, then let me pick one to import
+```
+
+```text
+תמצא לי 3 ספרים דומים ל-Against the Gods (cultivation) שאפשר לייבא מהאתרים הנתמכים
+```
+
+```text
+Recommend books with system / apocalypse tropes — show options, don't import yet
 ```
 
 **דוגמאות (URL):**
@@ -210,7 +227,7 @@ Scrape https://novelbin.com/b/some-slug starting at chapter 10, only 20 chapters
 
 ## מה עדיין לא (בכוונה / בהמשך)
 
-- חיפוש discovery לפי נושא/trope והמלצות סמנטיות (כרגע החיפוש הוא בעיקר לפי כותרת/alias)
+- אינדקס theme→title נוסף (למשל DaoSearch) — WLNUpdates כבר משמש להרחבת themes
 - סיכום מועמד discovery לפני ייבוא (סיכומי ספרים שכבר בספרייה כן נתמכים)
 - הערכת מספר פרקים מלאה בכל מקור (הדירוג משתמש במטא־דאטה הזמין)
 - דיון עשיר ורב־שלבי יותר על ספרים

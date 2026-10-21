@@ -19,6 +19,7 @@ from app.modules.discovery.router import router as discovery_router
 from app.modules.downloads.router import router as downloads_router
 from app.modules.health.router import router as health_router
 from app.modules.imports.router import router as imports_router
+from app.modules.job_events.router import router as job_events_router
 from app.modules.library.router import router as library_router
 from app.modules.llm.admin_router import router as llm_admin_router
 from app.modules.llm.router import chat_router
@@ -54,6 +55,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 def _register_routers(app: FastAPI, api_prefix: str) -> None:
+    _register_core_routers(app, api_prefix)
+    _register_admin_routers(app, api_prefix)
+
+
+def _register_core_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(health_router, prefix=api_prefix)
     app.include_router(auth_router, prefix=api_prefix)
     app.include_router(library_router, prefix=api_prefix)
@@ -61,6 +67,7 @@ def _register_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(reader_router, prefix=api_prefix)
     app.include_router(audio_router, prefix=api_prefix)
     app.include_router(downloads_router, prefix=api_prefix)
+    app.include_router(job_events_router, prefix=api_prefix)
     app.include_router(scraping_router, prefix=api_prefix)
     app.include_router(imports_router, prefix=api_prefix)
     app.include_router(discovery_router, prefix=api_prefix)
@@ -68,6 +75,9 @@ def _register_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(me_plans_router, prefix=api_prefix)
     app.include_router(llm_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
+
+
+def _register_admin_routers(app: FastAPI, api_prefix: str) -> None:
     app.include_router(llm_admin_router, prefix=api_prefix)
     app.include_router(membership_admin_router, prefix=api_prefix)
     app.include_router(quotas_admin_router, prefix=api_prefix)

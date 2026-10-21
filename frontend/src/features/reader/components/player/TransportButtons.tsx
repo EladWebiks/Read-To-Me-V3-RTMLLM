@@ -15,7 +15,7 @@ export function TransportButtons(props: Props) {
   const playing = props.status === 'playing'
   const idle = props.status === 'idle'
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex h-9 items-center gap-0.5">
       <Button
         type="button"
         variant="ghost"
@@ -30,13 +30,17 @@ export function TransportButtons(props: Props) {
       <Button
         type="button"
         size="icon"
-        className="mx-0.5 h-10 w-10 rounded-full"
+        className="rounded-full"
         aria-label={playing ? 'Pause' : 'Play'}
         title={playing ? 'Pause' : props.status === 'paused' ? 'Resume' : 'Play'}
         disabled={!props.hasText}
         onClick={props.onPlayPause}
       >
-        {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+        {playing ? (
+          <Pause className="h-4 w-4" />
+        ) : (
+          <Play className="h-4 w-4 translate-x-px" />
+        )}
       </Button>
       <Button
         type="button"
@@ -47,7 +51,7 @@ export function TransportButtons(props: Props) {
         disabled={idle}
         onClick={props.onStop}
       >
-        <Square className="h-4 w-4" />
+        <Square className="h-3.5 w-3.5" />
       </Button>
       <Button
         type="button"

@@ -149,6 +149,9 @@ async def test_thinking_step_is_sent_before_llm_finishes(
     monkeypatch.setattr(service._llm, "stream_tools", stream_from_call(_call))
     stream = service.stream_chat(user, "hello", None)
     assert (await anext(stream)).event == "meta"
+    preparing = await anext(stream)
+    assert preparing.event == "step"
+    assert preparing.data["label"] == "Preparing…"
     step = await anext(stream)
     assert step.event == "step"
     assert step.data["label"] == "Understanding your request…"
@@ -210,7 +213,7 @@ async def test_text_delta_arrives_before_tool_stream_finishes(
     monkeypatch.setattr(service._llm, "stream_tools", _stream)
     events = service.stream_chat(user, "question", None)
     assert (await anext(events)).event == "meta"
-    assert (await anext(events)).event == "step"
+    assert [(await anext(events)).event, (await anext(events)).event] == ["step", "step"]
 
     delta = await anext(events)
 

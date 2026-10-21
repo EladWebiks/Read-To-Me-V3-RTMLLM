@@ -28,13 +28,43 @@ def test_format_rejects_bad_path() -> None:
 
 
 def test_client_action_scrape() -> None:
-    action = client_action_for_tool("scrape_book_range", True, {})
-    assert action == {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
+    job = uuid4()
+    action = client_action_for_tool(
+        "scrape_book_range",
+        True,
+        {"job_id": job, "max_chapters": 50, "chapter_from": 1},
+    )
+    assert action == {
+        "type": "scrape",
+        "label": "Open Scraper",
+        "job_id": str(job),
+        "max_chapters": 50,
+        "chapter_from": 1,
+    }
 
 
 def test_client_action_import_discovered() -> None:
-    action = client_action_for_tool("import_discovered_book", True, {})
-    assert action == {"type": "navigate", "path": "/scraper", "label": "Open Scraper"}
+    job = uuid4()
+    action = client_action_for_tool(
+        "import_discovered_book",
+        True,
+        {"job_id": job, "max_chapters": None, "chapter_from": 1},
+    )
+    assert action == {
+        "type": "scrape",
+        "label": "Open Scraper",
+        "job_id": str(job),
+        "max_chapters": None,
+        "chapter_from": 1,
+    }
+
+
+def test_client_action_scrape_falls_back_without_job() -> None:
+    assert client_action_for_tool("scrape_book_range", True, {}) == {
+        "type": "navigate",
+        "path": "/scraper",
+        "label": "Open Scraper",
+    }
 
 
 def test_client_action_play() -> None:

@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "library": "Library",
+    "reader": "Reader",
+    "scraper": "Scraper",
+    "admin": "Admin"
+  },
+  "shell": {
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "logOut": "Log out"
+  }
+}

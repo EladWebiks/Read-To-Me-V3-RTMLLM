@@ -47,6 +47,29 @@ async def test_pagination_envelope(client: AsyncClient, admin: UUID) -> None:
 
 
 @pytest.mark.integration
+async def test_list_filters_and_sort(client: AsyncClient, admin: UUID) -> None:
+    await create_user("alpha")
+    await create_user("bravo", is_admin=True)
+    await create_user("ghost", deleted=True)
+
+    by_q = await client.get(f"{BASE}?q=alpha")
+    assert {u["username"] for u in by_q.json()["items"]} == {"alpha"}
+
+    admins = await client.get(f"{BASE}?admin=admin")
+    names = {u["username"] for u in admins.json()["items"]}
+    assert "bravo" in names
+    assert "boss" in names
+    assert "alpha" not in names
+
+    deleted = await client.get(f"{BASE}?status=deleted")
+    assert {u["username"] for u in deleted.json()["items"]} == {"ghost"}
+
+    sorted_asc = await client.get(f"{BASE}?sort=username_asc&status=active")
+    usernames = [u["username"] for u in sorted_asc.json()["items"]]
+    assert usernames == sorted(usernames)
+
+
+@pytest.mark.integration
 async def test_promote_then_demote_other_user(client: AsyncClient, admin: UUID) -> None:
     other = await create_user("other")
     up = await client.patch(f"{BASE}/{other}", json={"is_admin": True})

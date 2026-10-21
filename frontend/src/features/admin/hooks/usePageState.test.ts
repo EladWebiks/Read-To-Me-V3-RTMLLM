@@ -24,4 +24,21 @@ describe('usePageState', () => {
     act(() => result.current.prev())
     expect(result.current.offset).toBe(0)
   })
+
+  it('realigns offset when limit changes', () => {
+    const { result, rerender } = renderHook(({ limit }) => usePageState(limit), {
+      initialProps: { limit: 10 },
+    })
+    act(() => result.current.next(100))
+    expect(result.current.offset).toBe(10)
+    rerender({ limit: 15 })
+    expect(result.current.offset).toBe(0)
+  })
+
+  it('jumps to a page via setPage', () => {
+    const { result } = renderHook(() => usePageState(10))
+    act(() => result.current.setPage(3))
+    expect(result.current.offset).toBe(20)
+    expect(result.current.page).toBe(3)
+  })
 })

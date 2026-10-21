@@ -102,3 +102,52 @@ async def test_stream_chat_persists_with_fake_llm(
     payload = await service.get_conversation(user.id, UUID(str(conv_id)))
     assert len(payload["messages"]) == 2
     assert payload["messages"][1]["content"] == "Hello world"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_list_conversations_newest_first(chat_session: AsyncSession) -> None:
+    user = await _user(chat_session)
+    service = ChatService(chat_session, make_settings())
+    await service._repo.create_conversation(user.id, title="older ask")
+    await chat_session.commit()
+    newer = await service._repo.create_conversation(user.id, title="newer ask")
+    await service._repo.set_conversation_title(newer.id, "newer ask")
+    await chat_session.commit()
+
+    listed = await service.list_conversations(user.id, limit=10, offset=0)
+    assert listed.total == 2
+    assert listed.items[0].id == newer.id
+    assert listed.items[0].title == "newer ask"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_conversation_title_tracks_latest_user_message(
+    chat_session: AsyncSession,
+) -> None:
+    user = await _user(chat_session)
+    repo = LlmRepository(chat_session)
+    conv = await repo.create_conversation(user.id, title="first")
+    await repo.set_conversation_title(conv.id, "second message here")
+    await chat_session.commit()
+    reloaded = await repo.get_conversation_for_user(conv.id, user.id)
+    assert reloaded is not None
+    assert reloaded.title == "second message here"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_delete_conversation_removes_from_list(chat_session: AsyncSession) -> None:
+    user = await _user(chat_session)
+    service = ChatService(chat_session, make_settings())
+    kept = await service._repo.create_conversation(user.id, title="keep me")
+    doomed = await service._repo.create_conversation(user.id, title="delete me")
+    await service._repo.add_message(doomed.id, role="user", content="delete me")
+    await chat_session.commit()
+
+    await service.delete_conversation(user.id, doomed.id)
+    listed = await service.list_conversations(user.id, limit=10, offset=0)
+    assert listed.total == 1
+    assert listed.items[0].id == kept.id
+    assert await service._repo.get_conversation_for_user(doomed.id, user.id) is None

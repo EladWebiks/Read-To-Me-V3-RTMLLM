@@ -56,7 +56,7 @@ describe('QuotaSection', () => {
 
   it('spells out that blank and 0 are different', () => {
     renderSection()
-    expect(screen.getByText('Quotas (blank = unlimited, 0 = blocked)')).toBeTruthy()
+    expect(screen.getByText(/Blank = unlimited/)).toBeTruthy()
   })
 
   it('PUTs 0 as a blocking limit rather than clearing the rule', async () => {

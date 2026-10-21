@@ -1,7 +1,5 @@
 import { RISK_LEVELS, type ToolCallFilterValues } from '@/features/admin/api/toolCalls'
-import { Select } from '@/shared/ui'
-
-const FIELD = 'rounded border border-border bg-background px-2 py-1 text-sm'
+import { Input, Select } from '@/shared/ui'
 
 export function ToolCallFilters({
   filters,
@@ -11,16 +9,18 @@ export function ToolCallFilters({
   onChange: (filters: ToolCallFilterValues) => void
 }) {
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
-      <input
-        className={FIELD}
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        size="sm"
+        className="w-40 sm:w-48"
         placeholder="Tool name"
         aria-label="Filter by tool name"
         value={filters.tool_name ?? ''}
         onChange={(event) => onChange({ ...filters, tool_name: event.target.value })}
       />
-      <input
-        className={FIELD}
+      <Input
+        size="sm"
+        className="w-32 sm:w-40"
         placeholder="Status"
         aria-label="Filter by status"
         value={filters.status ?? ''}

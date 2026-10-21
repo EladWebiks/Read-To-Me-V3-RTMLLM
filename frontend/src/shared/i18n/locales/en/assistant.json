@@ -1,0 +1,79 @@
+{
+  "title": "Assistant",
+  "subtitle": "Read To Me",
+  "subtitleFullscreen": "Fullscreen · Read To Me",
+  "ariaLabel": "Assistant",
+  "openAssistant": "Open assistant",
+  "closeAssistant": "Close assistant",
+  "emptyTitle": "Ask anything",
+  "emptyBody": "Library tools, play, downloads, and scrape confirmation when needed.",
+  "composer": {
+    "placeholder": "Ask anything…",
+    "waitingConfirm": "Waiting for confirmation…",
+    "working": "Assistant is working…",
+    "blockedNotice": "Confirm or cancel the pending action above to continue.",
+    "messageAria": "Message",
+    "sendAria": "Send message",
+    "stopAria": "Stop response"
+  },
+  "history": {
+    "untitled": "Untitled chat",
+    "title": "Chat history",
+    "button": "History",
+    "subtitle": "Your recent conversations",
+    "close": "Close history",
+    "delete": "Delete chat",
+    "newChat": "New chat",
+    "loadFailed": "Couldn't load that conversation."
+  },
+  "header": {
+    "fullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "close": "Close"
+  },
+  "linkSafety": {
+    "title": "Open external link?",
+    "warning": "This takes you to another website outside Read To Me.",
+    "copy": "Copy address",
+    "open": "Visit site",
+    "close": "Close"
+  },
+  "hitl": {
+    "approve": "Approve",
+    "cancel": "Cancel",
+    "approved": "Approved",
+    "declined": "Declined",
+    "choose": "Choose"
+  },
+  "actions": {
+    "import_discovered_book": "Import book",
+    "scrape_book_range": "Scrape book",
+    "create_audio_download": "Create audio"
+  },
+  "tool": {
+    "done": "Done",
+    "failed": "Failed",
+    "scrape": "Scrape",
+    "audioDownload": "Audio download"
+  },
+  "fields": {
+    "chapter_from": "From",
+    "chapter_to": "To (inclusive)",
+    "start_chapter": "From",
+    "chapter_count": "Total amount of chapters",
+    "provider": "Provider",
+    "voice": "Voice",
+    "rate": "Rate"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "busy": "The AI service is busy right now. Please try again in a moment.",
+    "rateLimited": "Too many AI requests right now. Please wait a moment and try again.",
+    "timeout": "The assistant took too long to respond. Please try again.",
+    "auth": "The AI service couldn't authenticate. Check your API key settings.",
+    "providerDump": "The assistant couldn't complete that reply. Please try again.",
+    "quota": "You've reached your monthly AI limit. Upgrade your plan or try again after {{date}}.",
+    "quotaNextMonth": "next month",
+    "quotaLock": "Monthly AI limit reached — resets {{date}}"
+  }
+}

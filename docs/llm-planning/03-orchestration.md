@@ -84,10 +84,10 @@ must translate it into useful user copy rather than exposing internal budget tex
 | Cap | Setting (proposed) | Default |
 |-----|--------------------|---------|
 | Max tool-call iterations | `llm_max_tool_iters` | 6 |
-| Max external requests / run | `llm_max_external_calls` | 3 |
+| Max external requests / run | `llm_max_external_calls` | 8 |
 | Max tokens / conversation turn | `llm_max_turn_tokens_in` / `_out` | 64k in + 8k out (cumulative across tool rounds; a completed final answer records soft-limit overage instead of being discarded) |
 | Max cost / turn (USD) | `llm_max_turn_cost_usd` | 0.05 |
-| Max wall-clock / run | `llm_run_deadline_seconds` | 60 |
+| Max wall-clock / run | `llm_run_deadline_seconds` | 300 |
 | Per-tool timeout | tool `timeout_ms` | tool-specific |
 | Per-provider circuit breaker | (from B1 router) | inherited |
 

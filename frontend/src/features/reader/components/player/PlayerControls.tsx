@@ -1,27 +1,13 @@
-import type { PlaybackEngine } from '@/features/reader/hooks/ttsSettingsStore'
-import type { PlayerControlsProps } from '@/features/reader/logic/playerControlTypes'
-import { Select } from '@/shared/ui'
 import { RateVolumeControls } from './RateVolumeControls'
-import { VoicePickers } from './VoicePickers'
 
-export type { PlayerControlsProps } from '@/features/reader/logic/playerControlTypes'
+type Props = {
+  rate: number
+  volume: number
+  onRate: (rate: number) => void
+  onVolume: (volume: number) => void
+}
 
-export function PlayerControls(props: PlayerControlsProps) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-      <label className="flex items-center gap-1">
-        Engine
-        <Select
-          className="w-auto text-foreground"
-          value={props.engine}
-          onChange={(event) => props.onEngine(event.target.value as PlaybackEngine)}
-        >
-          <option value="browser">Browser</option>
-          <option value="server">Server</option>
-        </Select>
-      </label>
-      <VoicePickers {...props} />
-      <RateVolumeControls {...props} />
-    </div>
-  )
+/** Expanded reader playback row: speed and volume only. */
+export function PlayerControls(props: Props) {
+  return <RateVolumeControls {...props} />
 }

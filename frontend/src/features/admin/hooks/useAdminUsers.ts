@@ -4,15 +4,16 @@ import {
   patchAdminUser,
   restoreAdminUser,
   softDeleteAdminUser,
+  type AdminUserFilters,
   type AdminUserPatch,
 } from '@/features/admin/api/users'
 
 export const usersKey = ['admin', 'users'] as const
 
-export function useAdminUsers(limit: number, offset: number) {
+export function useAdminUsers(limit: number, offset: number, filters: AdminUserFilters) {
   return useQuery({
-    queryKey: [...usersKey, limit, offset],
-    queryFn: () => fetchAdminUsers(limit, offset),
+    queryKey: [...usersKey, limit, offset, filters],
+    queryFn: () => fetchAdminUsers(limit, offset, filters),
   })
 }
 

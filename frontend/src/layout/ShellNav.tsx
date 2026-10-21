@@ -1,22 +1,36 @@
 import type { ReactNode } from 'react'
 import { BookOpen, Library, ShieldCheck, Wand2 } from 'lucide-react'
 import { NavLink } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/features/auth/hooks'
 
 export function ShellNavLinks({ readerActive }: { readerActive: boolean }) {
   const isAdmin = useIsAdmin()
+  const { t } = useTranslation('common')
   return (
-    <nav className="mr-1 flex items-center gap-1 text-sm">
-      <ShellNav to="/library" label="Library" icon={<Library className="h-4 w-4" />} />
+    <nav className="me-1 flex items-center gap-1 text-sm">
+      <ShellNav
+        to="/library"
+        label={t('nav.library')}
+        icon={<Library className="h-4 w-4" />}
+      />
       <ShellNav
         to="/reader"
-        label="Reader"
+        label={t('nav.reader')}
         icon={<BookOpen className="h-4 w-4" />}
         active={readerActive}
       />
-      <ShellNav to="/scraper" label="Scraper" icon={<Wand2 className="h-4 w-4" />} />
+      <ShellNav
+        to="/scraper"
+        label={t('nav.scraper')}
+        icon={<Wand2 className="h-4 w-4" />}
+      />
       {isAdmin && (
-        <ShellNav to="/admin" label="Admin" icon={<ShieldCheck className="h-4 w-4" />} />
+        <ShellNav
+          to="/admin"
+          label={t('nav.admin')}
+          icon={<ShieldCheck className="h-4 w-4" />}
+        />
       )}
     </nav>
   )

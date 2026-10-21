@@ -49,6 +49,7 @@ class TunableField:
     field_name: str  # attribute on the group model
     group_cls: type[BaseSettings]
     adapter: TypeAdapter[Any]  # validates type AND field constraints
+    description: str | None  # from Field(description=…); shown in admin UI
 
 
 def _field_adapter(group_cls: type[BaseSettings], field_name: str) -> TypeAdapter[Any]:
@@ -67,12 +68,14 @@ def _field_adapter(group_cls: type[BaseSettings], field_name: str) -> TypeAdapte
 
 
 def _entry(section: str, group_cls: type[BaseSettings], field_name: str) -> TunableField:
+    info = group_cls.model_fields[field_name]
     return TunableField(
         key=f"{section}.{field_name}",
         section=section,
         field_name=field_name,
         group_cls=group_cls,
         adapter=_field_adapter(group_cls, field_name),
+        description=info.description,
     )
 
 

@@ -34,6 +34,7 @@ async def seed_tool_calls(user_id: UUID) -> None:
         session.add(
             ToolCallRecord(
                 message_id=message.id,
+                user_id=user_id,
                 tool_name="search_books",
                 input={"q": "dragons"},
                 output={"ok": True},
@@ -46,6 +47,7 @@ async def seed_tool_calls(user_id: UUID) -> None:
         session.add(
             ToolCallRecord(
                 message_id=None,
+                user_id=user_id,
                 tool_name="scrape_url",
                 input={},
                 status="failed",
@@ -65,9 +67,12 @@ async def test_lists_all_with_attribution(client: AsyncClient, admin: UUID) -> N
     assert payload["total"] == 2
     by_tool = {row["tool_name"]: row for row in payload["items"]}
     assert by_tool["search_books"]["user_id"] == str(reader)
+    assert by_tool["search_books"]["username"] == "reader"
+    assert by_tool["search_books"]["email"] == "reader@example.com"
     assert by_tool["search_books"]["input"] == {"q": "dragons"}
     assert by_tool["search_books"]["duration_ms"] == 12
-    assert by_tool["scrape_url"]["user_id"] is None
+    assert by_tool["scrape_url"]["user_id"] == str(reader)
+    assert by_tool["scrape_url"]["username"] == "reader"
     assert by_tool["scrape_url"]["error"] == "boom"
 
 

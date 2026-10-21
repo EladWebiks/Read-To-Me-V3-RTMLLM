@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import {
+  type ExecutionFilters,
   fetchExecutions,
   fetchUsageByUser,
   fetchUsageOverview,
@@ -20,9 +21,14 @@ export function useUsageByUser(period: Period, limit: number, offset: number) {
   })
 }
 
-export function useExecutions(period: Period, limit: number, offset: number) {
+export function useExecutions(
+  period: Period,
+  limit: number,
+  offset: number,
+  filters: ExecutionFilters = {},
+) {
   return useQuery({
-    queryKey: ['admin', 'usage', 'executions', period, limit, offset],
-    queryFn: () => fetchExecutions(period, limit, offset),
+    queryKey: ['admin', 'usage', 'executions', period, limit, offset, filters],
+    queryFn: () => fetchExecutions(period, limit, offset, filters),
   })
 }

@@ -34,6 +34,15 @@ export function parseClientAction(raw: unknown): ClientAction | undefined {
       chapterTo: obj.chapter_to,
     }
   }
+  if (type === 'scrape' && typeof obj.job_id === 'string') {
+    return {
+      type,
+      label,
+      jobId: obj.job_id,
+      maxChapters: typeof obj.max_chapters === 'number' ? obj.max_chapters : null,
+      chapterFrom: typeof obj.chapter_from === 'number' ? obj.chapter_from : null,
+    }
+  }
   if (type !== 'navigate' && type !== 'play') return undefined
   if (typeof path !== 'string') return undefined
   if (!path.startsWith('/')) return undefined
@@ -70,10 +79,19 @@ export function parseConfirmation(data: Record<string, unknown>): ConfirmationPa
     tool: String(data.tool ?? ''),
     risk: String(data.risk ?? ''),
     summary: String(data.summary ?? 'Confirm action'),
+    action: optionalString(data.action),
+    title: optionalString(data.title),
+    subtitle: optionalString(data.subtitle),
     args: (data.args as Record<string, unknown>) ?? {},
     form,
     status: 'pending',
   }
+}
+
+function optionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
 export function parseSseBlock(block: string): {

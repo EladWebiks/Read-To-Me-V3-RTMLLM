@@ -9,18 +9,19 @@ export type PolicyFieldKey =
 
 export type PolicyFieldMeta = {
   key: PolicyFieldKey
-  /** All fields here are per-turn caps: null = inherit the runtime setting. */
+  /** Short label — units / inherit rules live in `hint`. */
   label: string
+  hint: string
 }
 
 export const POLICY_FIELDS: PolicyFieldMeta[] = [
-  { key: 'max_tool_iters', label: 'Max tool iterations / turn' },
-  { key: 'max_external_calls', label: 'Max external calls / turn' },
-  { key: 'max_turn_tokens_in', label: 'Max tokens in / turn' },
-  { key: 'max_turn_tokens_out', label: 'Max tokens out / turn' },
-  { key: 'max_turn_cost_usd', label: 'Max cost (USD) / turn' },
-  { key: 'run_deadline_seconds', label: 'Run deadline (seconds)' },
-  { key: 'max_hitl_rounds', label: 'Max confirmation rounds / turn' },
+  { key: 'max_tool_iters', label: 'Tool iterations', hint: 'Per turn' },
+  { key: 'max_external_calls', label: 'External calls', hint: 'Per turn' },
+  { key: 'max_turn_tokens_in', label: 'Tokens in', hint: 'Per turn' },
+  { key: 'max_turn_tokens_out', label: 'Tokens out', hint: 'Per turn' },
+  { key: 'max_turn_cost_usd', label: 'Cost (USD)', hint: 'Per turn' },
+  { key: 'run_deadline_seconds', label: 'Run deadline', hint: 'Seconds' },
+  { key: 'max_hitl_rounds', label: 'Confirmation rounds', hint: 'Per turn' },
 ]
 
 /** '' -> null (inherit); invalid -> undefined (block save). */

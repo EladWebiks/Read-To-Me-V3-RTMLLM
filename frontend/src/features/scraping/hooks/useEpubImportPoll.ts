@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useJobEventsStore } from '@/features/jobEvents'
 import { getImportJob } from '../api/importApi'
 import type { EpubImportResult, ImportJob } from '../types/importTypes'
 
@@ -12,9 +13,11 @@ type Setters = {
   onImported: () => void
 }
 
-/** Poll while an EPUB import job is running. */
+/** Follow EPUB import progress via SSE when connected, else poll. */
 export function useEpubImportPoll(importJob: ImportJob | null, setters: Setters) {
   const queryClient = useQueryClient()
+  const sseConnected = useJobEventsStore((s) => s.connected)
+  const subscribe = useJobEventsStore((s) => s.subscribe)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { setImportJob, setResult, setImportError, onImported } = setters
 
@@ -26,7 +29,8 @@ export function useEpubImportPoll(importJob: ImportJob | null, setters: Setters)
       }
       return
     }
-    pollRef.current = setInterval(() => {
+
+    const runOnce = () =>
       void pollOnce(importJob, {
         setImportJob,
         setResult,
@@ -34,13 +38,20 @@ export function useEpubImportPoll(importJob: ImportJob | null, setters: Setters)
         onImported,
         queryClient,
       })
-    }, POLL_MS)
+
+    if (sseConnected) {
+      return subscribe((event) => {
+        if (event.kind === 'import' && event.job_id === importJob.job_id) runOnce()
+      })
+    }
+
+    pollRef.current = setInterval(runOnce, POLL_MS)
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
     }
-    // Only restart when job identity/status changes.
+    // Only restart when job identity/status/SSE mode changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [importJob?.job_id, importJob?.status])
+  }, [importJob?.job_id, importJob?.status, sseConnected, subscribe])
 }
 
 async function pollOnce(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseClientAction } from './sseParse'
+import { parseClientAction, parseConfirmation } from './sseParse'
 
 describe('parseClientAction', () => {
   it('accepts allowlisted play and settings action shapes', () => {
@@ -39,10 +39,64 @@ describe('parseClientAction', () => {
     })
   })
 
+  it('accepts a validated scrape tracking action', () => {
+    expect(
+      parseClientAction({
+        type: 'scrape',
+        label: 'Open Scraper',
+        job_id: 'job-9',
+        max_chapters: 50,
+        chapter_from: 1,
+      }),
+    ).toEqual({
+      type: 'scrape',
+      label: 'Open Scraper',
+      jobId: 'job-9',
+      maxChapters: 50,
+      chapterFrom: 1,
+    })
+  })
+
   it('rejects unknown action types and external paths', () => {
     expect(parseClientAction({ type: 'script', path: '/', label: 'Run' })).toBeUndefined()
     expect(
       parseClientAction({ type: 'navigate', path: 'https://example.com', label: 'Open' }),
     ).toBeUndefined()
+  })
+})
+
+describe('parseConfirmation', () => {
+  it('parses action, title, and subtitle when present', () => {
+    expect(
+      parseConfirmation({
+        call_id: 'c1',
+        tool: 'scrape_book_range',
+        risk: 'confirmation_required',
+        summary: 'Scrape book: Foo',
+        action: 'Scrape book',
+        title: 'Foo',
+        subtitle: 'novelfull',
+        args: { url: 'https://x' },
+        form: { fields: [] },
+      }),
+    ).toMatchObject({
+      callId: 'c1',
+      action: 'Scrape book',
+      title: 'Foo',
+      subtitle: 'novelfull',
+      status: 'pending',
+    })
+  })
+
+  it('omits blank presentation fields', () => {
+    const parsed = parseConfirmation({
+      call_id: 'c2',
+      tool: 'create_audio_download',
+      summary: 'Confirm',
+      action: '  ',
+      title: null,
+    })
+    expect(parsed.action).toBeUndefined()
+    expect(parsed.title).toBeUndefined()
   })
 })

@@ -1,4 +1,4 @@
-import { apiGet } from '@/shared/lib/api'
+import { apiDelete, apiGet } from '@/shared/lib/api'
 import type { ChatStreamHandlers, Conversation } from './chatTypes'
 import { dispatchSseBlock } from './sseDispatch'
 
@@ -19,6 +19,27 @@ const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 export function getConversation(conversationId: string): Promise<Conversation> {
   return apiGet<Conversation>(`/api/chat/${conversationId}`)
+}
+
+export type ConversationSummary = {
+  id: string
+  title: string | null
+  updated_at: string
+}
+
+export type ConversationList = {
+  items: ConversationSummary[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export function listConversations(limit = 50, offset = 0): Promise<ConversationList> {
+  return apiGet<ConversationList>(`/api/chat?limit=${limit}&offset=${offset}`)
+}
+
+export function deleteConversation(conversationId: string): Promise<void> {
+  return apiDelete(`/api/chat/${conversationId}`)
 }
 
 /** POST /api/chat and parse SSE events. */

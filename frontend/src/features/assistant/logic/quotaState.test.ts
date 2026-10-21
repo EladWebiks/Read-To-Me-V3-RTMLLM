@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MeUsage } from '@/features/usage'
+import '@/shared/i18n'
 import { quotaLock } from './quotaState'
 
 function usage(overrides: Partial<MeUsage['kinds'][number]>[]): MeUsage {

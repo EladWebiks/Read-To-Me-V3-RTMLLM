@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 from urllib.parse import urlparse
 
 import httpx
@@ -16,6 +17,16 @@ _USER_AGENT = (
 )
 
 _BLOCKED_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}  # noqa: S104
+_MIN_CHAPTER_HTML_BYTES = 8000
+_CF_BLOCK_MARKERS = (
+    "challenge-platform",
+    "cf-browser-verification",
+    "cdn-cgi/challenge",
+    "__cf$cv$params",
+    "just a moment",
+    "checking your browser",
+    "attention required",
+)
 
 
 class FetchError(Exception):
@@ -56,6 +67,89 @@ def validate_url(url: str, allowlist: set[str]) -> None:
         raise FetchError(f"Private/loopback IP blocked: {host}")
 
 
+def looks_like_bot_block(html: str) -> bool:
+    """Heuristic for Cloudflare / anti-bot interstitials (not real chapter HTML).
+
+    Real NovelFire pages embed ``challenge-platform`` / ``cdn-cgi`` scripts even
+    when ``div#content`` is present — markers alone are not enough. Only short
+    responses that also look like a CF interstitial count as blocked.
+    """
+    if len(html) >= _MIN_CHAPTER_HTML_BYTES:
+        return False
+    lowered = html.lower()
+    if any(marker in lowered for marker in _CF_BLOCK_MARKERS):
+        return True
+    return "cloudflare" in lowered
+
+
+def _decode_response(resp: httpx.Response, max_bytes: int) -> str:
+    raw = resp.content[:max_bytes]
+    return raw.decode(resp.encoding or "utf-8", errors="replace")
+
+
+class FetchSession:
+    """Reuses one HTTP client (cookies + connections) for a scrape walk."""
+
+    def __init__(self) -> None:
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> FetchSession:
+        await self._open()
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        await self._close()
+
+    async def reset(self) -> None:
+        """Drop a poisoned connection pool (e.g. after NovelFire disconnects)."""
+        await self._close()
+        await self._open()
+
+    async def _open(self) -> None:
+        settings = get_settings()
+        self._client = httpx.AsyncClient(
+            timeout=settings.scrape.timeout_seconds,
+            follow_redirects=True,
+            max_redirects=5,
+            headers={"User-Agent": _USER_AGENT},
+        )
+
+    async def _close(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def fetch_html(
+        self,
+        url: str,
+        allowlist: set[str],
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> str:
+        validate_url(url, allowlist)
+        if self._client is None:
+            raise FetchError("FetchSession is not active")
+        settings = get_settings()
+        try:
+            resp = await self._client.get(url, headers=headers or {})
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise FetchError(str(exc)) from exc
+        return _decode_response(resp, settings.scrape.max_bytes)
+
+    async def fetch_bytes(self, url: str, allowlist: set[str]) -> bytes:
+        validate_url(url, allowlist)
+        if self._client is None:
+            raise FetchError("FetchSession is not active")
+        settings = get_settings()
+        try:
+            resp = await self._client.get(url)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise FetchError(str(exc)) from exc
+        return resp.content[: settings.scrape.max_bytes]
+
+
 async def fetch_html(
     url: str,
     allowlist: set[str],
@@ -74,8 +168,7 @@ async def fetch_html(
     ) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-        raw = resp.content[: settings.scrape.max_bytes]
-        return raw.decode(resp.encoding or "utf-8", errors="replace")
+        return _decode_response(resp, settings.scrape.max_bytes)
 
 
 async def post_form_html(
@@ -99,6 +192,62 @@ async def post_form_html(
         resp.raise_for_status()
         raw = resp.content[: settings.scrape.max_bytes]
         return raw.decode(resp.encoding or "utf-8", errors="replace")
+
+
+async def get_json(
+    url: str,
+    allowlist: set[str],
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """GET JSON and return a parsed object (SSRF-safe)."""
+    return await _request_json("GET", url, allowlist, headers=headers)
+
+
+async def post_json(
+    url: str,
+    allowlist: set[str],
+    payload: dict[str, object],
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """POST JSON body and return parsed object (SSRF-safe)."""
+    return await _request_json("POST", url, allowlist, headers=headers, json_body=payload)
+
+
+async def _request_json(
+    method: str,
+    url: str,
+    allowlist: set[str],
+    *,
+    headers: dict[str, str] | None = None,
+    json_body: dict[str, object] | None = None,
+) -> dict[str, object]:
+    validate_url(url, allowlist)
+    settings = get_settings()
+    req_headers = {
+        "User-Agent": _USER_AGENT,
+        "Accept": "application/json",
+        **(headers or {}),
+    }
+    if json_body is not None:
+        req_headers.setdefault("Content-Type", "application/json")
+    async with httpx.AsyncClient(
+        timeout=settings.scrape.timeout_seconds,
+        follow_redirects=True,
+        max_redirects=5,
+        headers=req_headers,
+    ) as client:
+        resp = await client.request(method, url, json=json_body)
+        resp.raise_for_status()
+        raw = resp.content[: settings.scrape.max_bytes]
+        try:
+            data: object = json.loads(raw.decode(resp.encoding or "utf-8", errors="replace"))
+        except json.JSONDecodeError as exc:
+            raise FetchError("Invalid JSON response") from exc
+        if not isinstance(data, dict):
+            raise FetchError("JSON response was not an object")
+        return data
 
 
 async def fetch_bytes(url: str, allowlist: set[str]) -> bytes:

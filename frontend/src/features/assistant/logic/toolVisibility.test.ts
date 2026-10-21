@@ -22,12 +22,18 @@ describe('isVisibleToolMessage', () => {
     expect(isVisibleToolMessage(tool({ toolOk: false }))).toBe(false)
   })
 
-  it('shows navigate affordances', () => {
+  it('shows scrape progress affordances', () => {
     expect(
       isVisibleToolMessage(
         tool({
           toolName: 'scrape_book_range',
-          clientAction: { type: 'navigate', path: '/scraper', label: 'Open Scraper' },
+          clientAction: {
+            type: 'scrape',
+            label: 'Open Scraper',
+            jobId: 'j1',
+            maxChapters: 50,
+            chapterFrom: 1,
+          },
         }),
       ),
     ).toBe(true)

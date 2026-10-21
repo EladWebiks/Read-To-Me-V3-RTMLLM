@@ -1,60 +1,90 @@
 import { useState } from 'react'
-import type { ToolCallFilterValues } from '@/features/admin/api/toolCalls'
-import { PaginationControls } from '@/features/admin/components/common/PaginationControls'
+import type { ToolCall, ToolCallFilterValues } from '@/features/admin/api/toolCalls'
 import { usePageState } from '@/features/admin/hooks/usePageState'
 import { useToolCalls } from '@/features/admin/hooks/useToolCalls'
-import { QueryState, SkeletonTable } from '@/shared/ui'
+import { useDataListLayout } from '@/shared/hooks/useDataListLayout'
+import { DataListFrame, DataListPagination, QueryState, SkeletonTable } from '@/shared/ui'
+import { ToolCallDetailsDialog } from './ToolCallDetailsDialog'
 import { ToolCallFilters } from './ToolCallFilters'
-import { ToolCallRow } from './ToolCallRow'
+import { ToolCallsDataTable } from './ToolCallsDataTable'
+
+const ROW_REM = 2.5
+const HEADER_REM = 2
 
 export function ToolCallsPage() {
+  const layout = useDataListLayout({
+    rowRem: ROW_REM,
+    headerRem: HEADER_REM,
+    fallback: 12,
+  })
+  const page = usePageState(layout.pageSize)
   const [filters, setFilters] = useState<ToolCallFilterValues>({})
-  const page = usePageState(25)
-  const { data, isLoading, error, refetch } = useToolCalls(
-    filters,
-    page.limit,
-    page.offset,
-  )
-
-  const applyFilters = (next: ToolCallFilterValues) => {
-    setFilters(next)
-    page.reset()
-  }
+  const [selected, setSelected] = useState<ToolCall | null>(null)
+  const query = useToolCalls(filters, page.limit, page.offset)
 
   return (
-    <section>
-      <h1 className="mb-1 text-lg font-semibold">Tool-call audit</h1>
-      <ToolCallFilters filters={filters} onChange={applyFilters} />
-      <QueryState
-        isPending={isLoading}
-        isError={Boolean(error) || (!isLoading && !data)}
-        loading={<SkeletonTable rows={6} cols={5} />}
-        errorLabel="Couldn't load tool calls."
-        label="Loading tool calls…"
-        onRetry={() => void refetch()}
-      >
-        {data ? (
-          <>
-            <div className="space-y-2">
-              {data.items.map((call) => (
-                <ToolCallRow key={call.id} call={call} />
-              ))}
-              {data.items.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No tool calls match the filters.
-                </p>
-              )}
-            </div>
-            <PaginationControls
-              total={data.total}
+    <>
+      <DataListFrame
+        sectionRef={layout.sectionRef}
+        slotRef={layout.slotRef}
+        title="Tool-call audit"
+        description="Cross-user tool executions with input/output payloads."
+        toolbar={
+          <ToolCallFilters
+            filters={filters}
+            onChange={(next) => {
+              setFilters(next)
+              page.reset()
+            }}
+          />
+        }
+        footer={
+          query.data ? (
+            <DataListPagination
+              total={query.data.total}
               limit={page.limit}
               offset={page.offset}
-              onPrev={page.prev}
-              onNext={() => page.next(data.total)}
+              onPage={page.setPage}
             />
-          </>
-        ) : null}
-      </QueryState>
-    </section>
+          ) : (
+            <p className="text-sm text-muted-foreground">Measuring layout…</p>
+          )
+        }
+      >
+        <ToolCallsBody pageSize={layout.pageSize} query={query} onDetails={setSelected} />
+      </DataListFrame>
+      <ToolCallDetailsDialog
+        call={selected}
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null)
+        }}
+      />
+    </>
+  )
+}
+
+function ToolCallsBody({
+  pageSize,
+  query,
+  onDetails,
+}: {
+  pageSize: number
+  query: ReturnType<typeof useToolCalls>
+  onDetails: (call: ToolCall) => void
+}) {
+  return (
+    <QueryState
+      isPending={query.isLoading}
+      isError={Boolean(query.error) || (!query.isLoading && !query.data)}
+      loading={<SkeletonTable rows={Math.min(pageSize, 8)} cols={6} />}
+      errorLabel="Couldn't load tool calls."
+      label="Loading tool calls…"
+      onRetry={() => void query.refetch()}
+    >
+      {query.data ? (
+        <ToolCallsDataTable rows={query.data.items} onDetails={onDetails} />
+      ) : null}
+    </QueryState>
   )
 }

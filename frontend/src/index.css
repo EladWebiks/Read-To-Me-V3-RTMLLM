@@ -144,6 +144,56 @@ body {
   animation: fade-in-up 220ms ease-out;
 }
 
+/* Login split — brand panel atmosphere (photo optional: /login-hero.jpg). */
+.login-brand {
+  background-color: #1c1917;
+  color: #fafaf9;
+}
+
+.login-brand-mark {
+  font-family: var(--font-reader);
+  font-weight: 600;
+  line-height: 0.95;
+}
+
+.login-brand-atmosphere {
+  background:
+    radial-gradient(
+      ellipse 90% 70% at 15% 85%,
+      rgba(120, 113, 108, 0.35),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 90% 10%,
+      rgba(168, 162, 158, 0.2),
+      transparent 50%
+    ),
+    linear-gradient(165deg, #292524 0%, #1c1917 42%, #0c0a09 100%);
+}
+
+.login-brand-photo:not([hidden]) ~ .login-brand-atmosphere {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(12, 10, 9, 0.2) 0%,
+      rgba(12, 10, 9, 0.55) 45%,
+      rgba(12, 10, 9, 0.88) 100%
+    ),
+    linear-gradient(90deg, rgba(12, 10, 9, 0.15) 0%, transparent 55%);
+}
+
+@media (min-width: 1024px) {
+  .login-brand-photo:not([hidden]) ~ .login-brand-atmosphere {
+    background:
+      linear-gradient(180deg, rgba(12, 10, 9, 0.25) 0%, rgba(12, 10, 9, 0.82) 100%),
+      linear-gradient(90deg, rgba(12, 10, 9, 0.2) 0%, transparent 55%);
+  }
+}
+
+.login-brand-photo[hidden] {
+  display: none;
+}
+
 @keyframes rtm-skeleton-sweep {
   from {
     background-position: -200% 0;
@@ -168,23 +218,21 @@ body {
   animation: rtm-skeleton-sweep 1.6s ease-in-out infinite;
 }
 
-/* Floating / fullscreen assistant shell — lifts off reader in dark mode */
+/* Floating / fullscreen assistant — light: violet edge + neutral lift; dark: soft violet glow */
 .assistant-panel {
-  border-color: color-mix(in srgb, #a78bfa 28%, var(--border));
+  border-color: color-mix(in srgb, #a78bfa 22%, var(--border));
   box-shadow:
-    0 18px 50px -18px rgb(0 0 0 / 0.28),
-    0 0 0 1px rgb(167 139 250 / 0.12),
-    0 0 28px -6px rgb(167 139 250 / 0.22);
+    0 18px 44px -20px rgb(0 0 0 / 0.22),
+    0 0 0 1px rgb(167 139 250 / 0.1);
 }
 
 .dark .assistant-panel {
-  border-color: color-mix(in srgb, #c4b5fd 45%, var(--border));
-  background: color-mix(in srgb, var(--card) 92%, #2e1065 8%);
+  border-color: color-mix(in srgb, #c4b5fd 28%, var(--border));
+  background: color-mix(in srgb, var(--card) 96%, #2e1065 4%);
   box-shadow:
-    0 22px 60px -16px rgb(0 0 0 / 0.75),
-    0 0 0 1px rgb(196 181 253 / 0.28),
-    0 0 40px -4px rgb(167 139 250 / 0.45),
-    0 0 72px -8px rgb(232 121 249 / 0.22);
+    0 20px 48px -18px rgb(0 0 0 / 0.7),
+    0 0 0 1px rgb(196 181 253 / 0.16),
+    0 0 24px -8px rgb(167 139 250 / 0.22);
 }
 
 @keyframes assistant-pulse {
@@ -442,7 +490,7 @@ body {
 }
 
 .assistant-md :where(ul, ol) {
-  padding-left: 1.25em;
+  padding-inline-start: 1.25em;
 }
 
 .assistant-md li {
@@ -453,7 +501,8 @@ body {
   font-weight: 600;
 }
 
-.assistant-md :where(a) {
+.assistant-md :where(a),
+.assistant-md :where(button[data-streamdown='link']) {
   color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -480,9 +529,139 @@ body {
 }
 
 .assistant-md :where(blockquote) {
-  border-left: 3px solid var(--border);
-  padding-left: 0.75em;
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 0.75em;
   color: var(--muted-foreground);
+}
+
+/* Prefer wrapping over horizontal scroll in the chat column. */
+.assistant-md [data-streamdown='table-wrapper'] {
+  max-width: 100%;
+}
+
+.assistant-md [data-streamdown='table-wrapper'] > div {
+  overflow-x: visible;
+  overflow-y: visible;
+  max-width: 100%;
+}
+
+.assistant-md [data-streamdown='table'],
+.assistant-md table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.assistant-md :where(th, td),
+.assistant-md [data-streamdown='table-header-cell'],
+.assistant-md [data-streamdown='table-cell'] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+  hyphens: auto;
+}
+
+/* Streamdown portals fullscreen tables to document.body at z-50; the assistant
+   panel is z-60, so raise the overlay above chat and present it as a modal. */
+body > [data-streamdown='table-fullscreen'] {
+  z-index: 80;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--foreground) 35%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+body > [data-streamdown='table-fullscreen'] > div {
+  height: min(92vh, 56rem);
+  max-width: min(96vw, 72rem);
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--foreground) 22%, transparent);
+}
+
+/* Sheet (settings drawer): overlay fade + panel slide. Radix waits on
+   animationend for exit, so closed-state keyframes must be present. */
+@keyframes rtm-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rtm-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rtm-sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes rtm-sheet-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes rtm-sheet-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes rtm-sheet-out-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.rtm-sheet-overlay[data-state='open'] {
+  animation: rtm-overlay-in 200ms ease-out;
+}
+
+.rtm-sheet-overlay[data-state='closed'] {
+  animation: rtm-overlay-out 160ms ease-in;
+}
+
+.rtm-sheet-content-right[data-state='open'] {
+  animation: rtm-sheet-in-right 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rtm-sheet-content-right[data-state='closed'] {
+  animation: rtm-sheet-out-right 200ms ease-in;
+}
+
+.rtm-sheet-content-left[data-state='open'] {
+  animation: rtm-sheet-in-left 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rtm-sheet-content-left[data-state='closed'] {
+  animation: rtm-sheet-out-left 200ms ease-in;
 }
 
 @keyframes rtm-tooltip-in {

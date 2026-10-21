@@ -14,7 +14,7 @@ export function applyClientAction(
     applySettingsPatch(action.settings, setTheme)
     return
   }
-  if (action.type === 'download') return
+  if (action.type === 'download' || action.type === 'scrape') return
   if (!shouldAutoNavigate(action, pathname)) return
   if (action.type === 'play') {
     void navigate(action.path, {

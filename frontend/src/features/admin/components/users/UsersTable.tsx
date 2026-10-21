@@ -1,4 +1,5 @@
 import type { AdminUser } from '@/features/admin/api/users'
+import { DataTable, DataTableBody, DataTableColumn, DataTableHeader } from '@/shared/ui'
 import { UserRow, type MembershipOption } from './UserRow'
 
 export function UsersTable({
@@ -9,25 +10,26 @@ export function UsersTable({
   memberships: MembershipOption[]
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <thead className="text-muted-foreground">
-          <tr>
-            <th className="px-2 py-1.5 font-medium">Username</th>
-            <th className="px-2 py-1.5 font-medium">Email</th>
-            <th className="px-2 py-1.5 font-medium">Admin</th>
-            <th className="px-2 py-1.5 font-medium">Membership</th>
-            <th className="px-2 py-1.5 font-medium">Google</th>
-            <th className="px-2 py-1.5 font-medium">Created</th>
-            <th className="px-2 py-1.5 font-medium">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <UserRow key={user.id} user={user} memberships={memberships} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable empty={users.length === 0} emptyLabel="No users match these filters.">
+      <DataTableHeader>
+        <DataTableColumn>User</DataTableColumn>
+        <DataTableColumn className="w-14 px-2">Admin</DataTableColumn>
+        <DataTableColumn className="w-32 px-2">Membership</DataTableColumn>
+        <DataTableColumn className="w-16 px-2" hideBelow="md">
+          Google
+        </DataTableColumn>
+        <DataTableColumn className="w-24 px-2" hideBelow="lg">
+          Created
+        </DataTableColumn>
+        <DataTableColumn className="w-28 px-2" srOnly>
+          Actions
+        </DataTableColumn>
+      </DataTableHeader>
+      <DataTableBody>
+        {users.map((user) => (
+          <UserRow key={user.id} user={user} memberships={memberships} />
+        ))}
+      </DataTableBody>
+    </DataTable>
   )
 }

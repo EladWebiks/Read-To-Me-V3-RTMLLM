@@ -19,9 +19,10 @@ from app.modules.scraping.exceptions import (
     ScrapeJobNotFoundError,
     UnsupportedSourceError,
 )
+from app.modules.scraping.job_events import publish_scrape_job
 from app.modules.scraping.job_messages import public_scrape_error
 from app.modules.scraping.models import ScrapingJob
-from app.modules.scraping.registry import ALL_ALLOWED_HOSTS, get_adapter
+from app.modules.scraping.registry import ALL_ALLOWED_HOSTS, get_adapter, normalize_scrape_url
 from app.modules.scraping.repository import ScrapingRepository
 from app.modules.scraping.schemas import (
     ScrapeJobAdminRead,
@@ -30,10 +31,14 @@ from app.modules.scraping.schemas import (
     ScrapePreviewResponse,
 )
 from app.modules.scraping.types import BookMetadata
+from app.modules.scraping.walk_start import resolve_job_start_url_async, resolve_walk_start
 from app.modules.usage.kinds import UsageFact
 from app.modules.usage.read_service import UsageReadService
 
 _TERMINAL = {"complete", "failed", "cancelled"}
+
+# Re-export for older imports/tests.
+__all__ = ["ScrapingService", "resolve_walk_start"]
 
 
 class ScrapingService:
@@ -46,11 +51,12 @@ class ScrapingService:
 
     async def preview(self, url: str) -> ScrapePreviewResponse:
         """Fetch and parse a book/chapter URL into a preview."""
+        url = normalize_scrape_url(url)
         adapter = get_adapter(url)
         source = await self._repo.get_source_by_name(adapter.name)
         if source is None or not source.enabled:
             raise UnsupportedSourceError(adapter.name)
-        book_url, meta = await _fetch_book_meta(adapter, url)
+        book_url, meta, _html = await _fetch_book_meta(adapter, url)
         return ScrapePreviewResponse(
             source=adapter.name,
             book_url=book_url,
@@ -63,26 +69,35 @@ class ScrapingService:
     async def create_job(self, user_id: UUID, data: ScrapeJobCreate) -> ScrapeJobRead:
         """Create a pending scrape job and enqueue it."""
         await self._enforce_quota(user_id)
-        adapter = get_adapter(data.url)
+        url = normalize_scrape_url(data.url)
+        adapter = get_adapter(url)
         source = await self._repo.get_source_by_name(adapter.name)
         if source is None or not source.enabled:
             raise UnsupportedSourceError(adapter.name)
-        meta_url = data.book_url or data.url
-        book_url, meta = await _fetch_book_meta(adapter, meta_url)
-        book = await self._library.add_book(
+        meta_url = data.book_url or url
+        book_url, meta, book_html = await _fetch_book_meta(adapter, meta_url)
+        book = await self._library.find_or_add_book(
             user_id,
             BookCreate(title=meta.title or book_url, author=meta.author),
         )
-        if meta.cover_url:
+        if meta.cover_url and not book.cover_object_key:
             await _store_cover_from_url(self._session, book.id, meta.cover_url)
         start_chapter = (
             data.starting_chapter if data.starting_chapter is not None else data.chapter_from
+        )
+        start_url = await resolve_job_start_url_async(
+            adapter,
+            url,
+            meta.first_chapter_url,
+            start_chapter=start_chapter,
+            book_html=book_html,
+            book_url=book_url,
         )
         job = ScrapingJob(
             user_id=user_id,
             source_id=source.id,
             book_id=book.id,
-            start_url=resolve_walk_start(adapter, data.url, meta.first_chapter_url),
+            start_url=start_url,
             mode=data.mode,
             chapter_from=start_chapter,
             chapter_to=data.chapter_to,
@@ -92,6 +107,7 @@ class ScrapingService:
         )
         created = await self._repo.add_job(job)
         await self._session.commit()
+        await publish_scrape_job(created)
         await _enqueue(created.id)
         title = (meta.title or book_url or "Untitled").strip() or "Untitled"
         return _to_read(created, title)
@@ -158,6 +174,7 @@ class ScrapingService:
         job.message = "Cancel requested"
         await self._repo.flush()
         await self._session.commit()
+        await publish_scrape_job(job)
         return await self._read_with_title(job)
 
     async def delete_job(self, user_id: UUID, job_id: UUID) -> None:
@@ -240,22 +257,7 @@ def _to_read(job: ScrapingJob, book_title: str | None = None) -> ScrapeJobRead:
     )
 
 
-def resolve_walk_start(adapter: object, requested_url: str, first_chapter_url: str) -> str:
-    """Walk from the first chapter when the request URL is a book page.
-
-    Chapter URLs (where ``derive_book_url`` succeeds) are used as-is so mid-book
-    starts still work. Book pages have no chapter body, so using them as
-    ``start_url`` finishes with 0 chapters scraped.
-    """
-    if not first_chapter_url:
-        return requested_url
-    derived = adapter.derive_book_url(requested_url)  # type: ignore[attr-defined]
-    if derived is None:
-        return first_chapter_url
-    return requested_url
-
-
-async def _fetch_book_meta(adapter: object, url: str) -> tuple[str, BookMetadata]:
+async def _fetch_book_meta(adapter: object, url: str) -> tuple[str, BookMetadata, str]:
     book_url: str | None = adapter.derive_book_url(url)  # type: ignore[attr-defined]
     target = book_url or url
     try:
@@ -263,7 +265,7 @@ async def _fetch_book_meta(adapter: object, url: str) -> tuple[str, BookMetadata
     except FetchError as exc:
         raise PreviewError(str(exc)) from exc
     meta: BookMetadata = adapter.parse_book_page(html, target)  # type: ignore[attr-defined]
-    return target, meta
+    return target, meta, html
 
 
 async def _store_cover_from_url(session: AsyncSession, book_id: UUID, cover_url: str) -> None:

@@ -11,6 +11,7 @@ from app.core.ffmpeg import concat_mp3
 from app.core.storage import put_bytes
 from app.modules.audio.providers import get_provider
 from app.modules.chapters.service import ChapterService
+from app.modules.downloads.job_events import publish_download_job
 from app.modules.downloads.keys import chapter_object_key, combined_object_key
 from app.modules.downloads.models import DownloadJob
 from app.modules.downloads.repository import DownloadRepository
@@ -38,21 +39,29 @@ async def _process(session: AsyncSession, job_id: UUID) -> None:
     if job is None:
         return
     try:
-        job.status = "running"
-        await repo.flush()
-        await session.commit()
-        parts = await _synth_chapters(session, job)
-        combined = await concat_mp3(parts)
-        key = combined_object_key(job.user_id, job.id)
-        await put_bytes(key, combined, "audio/mpeg")
-        job.object_key = key
-        job.size_bytes = _total_bytes(combined, parts)
-        job.status = "complete"
-        job.error = None
+        await _run_success_path(session, repo, job)
     except Exception as exc:
         job.status = "failed"
         job.error = str(exc)[:2000]
     await repo.flush()
+    await publish_download_job(job)
+
+
+async def _run_success_path(
+    session: AsyncSession, repo: DownloadRepository, job: DownloadJob
+) -> None:
+    job.status = "running"
+    await repo.flush()
+    await session.commit()
+    await publish_download_job(job)
+    parts = await _synth_chapters(session, job)
+    combined = await concat_mp3(parts)
+    key = combined_object_key(job.user_id, job.id)
+    await put_bytes(key, combined, "audio/mpeg")
+    job.object_key = key
+    job.size_bytes = _total_bytes(combined, parts)
+    job.status = "complete"
+    job.error = None
 
 
 def _total_bytes(combined: bytes, parts: list[bytes]) -> int:
@@ -80,4 +89,5 @@ async def _synth_chapters(session: AsyncSession, job: DownloadJob) -> list[bytes
         job.ready_count = len(parts)
         await repo.flush()
         await session.commit()
+        await publish_download_job(job)
     return parts

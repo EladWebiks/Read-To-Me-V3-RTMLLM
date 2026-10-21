@@ -5,6 +5,7 @@ The only place that talks to Google. Domain code sees `GoogleClaims` only.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 from urllib.parse import urlencode
@@ -16,10 +17,16 @@ from pydantic import BaseModel, EmailStr, ValidationError
 from app.core.config import Settings
 from app.modules.auth.exceptions import GoogleAuthError, GoogleNotConfiguredError
 
+logger = logging.getLogger(__name__)
+
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 — public URL, not a secret
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 _ACCEPTED_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
+# Docker Desktop / Windows sleep-wake often drifts the container clock a few
+# seconds behind Google. Without leeway, PyJWT rejects fresh tokens with
+# "The token is not yet valid (iat)".
+_ID_TOKEN_LEEWAY_SECONDS = 120
 _JWKS_TTL_SECONDS = 3600
 # Minimum gap between forced (cache-bypassing) JWKS refetches triggered by an
 # unrecognized `kid`. Bounds request amplification from tokens carrying random
@@ -107,15 +114,18 @@ class GoogleOAuthClient:
                 key=key,
                 algorithms=["RS256"],
                 audience=self._client_id,
+                leeway=_ID_TOKEN_LEEWAY_SECONDS,
                 options={"require": ["exp", "aud", "sub"]},
             )
         except jwt.PyJWTError as exc:
+            logger.warning("google_id_token_jwt_failed: %s", exc)
             raise GoogleAuthError("invalid_id_token") from exc
         if payload.get("iss") not in _ACCEPTED_ISSUERS:
             raise GoogleAuthError("invalid_issuer")
         try:
             claims = GoogleClaims.model_validate(payload)
         except ValidationError as exc:
+            logger.warning("google_id_token_claims_invalid: %s", exc)
             raise GoogleAuthError("invalid_id_token") from exc
         if not claims.email_verified:
             raise GoogleAuthError("email_not_verified")

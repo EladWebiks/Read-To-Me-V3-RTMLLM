@@ -30,5 +30,13 @@ export type DownloadClientAction = {
   chapterTo: number
 }
 
+export type ScrapeClientAction = {
+  type: 'scrape'
+  label: string
+  jobId: string
+  maxChapters: number | null
+  chapterFrom: number | null
+}
+
 export type ClientAction =
-  NavigateClientAction | SettingsClientAction | DownloadClientAction
+  NavigateClientAction | SettingsClientAction | DownloadClientAction | ScrapeClientAction

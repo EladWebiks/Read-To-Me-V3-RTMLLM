@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.modules.llm.exceptions import ConversationNotFoundError, LlmError
 from app.modules.llm.repository import LlmRepository
+from app.modules.llm.schemas import ConversationListRead, ConversationSummaryRead
 from app.modules.llm.service import LlmService
 from app.modules.llm.sse import ChatSseEvent
 from app.modules.llm.types import Role
@@ -52,6 +53,26 @@ class ChatService:
                 for m in messages
             ],
         }
+
+    async def list_conversations(
+        self, user_id: UUID, *, limit: int, offset: int
+    ) -> ConversationListRead:
+        """Owned conversation summaries for the history drawer."""
+        rows, total = await self._repo.list_conversations_for_user(
+            user_id, limit=limit, offset=offset
+        )
+        items = [
+            ConversationSummaryRead(id=row.id, title=row.title, updated_at=row.updated_at)
+            for row in rows
+        ]
+        return ConversationListRead(items=items, total=total, limit=limit, offset=offset)
+
+    async def delete_conversation(self, user_id: UUID, conversation_id: UUID) -> None:
+        """Remove an owned conversation from history."""
+        deleted = await self._repo.delete_conversation_for_user(conversation_id, user_id)
+        if not deleted:
+            raise ConversationNotFoundError(str(conversation_id))
+        await self._session.commit()
 
     async def stream_chat(
         self,

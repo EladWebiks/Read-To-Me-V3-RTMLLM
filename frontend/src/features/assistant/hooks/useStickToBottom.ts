@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react'
 
-const NEAR_BOTTOM_PX = 64
+const NEAR_BOTTOM_PX = 80
 
 /** Keep a scroller pinned to the bottom unless the user scrolls up. */
 export function useStickToBottom(sending: boolean, contentKey: string) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stuckRef = useRef(true)
+  const ignoreScrollRef = useRef(false)
 
   const onScroll = useCallback(() => {
+    if (ignoreScrollRef.current) return
     const el = containerRef.current
     if (!el) return
     stuckRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
@@ -16,12 +18,21 @@ export function useStickToBottom(sending: boolean, contentKey: string) {
   const pin = useCallback(() => {
     const el = containerRef.current
     if (!el || !stuckRef.current) return
+    ignoreScrollRef.current = true
     el.scrollTop = el.scrollHeight
+    // Programmatic scroll fires 'scroll' with mid-layout metrics; ignore until paint.
+    requestAnimationFrame(() => {
+      ignoreScrollRef.current = false
+      if (!stuckRef.current) return
+      el.scrollTop = el.scrollHeight
+    })
   }, [])
 
   useEffect(() => {
-    if (sending) stuckRef.current = true
-  }, [sending])
+    if (!sending) return
+    stuckRef.current = true
+    pin()
+  }, [sending, pin])
 
   useEffect(pin, [contentKey, pin])
   useFollowContent(containerRef, pin)

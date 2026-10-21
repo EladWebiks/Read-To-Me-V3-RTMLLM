@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.normalize import normalize_title
 from app.modules.books.schemas import BookCreate, BookRead, BookUpdate
 from app.modules.books.service import BookService
 from app.modules.chapters.service import ChapterService
@@ -109,6 +110,27 @@ class LibraryService:
         book = await self._books.create(data)
         await self._repo.add(UserBook(user_id=user_id, book_id=book.id))
         return await self._books.get_read(book.id, chapter_count=0)
+
+    async def find_or_add_book(self, user_id: UUID, data: BookCreate) -> BookRead:
+        """Reuse an owned title match (most chapters) instead of duplicating."""
+        existing = await self._find_owned_title_match(user_id, data.title)
+        if existing is not None:
+            return existing
+        return await self.add_book(user_id, data)
+
+    async def _find_owned_title_match(self, user_id: UUID, title: str) -> BookRead | None:
+        needle = normalize_title(title)
+        if not needle:
+            return None
+        book_ids = await self._repo.list_book_ids(user_id)
+        if not book_ids:
+            return None
+        counts = await self._chapters.count_for_books(book_ids)
+        books = await self._books.list_read(book_ids, counts)
+        matches = [book for book in books if normalize_title(book.title) == needle]
+        if not matches:
+            return None
+        return max(matches, key=lambda book: book.chapter_count)
 
     async def update_book(
         self,

@@ -33,6 +33,9 @@ class FreezeRequest:
     proposed: dict[str, Any]
     provided_fields: set[str]
     summary: str
+    action: str
+    title: str | None
+    subtitle: str | None
 
 
 async def freeze_pending(req: FreezeRequest) -> ToolCallRecord:
@@ -70,6 +73,9 @@ async def freeze_pending(req: FreezeRequest) -> ToolCallRecord:
         "hitl_rounds": req.hitl_rounds,
         "expires_at": expires.isoformat(),
         "summary": req.summary,
+        "action": req.action,
+        "title": req.title,
+        "subtitle": req.subtitle,
         "form": build_form_payload(req.tool, req.proposed, req.provided_fields),
         "risk": req.tool.risk_level.value,
     }
@@ -81,6 +87,7 @@ async def freeze_pending(req: FreezeRequest) -> ToolCallRecord:
             status="pending_confirmation",
             risk_level=req.tool.risk_level.value,
             confirmed_by_user=False,
+            user_id=req.ctx.user_id,
         )
     )
 
@@ -93,6 +100,9 @@ def confirmation_event_data(row: ToolCallRecord, tool: BaseTool) -> dict[str, An
         "tool": tool.name,
         "risk": tool.risk_level.value,
         "summary": snap.get("summary") or f"Confirm {tool.name}",
+        "action": snap.get("action") or tool.name.replace("_", " ").capitalize(),
+        "title": snap.get("title"),
+        "subtitle": snap.get("subtitle"),
         "args": row.input,
         "form": snap.get("form"),
     }

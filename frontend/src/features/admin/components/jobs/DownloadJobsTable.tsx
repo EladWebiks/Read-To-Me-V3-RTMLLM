@@ -1,56 +1,59 @@
-import { PaginationControls } from '@/features/admin/components/common/PaginationControls'
-import { useDownloadJobs } from '@/features/admin/hooks/useAdminJobs'
-import { usePageState } from '@/features/admin/hooks/usePageState'
+import type { DownloadJob } from '@/features/admin/api/jobs'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableColumn,
+  DataTableHeader,
+  DataTableRow,
+} from '@/shared/ui'
 
-export function DownloadJobsTable({ status }: { status: string }) {
-  const page = usePageState(25)
-  const { data } = useDownloadJobs(status, page.limit, page.offset)
-  if (!data) {
-    return <p className="text-sm text-muted-foreground">Loading download jobs…</p>
-  }
+export function DownloadJobsTable({ rows }: { rows: DownloadJob[] }) {
   return (
-    <div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="text-muted-foreground">
-            <tr>
-              <th className="px-2 py-1.5 font-medium">User</th>
-              <th className="px-2 py-1.5 font-medium">Chapters</th>
-              <th className="px-2 py-1.5 font-medium">Provider</th>
-              <th className="px-2 py-1.5 font-medium">Status</th>
-              <th className="px-2 py-1.5 font-medium">Progress</th>
-              <th className="px-2 py-1.5 font-medium">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((job) => (
-              <tr key={job.id} className="border-t border-border/60">
-                <td className="px-2 py-1.5 font-mono text-xs">
-                  {job.user_id.slice(0, 8)}
-                </td>
-                <td className="px-2 py-1.5 tabular-nums">
-                  {job.chapter_from}–{job.chapter_to}
-                </td>
-                <td className="px-2 py-1.5">{job.provider}</td>
-                <td className="px-2 py-1.5">{job.error ?? job.status}</td>
-                <td className="px-2 py-1.5 tabular-nums">
-                  {job.ready_count}/{job.total_count}
-                </td>
-                <td className="px-2 py-1.5 text-muted-foreground">
-                  {new Date(job.created_at).toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <PaginationControls
-        total={data.total}
-        limit={page.limit}
-        offset={page.offset}
-        onPrev={page.prev}
-        onNext={() => page.next(data.total)}
-      />
-    </div>
+    <DataTable empty={rows.length === 0} emptyLabel="No download jobs match this filter.">
+      <DataTableHeader>
+        <DataTableColumn className="w-24">User</DataTableColumn>
+        <DataTableColumn className="w-24">Chapters</DataTableColumn>
+        <DataTableColumn>Provider</DataTableColumn>
+        <DataTableColumn className="w-24">Status</DataTableColumn>
+        <DataTableColumn className="w-20" hideBelow="sm">
+          Progress
+        </DataTableColumn>
+        <DataTableColumn className="w-36" hideBelow="md">
+          Created
+        </DataTableColumn>
+      </DataTableHeader>
+      <DataTableBody>
+        {rows.map((job) => (
+          <DownloadJobRow key={job.id} job={job} />
+        ))}
+      </DataTableBody>
+    </DataTable>
+  )
+}
+
+function DownloadJobRow({ job }: { job: DownloadJob }) {
+  return (
+    <DataTableRow>
+      <DataTableCell className="truncate text-xs" title={job.username ?? undefined}>
+        {job.username ?? '—'}
+      </DataTableCell>
+      <DataTableCell className="tabular-nums text-xs">
+        {job.chapter_from}–{job.chapter_to}
+      </DataTableCell>
+      <DataTableCell className="truncate text-xs">{job.provider}</DataTableCell>
+      <DataTableCell className="truncate text-xs" title={job.error ?? job.status}>
+        {job.error ?? job.status}
+      </DataTableCell>
+      <DataTableCell className="tabular-nums text-xs" hideBelow="sm">
+        {job.ready_count}/{job.total_count}
+      </DataTableCell>
+      <DataTableCell
+        className="tabular-nums text-xs text-muted-foreground"
+        hideBelow="md"
+      >
+        {new Date(job.created_at).toLocaleString()}
+      </DataTableCell>
+    </DataTableRow>
   )
 }

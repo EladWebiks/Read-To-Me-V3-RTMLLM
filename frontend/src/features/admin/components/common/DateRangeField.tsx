@@ -10,7 +10,7 @@ export function DateRangeField({
   onChange: (period: Period) => void
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end gap-2 text-sm">
+    <div className="flex flex-wrap items-end gap-2 text-sm">
       <label className="flex flex-col gap-1">
         <span className="text-xs text-muted-foreground">From</span>
         <input

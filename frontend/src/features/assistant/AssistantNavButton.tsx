@@ -1,12 +1,14 @@
 import { AssistantSparklesIcon } from './AssistantSparklesIcon'
 import { useAssistantStore } from './assistantStore'
+import { useTranslation } from 'react-i18next'
 import { IconTooltip } from '@/shared/ui'
 
 /** Navbar AI control — larger, always-animating, clearly clickable. */
 export function AssistantNavButton() {
   const open = useAssistantStore((s) => s.open)
   const toggle = useAssistantStore((s) => s.toggle)
-  const label = open ? 'Close assistant' : 'Open assistant'
+  const { t } = useTranslation('assistant')
+  const label = open ? t('closeAssistant') : t('openAssistant')
   return (
     <IconTooltip label={label}>
       <button

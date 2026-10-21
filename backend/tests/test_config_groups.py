@@ -91,11 +91,11 @@ def test_llm_disabled_allows_missing_key() -> None:
 def test_llm_runtime_defaults() -> None:
     runtime = make_settings(llm_max_tool_iters=2).llm_runtime
     assert runtime.max_tool_iters == 2
-    assert runtime.max_external_calls == 3
+    assert runtime.max_external_calls == 8
     assert runtime.max_turn_tokens_in == 64_000
     assert runtime.max_turn_tokens_out == 8_192
     assert runtime.max_turn_cost_usd == 0.05
-    assert runtime.run_deadline_seconds == 60
+    assert runtime.run_deadline_seconds == 300
     assert runtime.context_recent_messages == 10
     assert runtime.summary_trigger_tokens == 12_000
     assert runtime.summary_max_output_tokens == 1_200

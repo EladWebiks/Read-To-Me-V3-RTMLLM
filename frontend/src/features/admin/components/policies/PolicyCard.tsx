@@ -5,8 +5,9 @@ import type {
 } from '@/features/admin/api/membershipPolicies'
 import { usePatchMembershipPolicy } from '@/features/admin/hooks/useMembershipPolicies'
 import { parsePolicyInput, POLICY_FIELDS } from '@/features/admin/logic/policyFields'
-import { FormError } from '@/shared/ui'
+import { Button, FormError } from '@/shared/ui'
 import { PolicyField } from './PolicyField'
+import { SectionHeading } from './SectionHeading'
 
 type Props = {
   policy: MembershipPolicy
@@ -53,31 +54,41 @@ export function PolicyCard({ policy, inherited, header, children }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-border p-4">
-      {header ?? <h2 className="mb-2 font-medium capitalize">{policy.membership}</h2>}
-      <div className="grid gap-2 sm:grid-cols-2">
-        {POLICY_FIELDS.map((meta) => (
-          <PolicyField
-            key={meta.key}
-            membership={policy.membership}
-            meta={meta}
-            value={drafts[meta.key] ?? ''}
-            inherited={inherited}
-            onChange={(raw) => setDrafts((prev) => ({ ...prev, [meta.key]: raw }))}
+    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="border-b border-border/70 bg-muted/30 px-4 py-3">{header}</div>
+      <div className="space-y-5 p-4 sm:p-5">
+        <section className="space-y-3">
+          <SectionHeading
+            title="Per-turn caps"
+            hint="Blank inherits the runtime default shown in the field."
           />
-        ))}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {POLICY_FIELDS.map((meta) => (
+              <PolicyField
+                key={meta.key}
+                membership={policy.membership}
+                meta={meta}
+                value={drafts[meta.key] ?? ''}
+                inherited={inherited}
+                onChange={(raw) => setDrafts((prev) => ({ ...prev, [meta.key]: raw }))}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <Button
+              type="button"
+              size="sm"
+              disabled={mutation.isPending}
+              onClick={onSave}
+            >
+              {mutation.isPending ? 'Saving…' : 'Save caps'}
+            </Button>
+            <FormError error={invalid ? 'Enter numbers (or blank).' : null} />
+            <FormError error={mutation.error} />
+          </div>
+        </section>
+        {children}
       </div>
-      <FormError className="mt-2" error={invalid ? 'Enter numbers (or blank).' : null} />
-      <button
-        type="button"
-        className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
-        disabled={mutation.isPending}
-        onClick={onSave}
-      >
-        {mutation.isPending ? 'Saving…' : 'Save'}
-      </button>
-      <FormError className="mt-2" error={mutation.error} />
-      {children}
-    </div>
+    </article>
   )
 }
