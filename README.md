@@ -46,7 +46,13 @@
 
 ## Why this project
 
-RTM is a ground-up v3 rebuild of a personal reading tool. Two goals drove the design:
+RTM started as [RTM v2](https://github.com/eladjmc/RTM_V2) — a React + TypeScript
+reader with a small Node backend and a site scraper, still live at
+[read-to-me-beta.netlify.app](https://read-to-me-beta.netlify.app/). It proved the
+idea (read and listen to long web novels in one place) but had no LLM, in-memory
+jobs, and no multi-user story.
+
+v3 is a ground-up rebuild. Two goals drove the design:
 
 1. **A reading/listening experience that works for very long web novels** — libraries
    with thousands of chapters per book, resumable progress, server-side TTS, and
