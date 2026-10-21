@@ -1,28 +1,41 @@
-# RTM v3 — Read To Me
+<p align="center">
+  <img src="frontend/public/Logo-full.png" alt="RTM — Read To Me" width="420">
+</p>
 
-Read To Me is a local-first web application for building a personal book library,
-reading in the browser, listening with text-to-speech (TTS), producing MP3 downloads,
-importing EPUB files, scraping supported novel sites, and discussing owned books with
-a controlled LLM assistant.
+<h1 align="center">RTM v3 — Read To Me</h1>
 
-The project is a from-scratch v3 rebuild. It keeps the useful reading and scraping
-workflows from RTM v2 while replacing its in-memory jobs and single-purpose backend
-with durable storage, background workers, ownership checks, and a tool-gated assistant.
+<p align="center">
+  A local-first web app for building a personal novel library: read in the browser,
+  listen with text-to-speech, export MP3s, import EPUBs, scrape supported novel sites —
+  and talk to a tool-gated LLM assistant that can actually <em>do</em> things, safely.
+</p>
 
-> **Project status:** Milestones A and B are implemented. Milestone C currently includes
-> title discovery/import and persisted book summaries. Batched theme/trope
-> recommendations use `recommend_discovered_books` so “find three books like this”
-> is one bounded external operation on the four supported sources. Richer multi-step book
-> discussion, destructive/large assistant tools, and the evaluation harness also remain.
+<p align="center">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-modular%20monolith-009688?logo=fastapi&logoColor=white">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white">
+  <img alt="PostgreSQL + pgvector" src="https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-compose%20up-2496ED?logo=docker&logoColor=white">
+  <img alt="Gemini" src="https://img.shields.io/badge/LLM-Gemini%20via%20provider%20abstraction-8E75B2?logo=googlegemini&logoColor=white">
+</p>
+
+---
 
 ## Contents
 
-- [What RTM can do](#what-rtm-can-do)
+- [Why this project](#why-this-project)
+- [Tour](#tour)
+  - [Sign in and library](#sign-in-and-library)
+  - [Reader, TTS, and audio downloads](#reader-tts-and-audio-downloads)
+  - [Scraping and EPUB import](#scraping-and-epub-import)
+  - [The assistant](#the-assistant)
+  - [Admin backoffice](#admin-backoffice)
+- [Feature summary](#feature-summary)
 - [System architecture](#system-architecture)
 - [LLM architecture and safety](#llm-architecture-and-safety)
-- [Prerequisites](#prerequisites)
 - [Quick start with Docker](#quick-start-with-docker)
-- [Get and configure a Gemini API key](#get-and-configure-a-gemini-api-key)
+- [Enable the assistant (Gemini)](#enable-the-assistant-gemini)
 - [Local development](#local-development)
 - [Configuration](#configuration)
 - [Repository structure](#repository-structure)
@@ -31,91 +44,222 @@ with durable storage, background workers, ownership checks, and a tool-gated ass
 - [Troubleshooting](#troubleshooting)
 - [Further documentation](#further-documentation)
 
-## What RTM can do
+## Why this project
+
+Read To Me is the third generation of a project that has been evolving for over
+three years:
+
+| | What it was | Live |
+|---|---|---|
+| **v1** — [mern-read-to-me](https://github.com/eladjmc/mern-read-to-me) (2023) | MERN app for comfortable reading: paste or upload text, save it to a library, listen with browser TTS, adjustable speed and typography. No scraping. | [read-to-me.netlify.app](https://read-to-me.netlify.app/) |
+| **v2** — [RTM_V2](https://github.com/eladjmc/RTM_V2) | React + TypeScript rebuild with a Node backend and the first novel-site scraper — read and listen to long web novels in one place. No LLM, in-memory jobs, single user. | [read-to-me-beta.netlify.app](https://read-to-me-beta.netlify.app/) |
+| **v3** — this repo | Ground-up rebuild: Python/FastAPI modular monolith, durable background jobs, seven deterministic scrapers, server-side TTS and MP3 export, multi-user ownership, admin backoffice, and a tool-gated LLM assistant. | self-hosted (`docker compose up`) |
+
+<table>
+  <tr>
+    <th align="center">v1 — MERN, browser TTS</th>
+    <th align="center">v2 — React + Node, first scraper</th>
+    <th align="center">v3 — this repo</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/old-versions/v1.png" alt="Read To Me v1 home page"></td>
+    <td><img src="assets/screenshots/old-versions/v2.png" alt="RTM v2 reader with paragraph highlighting"></td>
+    <td><img src="assets/screenshots/reader-page-settings.png" alt="RTM v3 reader with settings"></td>
+  </tr>
+</table>
+
+Two goals drove the v3 design:
+
+1. **A reading/listening experience that works for very long web novels** — libraries
+   with thousands of chapters per book, resumable progress, server-side TTS, and
+   background jobs that survive restarts.
+2. **An LLM assistant that is useful but never trusted.** The model can search your
+   library, summarize books, play chapters, queue MP3 exports, find and import new
+   titles — but only through validated, authorized, audited tools, with a human
+   confirmation step before anything external, expensive, or irreversible happens.
+
+It runs entirely on your machine with `docker compose up`; the assistant is optional
+and everything else works without an API key.
+
+## Tour
+
+### Sign in and library
+
+Google SSO is the only sign-in method. The library shows cover, author, chapter count,
+and where you last stopped; sort by last read, date added, name, or chapter count.
+
+![Sign in](assets/screenshots/sign-in-page.png)
+
+![Library](assets/screenshots/library-page.png)
+
+Opening a book lists every chapter with the last-read marker, inline play/edit/delete,
+and a filter for titles or numbers — this one has ~2,800 chapters.
+
+![Chapter list](assets/screenshots/library-page-book-picked.png)
+
+### Reader, TTS, and audio downloads
+
+The reader has a player bar (play / pause / previous / next), speed and volume
+controls, auto-advance, and word- or paragraph-level highlighting that follows the
+voice. The settings sheet controls typography, highlight mode, speech engine, and
+voice — plus **Reader text cleanup**: JavaScript regex rules (toggle on/off per rule)
+that strip repeated translator/editor headers and other boilerplate before the text
+is shown or read aloud.
+
+![Reader with settings](assets/screenshots/reader-page-settings.png)
+
+Any chapter range can be exported as a single MP3 using a local SAPI voice or Edge
+neural voices. Jobs run in the background and finished files are served through
+short-lived signed URLs.
+
+<p align="center">
+  <img src="assets/screenshots/manually-download-chapters.png" alt="Download audio dialog" width="640">
+</p>
+
+### Scraping and EPUB import
+
+Seven novel sites have deterministic adapters (no LLM involved in parsing). The
+Scraper page lists recent jobs with live progress, cancellation, and one-click “Open
+book”; scraped chapters appear in the library as they land.
+
+![Scraper page](assets/screenshots/scraper-page.png)
+
+### The assistant
+
+The assistant lives in a floating panel on every page and streams real provider output
+over SSE with a live status line and a Stop button. It understands the page you are on
+(“this book”), replies in the language you write in (Hebrew and English, with proper
+RTL layout), and only acts through tools.
+
+**Scraping a book by name.** The model resolves the title against the supported
+sources, then pauses on a confirmation form. Approval resumes the *exact* frozen tool
+call; the progress card updates live afterwards.
+
+<table>
+  <tr>
+    <td><img src="assets/screenshots/scrape-book-request-llm.png" alt="Scrape request awaiting confirmation"></td>
+    <td><img src="assets/screenshots/scrape-book-approved-llm.png" alt="Scrape approved and running"></td>
+  </tr>
+</table>
+
+**Asking about the book, in Hebrew.** Grounded in owned content only — the model says
+so when a summary is not yet available.
+
+<table>
+  <tr>
+    <td><img src="assets/screenshots/asking-chat-about-the-book.png" alt="Asking about the book in Hebrew"></td>
+    <td><img src="assets/screenshots/assistant-capabilities.png" alt="Assistant explaining its capabilities"></td>
+  </tr>
+</table>
+
+**Creating an MP3 from chat.** “Download an MP3 of the first 5 chapters” produces a
+pre-filled confirmation form (range, provider, voice, rate), then a live progress card
+that turns into a download button.
+
+<table>
+  <tr>
+    <td><img src="assets/screenshots/download-mp3-request.png" alt="Create audio confirmation form"></td>
+    <td><img src="assets/screenshots/creating-mp3-file-from-chat.png" alt="Audio generation progress in chat"></td>
+  </tr>
+</table>
+
+**Structured answers from your library.** Search across metadata, summaries, and
+chapter content, rendered as a copyable/exportable table.
+
+<table>
+  <tr>
+    <td><img src="assets/screenshots/request-for-table-from-library.png" alt="Searching library content"></td>
+    <td><img src="assets/screenshots/result-table-from-library.png" alt="Result table of cultivation books"></td>
+  </tr>
+</table>
+
+### Admin backoffice
+
+A full admin area (admin role required) for operating the system without redeploys.
+
+| | |
+|---|---|
+| **Users** — roles, membership overrides, per-user quotas, soft-delete | ![Users](assets/screenshots/admin-page-1.png) |
+| **Memberships** — per-tier turn caps (iterations, external calls, tokens, cost, deadline, HITL rounds) and monthly quotas (AI tokens/spend, audio chapters, storage, scraped chapters, EPUB imports) | ![Memberships](assets/screenshots/admin-page-2.png) |
+| **Runtime settings** — override allow-listed settings live; env value vs effective value side by side; clearing restores env | ![Runtime settings](assets/screenshots/admin-page-3-settings.png) |
+| **AI usage & cost** — tokens, cost, executions, rejections by model / task / user for any period | ![AI usage](assets/screenshots/admin-page-4-usage.png) |
+| **LLM catalog** — DB-backed providers and models with capabilities, per-1M pricing, and enablement | ![LLM catalog](assets/screenshots/admin-page-5-llm-catalog.png) |
+| **Tool-call audit** — every tool execution across users with risk level, status, duration, and full input/output payloads | ![Tool-call audit](assets/screenshots/admin-page-6-tool-call-audit.png) |
+| **Jobs monitor** — read-only view of all scraping and download jobs, with status and failure messages | ![Jobs monitor](assets/screenshots/admin-page-7-job-monitor.png) |
+
+## Feature summary
 
 ### Library and reader
 
-- Create and manage an owned book library and its chapters.
-- Read chapters in a responsive reader with dark mode and configurable typography.
-- Save chapter and word/paragraph reading progress.
-- Search book metadata, stored summaries, and chapter content.
-- Continue from the last saved reading position.
+- Owned book library with chapters, covers, authors, and search.
+- Responsive reader with dark mode, configurable typography, and saved chapter +
+  word/paragraph reading position.
+- Regex-based reader text cleanup rules (client-side, toggleable per rule).
+- Full-text search across book metadata, stored summaries, and chapter content.
 
 ### Text-to-speech and downloads
 
-- Use browser speech or server-side TTS.
-- Use Edge neural voices or the local SAPI-compatible provider.
-- Highlight the current word or paragraph while reading.
-- Autoplay the next chapter and resume playback through assistant actions.
-- Generate a single-chapter MP3 immediately.
-- Generate chapter-range MP3 jobs through a confirmation form.
-- Track generation progress in chat and automatically download completed audio.
-- Store generated files in MinIO and expose them through expiring signed URLs.
-- Purge expired download rows and objects after `DOWNLOAD_JOB_TTL_HOURS` (24 by
-  default).
-
-SAPI downloads default to Microsoft Zira Desktop at 1.35× when no other voice/rate is
-selected. Generated filenames include the book title, chapter range, and a short job
-suffix.
+- Browser speech, local SAPI-compatible voices, or Edge neural voices.
+- Word/paragraph highlighting synced to playback, auto-advance to the next chapter.
+- Single-chapter MP3 on demand; chapter-range MP3 jobs with progress, cancellation,
+  and automatic download when ready.
+- Files stored in MinIO, delivered through expiring signed URLs, purged after
+  `DOWNLOAD_JOB_TTL_HOURS` (24 by default).
 
 ### Import, scraping, and discovery
 
-- Preview and import EPUB files using bounded, chunked background work.
-- Scrape supported sites with deterministic per-site adapters:
-  - `novelfull.net`
-  - `novelbin.com`
-  - `freewebnovel.com`
-  - `novellunar.com`
-- Run durable scrape jobs with progress, retries, cancellation, and ownership checks.
-- Search supported sources by title/alias, rank matching sources, and confirm an import
-  without manually pasting a URL.
+- EPUB preview and import as bounded, chunked background work.
+- Deterministic per-site adapters for **novelfull.net**, **novelbin.com**,
+  **freewebnovel.com**, **novellunar.com**, **novelfire.net** (and its
+  `novelphoenix.com` mirror), **ranobes.top/.net**, and **scribblehub.com**.
+- Durable scrape jobs (Redis + arq) with persisted progress, retries with backoff,
+  session reuse, bot-block/disconnect detection, resume from any chapter,
+  cancellation, and ownership checks.
+- Title/alias discovery across all sources; theme-based recommendations
+  (“three books like this one, not from novelfire”) ranked and de-duplicated in a
+  single bounded external call; import proposals always go through confirmation.
 
-Scraped pages and book text are always treated as untrusted data, never as instructions
-for the assistant.
-
-**Discovery:** `search_discovered_books` looks up one exact title/alias.
-`recommend_discovered_books` batches candidate titles, a seed owned book, and/or
-themes in **one** external tool call. Themes expand via allowlisted WLNUpdates
-(`search-advanced`) into titles, then the four scrape sources are searched;
-results are ranked, deduped, and owned titles excluded with evidence. Import
-still goes through `import_discovered_book` + HITL. NovelUpdates is not used.
-See
-[`docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md`](docs/superpowers/specs/2026-08-04-discovery-theme-index-design.md).
+Scraped pages and book text are always treated as untrusted *data*, never as
+instructions for the assistant.
 
 ### Controlled assistant
 
-The app-wide assistant can:
-
-- Search the user's library and retrieve book/chapter details.
-- Read or create persisted, content-hash-invalidated book summaries.
-- Answer grounded questions from owned content.
-- Find reading progress and recently read chapters.
-- Navigate to and play/resume a chapter.
+- Search the library, fetch book/chapter details, read or create content-hash
+  invalidated summaries, answer grounded questions.
+- Find reading progress and recently read chapters; navigate to, play, or resume a
+  chapter.
 - Create and monitor audio downloads.
-- Change allowlisted, reversible UI/TTS settings.
-- Discover titles and propose a ranked import.
-- Start scraping/import work only after explicit human confirmation.
+- Change allow-listed, reversible UI/TTS settings.
+- Discover titles and propose ranked imports; start scraping/import only after
+  explicit human confirmation.
+- Hebrew/English UI with RTL chat direction; replies match the user's language.
+- Chat history drawer, rolling conversation summaries, cancellation, live tool status.
 
-The chat streams real provider output over Server-Sent Events (SSE), exposes live tool
-status, supports cancellation, and keeps long conversations usable with rolling
-summaries. See [`docs/assistant-capabilities.md`](docs/assistant-capabilities.md) for
+See [`docs/assistant-capabilities.md`](docs/assistant-capabilities.md) (Hebrew) for
 working prompts and the exact current tool set.
+
+### Admin and operations
+
+- Google SSO; the first account to sign in claims the seeded admin row.
+- Membership tiers with per-turn caps and monthly quotas, enforced server-side.
+- Runtime-overridable settings, DB-backed LLM catalog, usage/cost rollups, full
+  tool-call audit, and a cross-user jobs monitor.
 
 ## System architecture
 
-RTM runs as a modular monolith: one FastAPI application contains bounded-context
-modules, while PostgreSQL, Redis, MinIO, an arq worker, and the React SPA run as
-separate services.
+RTM is a modular monolith: one FastAPI application composed of bounded-context modules,
+with PostgreSQL, Redis, MinIO, an arq worker, and the React SPA running as separate
+services.
 
 ```mermaid
 flowchart LR
-    User[Browser] --> Web[React 19 SPA<br/>Vite + Tailwind]
+    User[Browser] --> Web[React 19 SPA<br/>Vite + Tailwind + shadcn]
     Web -->|REST + SSE| API[FastAPI modular monolith]
 
     API --> PG[(PostgreSQL 16<br/>pgvector)]
     API --> Redis[(Redis 7)]
     API --> MinIO[(MinIO object storage)]
-    API -->|provider abstraction| Gemini[Gemini API]
+    API -->|LLMProvider abstraction| Gemini[Gemini API]
 
     Redis --> Worker[arq worker]
     Worker --> PG
@@ -128,22 +272,24 @@ flowchart LR
 
 ### Service responsibilities
 
-- **Frontend (`frontend/`)** — React Router SPA, reader/player, assistant shell,
-  scraper/import UI, React Query server state, and Zustand client preferences.
+- **Frontend (`frontend/`)** — React Router SPA: library, reader/player, assistant
+  panel, scraper/import UI, admin backoffice. React Query for server state, Zustand
+  for client preferences, i18next for localization.
 - **Backend (`backend/`)** — HTTP/SSE boundaries, domain services, authorization,
-  persistence, LLM orchestration, tool execution, and job creation.
-- **PostgreSQL + pgvector** — users, books, chapters, progress, conversations, audit
-  records, jobs, summaries, and LLM telemetry. Vector support is available, but RAG is
-  intentionally deferred until measured retrieval quality requires it.
-- **Redis + arq** — durable queue coordination for scraping, EPUB import, downloads,
-  and scheduled cleanup.
-- **MinIO** — EPUB chunks and generated audio objects; clients receive signed,
-  short-lived download URLs rather than direct object access.
+  persistence, LLM orchestration, tool execution, quotas, and job creation.
+- **PostgreSQL + pgvector** — users, memberships, books, chapters, progress,
+  conversations, summaries, jobs, runtime settings, LLM catalog, audit records, and
+  usage facts/rollups. Vector support is available; RAG is deferred until retrieval
+  quality measurably needs it.
+- **Redis + arq** — durable queue for scraping, EPUB import, audio downloads, and
+  scheduled cleanup; job rows are persisted so work resumes after restarts.
+- **MinIO** — EPUB chunks and generated audio; clients only ever receive signed,
+  short-lived URLs.
 
 ### Backend dependency direction
 
-Business logic lives in services. Modules may call another module's public service, but
-must never reach into another module's repository or SQLAlchemy models.
+Business logic lives in services. A module may call another module's public service,
+never its repository or SQLAlchemy models.
 
 ```mermaid
 flowchart LR
@@ -158,10 +304,9 @@ flowchart LR
 
 ## LLM architecture and safety
 
-The model does not have direct access to PostgreSQL, Redis, MinIO, the filesystem,
-arbitrary websites, internal services, or a shell. It can only propose calls to a
-registered tool. The backend validates, authorizes, rate-limits, audits, and executes
-that proposal.
+The model has no direct access to PostgreSQL, Redis, MinIO, the filesystem, arbitrary
+websites, internal services, or a shell. It can only *propose* a call to a registered
+tool; the backend validates, authorizes, rate-limits, audits, and executes it.
 
 ### Assistant request flow
 
@@ -189,7 +334,7 @@ sequenceDiagram
         Domain->>DB: Ownership-scoped read/write
         Tool-->>Orch: Validated structured result
     else Confirmation-required tool
-        Orch-->>UI: SSE confirmation form; pause
+        Orch-->>UI: SSE confirmation form, turn paused
         User->>UI: Approve/edit or reject
         UI->>Chat: POST confirmation
         Chat->>Orch: Resume frozen call
@@ -203,55 +348,39 @@ sequenceDiagram
 
 ### Core controls
 
-- **Provider abstraction:** domain code depends on capabilities such as tool calling,
-  never on Gemini model names or Google SDK types.
-- **Tool-only actions:** every model-triggered action has pydantic input/output schemas,
-  a risk level, authorization, audit, timeout, and rate limit.
-- **Ownership:** authenticated `user_id` comes from the server session. Model- or
-  client-supplied identity is never trusted.
-- **Assistant modes:** `internal_only` hides tools that touch external sites;
-  `external_allowed` exposes them but does not bypass confirmation.
-- **Human in the loop (HITL):** external, expensive, large, import, or destructive work
-  pauses the turn and presents a structured form. Approval resumes the frozen call;
-  it does not let the model invent a replacement action.
-- **Bounded orchestration:** iteration, external-call, input-token, output-token,
-  retry, wall-clock, and HITL-round limits prevent uncontrolled loops.
-- **Context management:** recent messages remain verbatim and older context is captured
-  in rolling summaries. Tool rounds enforce a 64K cumulative input-token budget; a
-  completed final answer may record a soft overage rather than being discarded.
+- **Provider abstraction:** domain code depends on capabilities (tool calling,
+  structured extraction, long-context summarization), never on model names or SDK
+  types. Only `modules/llm/providers/` imports a vendor SDK.
+- **Tool-only actions:** every tool declares pydantic input/output schemas, a risk
+  level (`read_only` / `low_risk` / `confirmation_required`), authorization, audit,
+  timeout, and rate limit.
+- **Ownership:** the authenticated `user_id` comes from the server session; model- or
+  client-supplied identity is never trusted. Every row is ownership-scoped.
+- **Assistant modes:** `internal_only` hides tools that reach external sites;
+  `external_allowed` exposes them but still requires confirmation.
+- **Human in the loop (HITL):** external, expensive, large, import, or destructive
+  work pauses the turn and presents a structured form. Approval resumes the frozen
+  call — the model cannot swap in a different action.
+- **Bounded orchestration:** per-turn limits on iterations, external calls, input and
+  output tokens, cost, retries, wall clock, and HITL rounds; tiers can tighten them.
+- **Quotas:** monthly AI tokens/spend, audio chapters, download storage, scraped
+  chapters, and EPUB imports per membership tier; refusals are recorded.
+- **Context management:** recent messages stay verbatim, older context is captured in
+  rolling summaries; tool rounds enforce a cumulative input-token budget.
 - **Observability:** LLM executions, costs, tool calls, confirmation outcomes, and run
-  IDs are persisted in PostgreSQL. Langfuse integration is optional and disabled.
+  IDs are persisted and visible in the admin backoffice.
 - **Prompt-injection boundary:** book, scraped, tool, and route-context text is
   delimited as data and cannot select tools, alter policy, or approve actions.
 
-## Prerequisites
-
-### Recommended: Docker workflow
-
-Install:
-
-1. **Git**
-2. **Docker Desktop** (or Docker Engine + Compose v2)
-3. At least **4 GB of free RAM** for the full local stack
-4. Free host ports `3000`, `8000`, `5432`, `6379`, `9000`, and `9001`, or change them
-   in `.env`
-
-On Windows, enable the WSL 2 backend in Docker Desktop. Commands below work in Git Bash,
-WSL, macOS, and Linux shells. PowerShell users can replace `cp` with `Copy-Item`.
-
-### Native development
-
-If running application processes outside Docker, also install:
-
-- **Python 3.12**
-- **uv** — <https://docs.astral.sh/uv/getting-started/installation/>
-- **Node.js 20.19+ or 22.12+** and npm (required by Vite 7)
-- **ffmpeg** on `PATH` for server-side audio conversion and chapter merging
-
-PostgreSQL, Redis, and MinIO can still run in Docker while the backend/frontend run
-natively.
-
 ## Quick start with Docker
+
+### Prerequisites
+
+- **Git** and **Docker Desktop** (or Docker Engine + Compose v2). On Windows, enable
+  the WSL 2 backend.
+- ~4 GB of free RAM for the full stack.
+- Free host ports `3000`, `8000`, `5432`, `6379`, `9000`, `9001` (or change them in
+  `.env`).
 
 ### 1. Clone and configure
 
@@ -261,31 +390,29 @@ cd Read-To-Me-V3-RTMLLM
 cp .env.example .env
 ```
 
-The development defaults work without an LLM key — `.env` only needs the Google OAuth
-values from step 2. Before exposing this stack outside your machine, override
-`JWT_SECRET` and all database/MinIO credentials with real environment variables; they
-ship as dev-only defaults in `backend/app/core/config.py`. `ADMIN_PASSWORD` is a legacy
-seed-only value: it is hashed into a column that nothing verifies any more, because
-Google SSO is the only way to sign in. Never commit `.env`; it is ignored by Git.
+Development defaults work without an LLM key — `.env` only needs the Google OAuth
+values from step 2. Before exposing the stack beyond your machine, override
+`JWT_SECRET` and the database/MinIO credentials (they ship as dev-only defaults in
+`backend/app/core/config.py`). Never commit `.env`; it is ignored by Git.
 
 ### 2. Create a Google OAuth client (required to sign in)
 
-Google SSO is the only sign-in method, so this step is not optional: with
-`GOOGLE_CLIENT_ID` unset the login endpoints return **503** and nobody can get in.
+Google SSO is the only sign-in method; with `GOOGLE_CLIENT_ID` unset the login
+endpoints return **503**.
 
-1. In the [Google Cloud console](https://console.cloud.google.com/), select or create a
-   project, then open **APIs & Services → Credentials**.
-2. Configure the OAuth consent screen if prompted (External, testing mode is fine), and
-   add your own Google account as a test user.
+1. In the [Google Cloud console](https://console.cloud.google.com/), open
+   **APIs & Services → Credentials**.
+2. Configure the OAuth consent screen if prompted (External, testing mode is fine) and
+   add your own account as a test user.
 3. **Create credentials → OAuth client ID → Web application**.
-4. Add both of these as **Authorized redirect URIs**:
+4. Add both **Authorized redirect URIs**:
    - `http://localhost:5173/api/auth/google/callback` (Vite dev server)
    - `http://localhost:3000/api/auth/google/callback` (Docker)
-5. Copy the client ID and secret into `.env` as `GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`, and set `GOOGLE_REDIRECT_URI` to whichever of the two URIs
-   matches how you run the app (`:3000` for the Docker quick start).
+5. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` /
+   `GOOGLE_CLIENT_SECRET`, and set `GOOGLE_REDIRECT_URI` to the URI that matches how
+   you run the app (`:3000` for Docker).
 
-The redirect URI in `.env` must match a registered one exactly, character for character.
+The redirect URI must match a registered one exactly.
 
 ### 3. Build and start
 
@@ -293,14 +420,11 @@ The redirect URI in `.env` must match a registered one exactly, character for ch
 docker compose up --build
 ```
 
-The backend entrypoint automatically runs `alembic upgrade head` before starting
-Uvicorn. The `minio-init` service creates the configured bucket. Wait until the
-backend and database health checks pass.
-
-To start in the background:
+The backend entrypoint runs `alembic upgrade head` before starting Uvicorn;
+`minio-init` creates the bucket. Wait for the health checks to pass.
 
 ```bash
-docker compose up --build -d
+docker compose up --build -d      # background
 docker compose ps
 docker compose logs -f backend worker
 ```
@@ -308,138 +432,89 @@ docker compose logs -f backend worker
 ### 4. Open the application
 
 - Web app: <http://localhost:3000>
-- FastAPI/OpenAPI docs: <http://localhost:8000/docs>
+- OpenAPI docs: <http://localhost:8000/docs>
 - API health: <http://localhost:8000/api/health>
-- MinIO console: <http://localhost:9001>
-
-With an unchanged `.env.example`:
-
-- RTM login: **Sign in with Google** (requires the `GOOGLE_*` values from step 2 — see
-  [Configuration](#configuration))
-- MinIO login: `rtm` / `rtmsecret`
-
-These are local development credentials only.
+- MinIO console: <http://localhost:9001> (`rtm` / `rtmsecret` with the default `.env`)
 
 ### 5. First-use path
 
-1. Sign in with Google and open **Library**. **Sign in yourself first** — see the
-   security note below.
-2. Add a book manually, upload an EPUB from **Scraper → Upload EPUB**, or run a supported
-   site scrape.
-3. Open a chapter in the reader and select browser or server TTS.
-4. Configure Gemini as described below if you want the assistant.
+1. **Sign in with Google first** — the first Google account to sign in claims the
+   seeded admin row and its library (see the security note below).
+2. Add a book manually, upload an EPUB from **Scraper → Upload EPUB**, or scrape a
+   supported site.
+3. Open a chapter in the reader and pick browser or server TTS.
+4. Configure Gemini (next section) if you want the assistant.
 
 ### Security notes for the Google sign-in flow
 
-Two properties of the sign-in flow are known and accepted as designed for this
-local-first stack. Neither is a bug; both matter if you expose the stack.
+Two properties are known and accepted by design for this local-first stack:
 
-- **The first Google account to sign in claims the seeded admin row — and its whole
-  library.** There is no email allowlist gating that claim. The intended owner must
-  therefore be the first person to sign in. Until that has happened, do not expose this
-  stack beyond `localhost`: whoever signs in first becomes the owner of the seeded
-  account and everything already in it. After the first login the rule is spent, and
-  every later Google account is provisioned as its own separate user.
-- **The OAuth authorization code appears in the uvicorn access log.** This is inherent
-  to the authorization-code flow — Google returns the code as a query parameter on the
-  callback URL, and the access log records request lines verbatim. The application layer
-  never logs the code, the ID token, or any claim. The exposure is bounded: the code is
-  single-use, short-lived, and unusable without `GOOGLE_CLIENT_SECRET`. Treat access
-  logs as sensitive, or disable the access log, if that residual risk matters to you.
+- **The first Google account to sign in claims the seeded admin row.** There is no
+  email allowlist. Do not expose the stack beyond `localhost` until the intended owner
+  has signed in; afterwards every new Google account becomes its own separate user.
+- **The OAuth authorization code appears in the uvicorn access log** (it is a query
+  parameter on the callback URL). The application never logs the code, ID token, or
+  claims; the code is single-use, short-lived, and useless without
+  `GOOGLE_CLIENT_SECRET`. Treat access logs as sensitive if that residual risk matters.
 
-Stop the stack with:
+Stop with `docker compose down`; add `-v` only to delete PostgreSQL, Redis, and MinIO
+data.
 
-```bash
-docker compose down
-```
-
-Add `-v` only when you intentionally want to delete PostgreSQL, Redis, and MinIO data:
-
-```bash
-docker compose down -v
-```
-
-## Get and configure a Gemini API key
+## Enable the assistant (Gemini)
 
 The assistant is optional and disabled by default. Library, reader, TTS, scraping,
-downloads, and EPUB import work without Gemini.
+downloads, and EPUB import work without it.
 
 ### Create a key
 
-1. Sign in with a Google account at
-   [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Select or create a Google Cloud project.
-3. Choose **Create API key** and copy the key once it is shown.
-4. Review the current [Gemini API pricing and rate limits](https://ai.google.dev/pricing).
-   Free-tier availability, model access, quotas, and billing requirements vary by
-   account and region.
-5. Restrict and rotate the key according to your deployment policy. Do not put it in
-   source code, frontend environment variables, screenshots, logs, or commits.
+1. Create an API key in [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Review [Gemini pricing and rate limits](https://ai.google.dev/pricing) — free-tier
+   availability and quotas vary by account and region.
+3. Never put the key in source, frontend env vars, screenshots, logs, or commits.
 
 ### Configure RTM
-
-Edit the root `.env`:
 
 ```dotenv
 LLM_ENABLED=true
 GEMINI_API_KEY=replace-with-your-key
+# optional
+LLM_ASSISTANT_MODE=external_allowed   # default internal_only hides scraping/discovery tools
 ```
 
-`LLM_PROVIDER` and `LLM_MODEL` already default to `gemini` / `gemini-3.5-flash-lite`;
-set them only to change those. `LLM_ENABLED=true` without a key now fails fast with a
-settings `ValidationError` at startup, in the worker as well as the API.
-
-The assistant mode is `internal_only` — the safest setting: it can work with owned data
-but external discovery/scraping tools are hidden. It and the other orchestration knobs
-(iteration/token/cost budgets, HITL TTL and round limits) currently live as code-only
-defaults in `LlmRuntimeSettings` and are **not** settable via environment variables; to
-let chat propose supported-site search/import operations, change `assistant_mode` in
-`backend/app/core/config.py` until the runtime-config layer lands.
-
-External/import operations still require a confirmation form. Restart the backend and
-worker after editing `.env`:
+`LLM_PROVIDER` / `LLM_MODEL` default to `gemini` / `gemini-3.5-flash-lite`.
+`LLM_ENABLED=true` without a key fails fast at startup (API and worker). Then restart:
 
 ```bash
 docker compose up -d --force-recreate backend worker
 ```
 
-If the configured model is unavailable for your account, choose a Gemini model that
-supports function/tool calling and streaming, then update `LLM_MODEL`. Model IDs and
-availability change over time; check the
-[Gemini models documentation](https://ai.google.dev/gemini-api/docs/models) rather than
-guessing an ID.
+Assistant mode and the other orchestration knobs (iteration/token/cost budgets, HITL
+TTL and rounds) can also be changed live from **Admin → Settings** without a restart;
+model enablement and pricing live in **Admin → LLM Catalog**.
 
-### Validate the integration
+### Validate
 
-1. Confirm `GET /api/health` is healthy.
-2. Sign in and open the assistant.
-3. Ask a read-only question such as “Which books are in my library?”
-4. Watch backend logs if the request fails:
-
-```bash
-docker compose logs -f backend
-```
-
-Common Gemini errors:
-
-- **401/403:** invalid key, disabled API, project restriction, or unsupported region.
-- **404 model not found:** `LLM_MODEL` is not available to that key/project.
-- **429:** free-tier or project quota exhausted; wait, reduce usage, or review billing.
-- **Timeout:** increase `LLM_TIMEOUT_SECONDS` carefully and inspect network access.
+1. `GET /api/health` is healthy.
+2. Sign in, open the assistant, ask “Which books are in my library?”.
+3. If it fails, check `docker compose logs -f backend`. Common Gemini errors: 401/403
+   (bad key, disabled API, region), 404 (model not available to your key), 429 (quota),
+   timeouts (raise `LLM_TIMEOUT_SECONDS` carefully, or switch to a faster model).
 
 ## Local development
 
-### Start only infrastructure
+### Infrastructure only
 
 ```bash
 docker compose up -d postgres redis minio minio-init
 ```
 
-The root `.env.example` uses `localhost` addresses for native processes. Compose
-overrides those values for containers with service DNS names such as `postgres`,
-`redis`, and `minio`.
+`.env.example` uses `localhost` addresses for native processes; compose overrides them
+with service DNS names inside containers.
 
 ### Backend
+
+Requires **Python 3.12**, [**uv**](https://docs.astral.sh/uv/getting-started/installation/),
+and **ffmpeg** on `PATH`.
 
 ```bash
 cd backend
@@ -448,16 +523,15 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-The API runs at <http://localhost:8000>. Keep the worker running in a second terminal
-for scraping, imports, audio jobs, and scheduled cleanup:
+Run the worker in a second terminal for scraping, imports, audio, and cleanup:
 
 ```bash
 cd backend
 uv run arq app.jobs.worker.WorkerSettings
 ```
 
-For native integration tests, use a separate test database. Never point destructive
-test setup at the application database:
+Integration tests need a **separate** test database — never point test setup at the
+app database:
 
 ```bash
 docker compose exec postgres createdb -U rtm rtm_test
@@ -469,283 +543,193 @@ TEST_DATABASE_URL=postgresql+asyncpg://rtm:rtm@localhost:5432/rtm_test
 
 ### Frontend
 
+Requires **Node.js 20.19+ or 22.12+**.
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-The Vite app opens at <http://localhost:5173> and proxies `/api` to
-<http://localhost:8000>. Leave `VITE_API_URL` empty for this workflow.
-
-### Useful Docker commands
-
-```bash
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f worker
-docker compose restart backend worker
-docker compose build backend frontend
-```
+Vite serves <http://localhost:5173> and proxies `/api` to <http://localhost:8000>.
+Leave `VITE_API_URL` empty for this workflow.
 
 ## Configuration
 
 Settings are grouped sub-models in `backend/app/core/config.py` — `app`, `database`,
-`redis`, `storage`, `auth`, `google`, `scrape`, `audio`, `llm`, `llm_runtime`. Those
-classes are the list of supported variables; each field's flat env name is its
-`validation_alias` (or its own name). This README does not re-enumerate them.
+`redis`, `storage`, `auth`, `google`, `scrape`, `audio`, `llm`, `llm_runtime`, and so
+on. Those classes are the authoritative list of variables; each field's flat env name
+is its `validation_alias`.
 
-`.env.example` documents only the two categories that belong in `.env`: the real
-secrets (`GOOGLE_*`, `GEMINI_API_KEY`, which have no code default and never appear in
-`docker-compose.yml`) and the three required infra URLs for **native dev only**
-(`DATABASE_URL`, `REDIS_URL`, `MINIO_ENDPOINT` — compose supplies its own). Everything
-else has a dev-correct default in code. The placement rule — every setting has exactly
-one home — lives in `CLAUDE.md`; follow it when adding a setting.
+**Every setting has exactly one home:**
 
-Two things worth knowing while reading those classes:
+- A dev-correct default in the matching group class for anything tunable.
+- `.env` only for real secrets (`GOOGLE_*`, `GEMINI_API_KEY` — no code default, never
+  in `docker-compose.yml`) and, for native dev only, the three infra URLs
+  (`DATABASE_URL`, `REDIS_URL`, `MINIO_ENDPOINT`).
+- The `x-app-env` block in `docker-compose.yml` only for values compose itself
+  produces or provisions.
 
-- `auth.admin_password` (`ADMIN_PASSWORD`) is **legacy and seed-only**: startup hashes
-  it into a column that nothing verifies, since password login was removed. It
-  authenticates nothing. `auth.admin_username` still matters — it names the seeded row
-  that the first Google login claims.
-- All three `google` values must be set for Google sign-in to work; login endpoints
-  return 503 while any is unset, which means nobody can sign in at all. Setup steps are
-  in [Quick start step 2](#2-create-a-google-oauth-client-required-to-sign-in).
-  `VITE_API_URL` (a frontend build variable, not a `Settings` field) must stay
-  same-origin with the web app: the popup reports its result over a `BroadcastChannel`
-  (plus an opener `postMessage` fallback), both scoped to the popup's own origin, so a
-  cross-origin API base breaks sign-in even though every other call would still work.
+Notes:
 
-Docker Compose uses the root `.env` both for interpolation and — via `env_file` — to
-pass the secrets through to the backend and worker. Its `x-app-env` block carries only
-what compose itself produces or provisions, and is merged into both services, so they
-cannot drift.
+- `ADMIN_PASSWORD` is legacy and seed-only — password login was removed; nothing
+  verifies it. `ADMIN_USERNAME` still names the seeded row that the first Google login
+  claims.
+- `VITE_API_URL` must stay same-origin with the web app: the sign-in popup reports its
+  result over a `BroadcastChannel` scoped to its own origin.
 
 ### Runtime configuration overrides
 
-Some settings are safe to change without a redeploy. Admins can override those at
-runtime through `GET/PUT/DELETE /api/admin/settings[/{key}]` (admin session required);
-no new env vars are involved, so `.env.example` and `docker-compose.yml` are unaffected.
+Allow-listed settings can be overridden at runtime from **Admin → Settings** (or
+`GET/PUT/DELETE /api/admin/settings[/{key}]`). Keys are `section.field`, e.g.
+`llm_runtime.assistant_mode`, `llm_runtime.max_turn_cost_usd`,
+`scrape.delay_seconds`, `storage.download_job_ttl_hours`.
 
-- Keys are `section.field` — e.g. `llm_runtime.max_turn_cost_usd`,
-  `scrape.delay_seconds`, `storage.download_job_ttl_hours`, `audio.sapi_proxy_enabled`.
-  The whitelist lives in `backend/app/modules/runtime_config/registry.py`; secrets and
-  infrastructure endpoints (DB/Redis/MinIO/JWT/Google) can never be overridden, because
-  their groups and fields simply never appear in it.
-- Effective value = the env value unless an override row exists; deleting the override
-  restores the env value. Every change is attributed to the acting admin and recorded in
-  `app_settings_audit` (append-only, with old and new values).
-- Values are validated against the same pydantic types and bounds as the env vars, so a
-  rejected env value is a rejected override too. Since this release those bounds are
-  enforced at startup as well — e.g. `SCRAPE_TIMEOUT_SECONDS=0` now fails to boot.
-- **Propagation:** each process caches overrides for 30 seconds. The process that takes
-  the write sees it immediately; the arq worker and any other API worker converge within
-  the TTL, so a budget or throttle change can take up to 30s to reach running jobs.
+- The whitelist is `backend/app/modules/runtime_config/registry.py`; secrets and
+  infrastructure endpoints never appear in it.
+- Effective value = env value unless an override row exists; deleting the override
+  restores the env value. Every change is attributed and recorded in
+  `app_settings_audit`.
+- Values are validated against the same pydantic types and bounds as the env vars.
+- Each process caches overrides for 30 seconds; the writer sees its change immediately.
 
-### LLM model catalog (DB-backed)
+### LLM model catalog and membership tiers (DB-backed)
 
-Which LLM providers/models exist, whether they are enabled, and their
-USD-per-1M-token prices (used for cost records) live in the
-`model_providers` / `model_configurations` tables — manageable at runtime
-via `GET/PATCH/POST /api/admin/llm/catalog...` (admin session required),
-no redeploy needed. The code catalog in
-`backend/app/modules/llm/registry.py` is only the seed default: startup
-inserts missing rows and never overwrites existing ones, so admin edits
-(enablement, pricing) survive restarts. Catalog reads are cached
-per-process for 30 seconds; the process performing a write sees it
-immediately. Disabling every model makes chat return the same 503 as
-`LLM_ENABLED=false`.
+Providers, models, capabilities, enablement, and USD-per-1M pricing live in
+`model_providers` / `model_configurations`, managed from **Admin → LLM Catalog**. The
+code catalog in `backend/app/modules/llm/registry.py` is seed-only: startup inserts
+missing rows and never overwrites admin edits. Membership tiers follow the same
+pattern (`memberships` table, **Admin → Memberships**, seed inserts only `free`).
 
-Request handlers read overrides by depending on `get_effective_settings` instead of
-`get_settings`. Jobs, which have no FastAPI dependency injection, construct the service
-directly:
+### Production checklist
 
-```python
-from app.core.config import LlmRuntimeSettings, get_settings
-from app.core.db import SessionLocal
-from app.modules.runtime_config.service import RuntimeConfigService
-
-async with SessionLocal() as session:
-    service = RuntimeConfigService(session, get_settings())
-    runtime = await service.get_effective(LlmRuntimeSettings)
-```
-
-Security-sensitive production changes include:
-
-- Use a long random `JWT_SECRET` and strong unique credentials.
-- Sign in with the intended owner's Google account before anyone else can reach the app
-  — the first Google login claims the seeded admin row and its library. See
-  [Security notes for the Google sign-in flow](#security-notes-for-the-google-sign-in-flow).
-- Treat uvicorn access logs as sensitive: the OAuth authorization code is part of the
-  callback query string.
-- Set `COOKIE_SECURE=true` behind HTTPS and review `COOKIE_SAMESITE`.
-- Limit `CORS_ORIGINS` to trusted frontend origins.
-- Use TLS-enabled PostgreSQL/Redis/MinIO or private networking.
-- Put secrets in the deployment secret manager, not an image or repository.
-- Set `MINIO_PUBLIC_ENDPOINT` to the browser-reachable host used in signed URLs.
+- Long random `JWT_SECRET`; strong unique DB/MinIO credentials from a secret manager.
+- Sign in with the owner's Google account before anyone else can reach the app.
+- Treat uvicorn access logs as sensitive.
+- `COOKIE_SECURE=true` behind HTTPS; review `COOKIE_SAMESITE`; restrict `CORS_ORIGINS`.
+- TLS or private networking for PostgreSQL/Redis/MinIO.
+- `MINIO_PUBLIC_ENDPOINT` set to the browser-reachable host used in signed URLs.
 
 ## Repository structure
 
 ```text
 RTM_V3/
+├── assets/screenshots/           # README screenshots
 ├── backend/
 │   ├── app/
-│   │   ├── core/                 # config, DB, auth, logging, shared infrastructure
+│   │   ├── core/                 # config, DB, auth, logging, SSRF-guarded fetcher
 │   │   ├── jobs/                 # arq worker and task registration
 │   │   └── modules/              # bounded contexts
-│   │       ├── auth, users, library, books, chapters, reader
-│   │       ├── audio, downloads, storage
-│   │       ├── scraping, discovery, imports, summaries
-│   │       └── llm, tools, orchestration, observability
-│   ├── migrations/               # Alembic revisions
-│   ├── tests/                    # backend unit/integration tests
-│   ├── pyproject.toml
+│   │       ├── auth, users, quotas, usage, admin, runtime_config
+│   │       ├── library, books, chapters, reader, summaries
+│   │       ├── audio, downloads, storage, job_events
+│   │       ├── scraping, discovery, imports
+│   │       └── llm, tools, orchestration
+│   ├── migrations/               # Alembic revisions (all reversible)
+│   ├── tests/                    # unit/integration tests + saved HTML fixtures
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── features/             # feature-owned UI, hooks, API clients, tests
-│   │   └── components/           # shared UI components
-│   ├── package.json
+│   │   ├── features/             # feature-first UI, hooks, API clients, tests
+│   │   ├── shared/               # UI kit (shadcn), API client, i18n, utilities
+│   │   └── layout/               # shell, navigation
 │   └── Dockerfile
-├── docs/                          # product, architecture, HITL, tools, roadmap
-├── .cursor/
-│   ├── rules/                    # repository engineering constraints
-│   └── skills/                   # repeatable implementation workflows
-├── .env.example                  # canonical local configuration
-└── docker-compose.yml            # full development stack
+├── docs/                         # architecture, LLM planning, HITL, design specs
+├── .cursor/rules, .cursor/skills # engineering constraints and repeatable workflows
+├── .env.example
+└── docker-compose.yml
 ```
 
-Most backend modules follow:
+Each backend module follows:
 
 ```text
 modules/<name>/
 ├── router.py       # HTTP transport only
 ├── service.py      # business logic
-├── repository.py  # this module's persistence
+├── repository.py   # this module's persistence
 ├── schemas.py      # pydantic request/response DTOs
-├── models.py       # this module's SQLAlchemy models
-└── tests/
+└── models.py       # this module's SQLAlchemy models
 ```
 
 ## Engineering rules
 
-Read `.cursor/rules/` before making structural changes. The most important invariants:
+Read `.cursor/rules/` before structural changes. The invariants:
 
-1. **Provider agnostic:** only `modules/llm` imports provider SDKs. Business modules ask
-   for capabilities through `LLMProvider`.
-2. **The LLM acts only through tools:** no direct DB, filesystem, service, arbitrary
-   URL, or shell access.
-3. **Multi-user ready:** every user-owned row and operation is ownership-scoped even
-   though local setup starts with one admin.
+1. **Provider agnostic:** only `modules/llm` imports provider SDKs.
+2. **The LLM acts only through tools:** no direct DB, filesystem, service, URL, or
+   shell access.
+3. **Multi-user ready:** every user-owned row and operation is ownership-scoped.
 4. **Untrusted content stays data:** scraped/book/external text cannot redefine
    instructions or approve tools.
-5. **Deterministic first:** known sites use deterministic adapters; an LLM is never the
-   primary parser.
+5. **Deterministic first:** known sites use deterministic adapters; the LLM is never
+   the primary parser.
 6. **Respect module boundaries:** router → service → repository; cross-module calls go
    through public services.
-7. **Schema changes require Alembic migrations.**
+7. **Every schema change is a reversible Alembic migration.**
 8. **State-changing/external tool actions are audited and re-authorized.**
-
-When adding functionality:
-
-- Put business behavior in the owning module's service.
-- Keep FastAPI routers thin.
-- Do not import another module's repository/models.
-- Add pydantic validation at HTTP, tool, config, and structured-LLM boundaries.
-- Add tests in the same slice.
-- Give a new setting exactly one home (see [Configuration](#configuration)): a
-  dev-correct default on the matching group class in `backend/app/core/config.py` unless
-  it is a real secret or a value compose produces.
+9. **Hard size limits in the frontend:** file ≤ 110 lines, function ≤ 60 lines,
+   nesting ≤ 3 — enforced by ESLint; split components instead of disabling rules.
 
 ## Testing and quality gates
 
-All relevant local checks must pass before a change is considered complete.
-
-### Backend
+There is no CI; these local checks are the gate and all must pass before a change is
+considered done.
 
 ```bash
+# backend
 cd backend
-uv run ruff check . --fix
-uv run ruff format .
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy .
+uv run ruff check . --fix && uv run ruff format .
+uv run ruff check . && uv run ruff format --check .
+uv run mypy .                                   # strict
 uv run pytest -m "unit or integration"
-```
 
-### Frontend
-
-```bash
+# frontend
 cd frontend
-npm run lint
+npm run lint                                    # eslint + prettier
 npm run format
-npm run build
-npm run test
+npm run build                                   # tsc -b && vite build
+npm run test                                    # vitest
 ```
 
-Tests use Vitest on the frontend and pytest on the backend. Backend code is strict-mypy
-typed; frontend TypeScript is strict and must not introduce `any`.
+Scraping adapters have contract tests against saved HTML fixtures in
+`backend/tests/fixtures/scraping/`; a fixture is added whenever a site changes.
 
 ## Troubleshooting
 
-### A port is already in use
+**A port is already in use** — change `FRONTEND_PORT`, `BACKEND_PORT`, `DB_PORT`,
+`REDIS_PORT`, `MINIO_PORT`, or `MINIO_CONSOLE_PORT` in `.env` and recreate the stack.
 
-Change the relevant root `.env` value (`FRONTEND_PORT`, `BACKEND_PORT`, `DB_PORT`,
-`REDIS_PORT`, `MINIO_PORT`, or `MINIO_CONSOLE_PORT`) and recreate the stack.
+**Backend cannot reach infrastructure** — `docker compose ps` and
+`docker compose logs postgres redis minio backend`. Native processes use `localhost`;
+compose services use the container values from `docker-compose.yml`.
 
-### Backend waits for or cannot connect to infrastructure
+**Database schema errors** — `docker compose run --rm backend alembic upgrade head`
+(or `uv run alembic upgrade head` from `backend/` natively).
 
-```bash
-docker compose ps
-docker compose logs postgres redis minio backend
-```
+**ffmpeg missing** — the backend image includes it; for a native backend install
+ffmpeg and check `ffmpeg -version`.
 
-Check health status and ensure native processes use `localhost`, while Compose services
-use the container values already supplied by `docker-compose.yml`.
+**Signed download URL points to the wrong host** — set `MINIO_PUBLIC_ENDPOINT` to a
+browser-reachable host; keep `MINIO_ENDPOINT` for the backend/worker.
 
-### Database schema errors
+**Worker jobs do not progress** — `docker compose ps redis worker` and
+`docker compose logs -f worker`.
 
-```bash
-docker compose run --rm backend alembic upgrade head
-```
+**Scrape job failed with “blocked” or “disconnected”** — the site returned a
+Cloudflare interstitial or dropped the connection. Jobs retry with backoff
+automatically; re-queue from the last scraped chapter if it still fails. Some sites
+(e.g. freewebnovel) may block non-browser clients entirely.
 
-For native development, run `uv run alembic upgrade head` from `backend/`.
+**Google sign-in suddenly fails with 401** — usually container clock drift after a
+host sleep/wake (`token is not yet valid`). The verifier allows 120s of leeway;
+restart Docker Desktop if drift is larger.
 
-### Audio generation says ffmpeg is missing
-
-The backend image includes ffmpeg. For a native backend install ffmpeg and verify:
-
-```bash
-ffmpeg -version
-```
-
-### Signed download URL points to the wrong host
-
-Set `MINIO_PUBLIC_ENDPOINT` to a host and port reachable by the browser. Keep
-`MINIO_ENDPOINT` as the backend/worker endpoint.
-
-### Worker jobs do not progress
-
-Confirm Redis and the worker are running:
-
-```bash
-docker compose ps redis worker
-docker compose logs -f worker
-```
-
-### Reset local data
-
-This permanently removes local database, queue, and object-storage volumes:
-
-```bash
-docker compose down -v
-docker compose up --build
-```
+**Reset local data** (destructive): `docker compose down -v && docker compose up --build`.
 
 ## Further documentation
 
-- [`docs/assistant-capabilities.md`](docs/assistant-capabilities.md) — current assistant
-  features and prompt examples
+- [`docs/assistant-capabilities.md`](docs/assistant-capabilities.md) — what the
+  assistant can do today, with prompt examples (Hebrew)
 - [`docs/llm-planning/README.md`](docs/llm-planning/README.md) — LLM milestone status
   and design index
 - [`docs/llm-planning/01-architecture.md`](docs/llm-planning/01-architecture.md) —
@@ -756,6 +740,8 @@ docker compose up --build
   bounded loop, budgets, context, and cancellation
 - [`docs/llm-planning/04-hitl.md`](docs/llm-planning/04-hitl.md) — confirmation and
   structured-form protocol
+- [`docs/superpowers/specs/`](docs/superpowers/specs/) — per-feature design specs
+  (SSO, runtime config, membership tiers, usage rollups, discovery, i18n, …)
 - [`docs/phase-0-discovery.md`](docs/phase-0-discovery.md) — product discovery,
   decisions, and milestone history
 - [`backend/README.md`](backend/README.md) — backend module summary and commands
